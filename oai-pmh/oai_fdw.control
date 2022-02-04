@@ -1,0 +1,4 @@
+comment = 'OAI-PMH FDW.'
+default_version = '1.0'
+module_pathname = '$libdir/oai_fdw'
+relocatable = true
