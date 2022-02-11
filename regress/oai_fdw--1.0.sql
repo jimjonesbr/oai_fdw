@@ -1,7 +1,0 @@
-CREATE FUNCTION oai_fdw_handler()
-RETURNS fdw_handler
-AS 'MODULE_PATHNAME'
-LANGUAGE C STRICT;
-
-CREATE FOREIGN DATA WRAPPER oai_fdw
-  HANDLER oai_fdw_handler;
