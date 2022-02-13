@@ -38,6 +38,11 @@ typedef struct oai_fdw_state {
 	char *set;
 	List *list;
 
+	char*url;
+	char*from;
+	char*until;
+	char *metadataPrefix;
+
 } oai_fdw_state;
 
 
@@ -64,7 +69,9 @@ void oai_fdw_BeginForeignScan(ForeignScanState *node, int eflags);
 TupleTableSlot *oai_fdw_IterateForeignScan(ForeignScanState *node);
 void oai_fdw_ReScanForeignScan(ForeignScanState *node);
 void oai_fdw_EndForeignScan(ForeignScanState *node);
-void oai_fdw_LoadOAIDocuments(List **list, char *url, char *metadataPrefix, char *set, char *from, char * until);
+
+//void oai_fdw_LoadOAIDocuments(List **list, char *url, char *metadataPrefix, char *set, char *from, char * until);
+void oai_fdw_LoadOAIDocuments(oai_fdw_state* state);
 
 Datum oai_fdw_handler(PG_FUNCTION_ARGS)
 {
@@ -107,15 +114,17 @@ size_t writefunc(void *ptr, size_t size, size_t nmemb, struct string *s) {
 
 }
 
-void oai_fdw_LoadOAIDocuments(List **list, char *url, char *metadataPrefix, char *set, char *from, char * until) {
+//void oai_fdw_LoadOAIDocuments(List **list, char *url, char *metadataPrefix, char *set, char *from, char * until) {
+void oai_fdw_LoadOAIDocuments(oai_fdw_state *state) {
+
 
 	char *postfields;
 
 	postfields = malloc(5000); //todo: calculate real size for malloc!
 
-	sprintf(postfields,"verb=ListRecords&from=%s&until=%s&metadataPrefix=%s&set=%s",from,until,metadataPrefix,set);
+	sprintf(postfields,"verb=ListRecords&from=%s&until=%s&metadataPrefix=%s&set=%s",state->from,state->until,state->metadataPrefix,state->set);
 
-	elog(DEBUG1,"%s?%s",url,postfields);
+	elog(DEBUG1,"%s?%s",state->url,postfields);
 
 	CURL *curl;
 	CURLcode res;
@@ -128,7 +137,7 @@ void oai_fdw_LoadOAIDocuments(List **list, char *url, char *metadataPrefix, char
 		init_string(&s);
 		//appendBinaryStringInfo(&s, VARDATA(content_text), content_size);
 
-		curl_easy_setopt(curl, CURLOPT_URL, url);
+		curl_easy_setopt(curl, CURLOPT_URL, state->url);
 		curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postfields);
 		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writefunc);
 		curl_easy_setopt(curl, CURLOPT_WRITEDATA, &s);
@@ -176,10 +185,10 @@ void oai_fdw_LoadOAIDocuments(List **list, char *url, char *metadataPrefix, char
 				elog(DEBUG1,"buffer size -> %d",size);
 				elog(DEBUG1,"buffer content -> %s",buffer->content);
 
-				if(list == NIL) {
-					list = list_make1(makeString(buffer->content)) ;
+				if(state->list == NIL) {
+					state->list = list_make1(makeString(buffer->content)) ;
 				} else {
-					list_concat(*list, list_make1(makeString(buffer->content)));
+					list_concat(state->list, list_make1(makeString(buffer->content)));
 				}
 
 
@@ -334,12 +343,20 @@ ForeignScan *oai_fdw_GetForeignPlan(PlannerInfo *root, RelOptInfo *baserel, Oid 
 
 	oai_fdw_TableOptions *opts = baserel->fdw_private;
 
-	List *fdw_private = list_make1(makeString(opts->url));
+//	List *fdw_private = list_make1(makeString(opts->url));
+//
+//	list_concat(fdw_private, list_make1(makeString(opts->metadataPrefix)));
+//	list_concat(fdw_private, list_make1(makeString(opts->set)));
+//	list_concat(fdw_private, list_make1(makeString(opts->from)));
+//	list_concat(fdw_private, list_make1(makeString(opts->until)));
 
-	list_concat(fdw_private, list_make1(makeString(opts->metadataPrefix)));
-	list_concat(fdw_private, list_make1(makeString(opts->set)));
-	list_concat(fdw_private, list_make1(makeString(opts->from)));
-	list_concat(fdw_private, list_make1(makeString(opts->until)));
+	oai_fdw_state * state = palloc0(sizeof(oai_fdw_state));
+
+	state->url = opts->url;
+	state->set = opts->set;
+	state->from = opts->from;
+	state->until = opts->until;
+	state->metadataPrefix = opts->metadataPrefix;
 
 	elog(DEBUG1,"GetForeignPlan set = %s",opts->set);
 
@@ -348,7 +365,7 @@ ForeignScan *oai_fdw_GetForeignPlan(PlannerInfo *root, RelOptInfo *baserel, Oid 
 			scan_clauses,
 			baserel->relid,
 			NIL, /* no expressions we will evaluate */
-			fdw_private, /* pass along our start and end */
+			state, /* pass along our start and end */
 			NIL, /* no custom tlist; our scan tuple looks like tlist */
 			NIL, /* no quals we will recheck */
 			outer_plan);
@@ -358,7 +375,7 @@ ForeignScan *oai_fdw_GetForeignPlan(PlannerInfo *root, RelOptInfo *baserel, Oid 
 
 void oai_fdw_BeginForeignScan(ForeignScanState *node, int eflags) {
 
-	oai_fdw_state *state = palloc0(sizeof(oai_fdw_state));
+	//oai_fdw_state *state = palloc0(sizeof(oai_fdw_state));
 	ForeignScan *fs = (ForeignScan *) node->ss.ps.plan;
 	List *list = NIL;
 
@@ -370,28 +387,39 @@ void oai_fdw_BeginForeignScan(ForeignScanState *node, int eflags) {
 //	list_concat(list, list_make1(makeString("<doc>2</doc>")));
 //	list_concat(list, list_make1(makeString("<doc>3</doc>")));
 
+	oai_fdw_state *state = (oai_fdw_state *) fs->fdw_private;
 
 
-	char *postfields;
-	char *url = "https://services.dnb.de/oai/repository";
-	char *metadata_prefix = "MARC21-xml";
-	char *from = "2020-04-01";
-	char *until = "2020-05-01";
-	char *set = "dnb-all:online:dissertations:sg300";
+//	char *postfields;
+//	char *url = "https://services.dnb.de/oai/repository";
+//	char *metadata_prefix = "MARC21-xml";
+//	char *from = "2020-04-01";
+//	char *until = "2020-05-01";
+//	char *set = "dnb-all:online:dissertations:sg300";
 
-	oai_fdw_LoadOAIDocuments(
-			&list,
-			strVal(lfirst(list_nth_cell(fs->fdw_private, 0))),  // url
-			strVal(lfirst(list_nth_cell(fs->fdw_private, 1))),  // metadataPrefix
-			strVal(lfirst(list_nth_cell(fs->fdw_private, 2))),  // set
-			strVal(lfirst(list_nth_cell(fs->fdw_private, 3))),  // from
-			strVal(lfirst(list_nth_cell(fs->fdw_private, 4)))); // until
+//	oai_fdw_LoadOAIDocuments(
+//			&list,
+//			strVal(lfirst(list_nth_cell(fs->fdw_private, 0))),  // url
+//			strVal(lfirst(list_nth_cell(fs->fdw_private, 1))),  // metadataPrefix
+//			strVal(lfirst(list_nth_cell(fs->fdw_private, 2))),  // set
+//			strVal(lfirst(list_nth_cell(fs->fdw_private, 3))),  // from
+//			strVal(lfirst(list_nth_cell(fs->fdw_private, 4)))); // until
 
-	state->list = list;
+//	oai_fdw_LoadOAIDocuments(
+//			&list,
+//			state->url,  // url
+//			state->metadataPrefix,  // metadataPrefix
+//			state->set,  // set
+//			state->from,  // from
+//			state->until); // until
+
+	oai_fdw_LoadOAIDocuments(state);
+
+//	state->list = list;
 	state->identifier = "ID000042";
 	state->current = 0;
-	state->end = intVal(lsecond(fs->fdw_private));
-	state->set = strVal(lthird(fs->fdw_private));
+	//state->end = intVal(lsecond(fs->fdw_private));
+	state->set = "set";
 
 
 
@@ -399,6 +427,8 @@ void oai_fdw_BeginForeignScan(ForeignScanState *node, int eflags) {
 
 }
 
+//TODO: CRIAR FUNCAO GETNEXT PARA A LISTA CRIADA PELA FUNCAO LOADOAIDOCUMENTS
+//      CRIAR TIPO OAIDOCUMENT COM CONTENT E HEADER. COLOCAR ESSE TIPO COMO TIPO DA LISTA EM STATE
 TupleTableSlot *oai_fdw_IterateForeignScan(ForeignScanState *node) {
 
 	TupleTableSlot *slot = node->ss.ss_ScanTupleSlot;
