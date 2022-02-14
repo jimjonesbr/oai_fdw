@@ -15,9 +15,9 @@
 #include <stdlib.h>
 #include <curl/curl.h>
 #include <utils/builtins.h>
+#include <utils/array.h>
 #include "commands/explain.h"
 #include <curl/curl.h>
-#include <string.h> //TODO: REMNOVE
 #include <libxml2/libxml/tree.h> //TODO: CORRECT PATH
 
 #define LIBXML_OUTPUT_ENABLED
@@ -85,7 +85,7 @@ void oai_fdw_ReScanForeignScan(ForeignScanState *node);
 void oai_fdw_EndForeignScan(ForeignScanState *node);
 
 //void oai_fdw_LoadOAIDocuments(List **list, char *url, char *metadataPrefix, char *set, char *from, char * until);
-void oai_fdw_LoadOAIRecords(oai_fdw_state ** state);
+void loadOAIRecords(oai_fdw_state ** state);
 void init_string(struct string *s);
 size_t writefunc(void *ptr, size_t size, size_t nmemb, struct string *s);
 int fetchNextOAIRecord(oai_fdw_state *state,oai_Record **entry);
@@ -131,7 +131,7 @@ size_t writefunc(void *ptr, size_t size, size_t nmemb, struct string *s) {
 
 }
 
-void oai_fdw_LoadOAIRecords(oai_fdw_state **state) {
+void loadOAIRecords(oai_fdw_state **state) {
 
 
 	char *postfields;
@@ -213,7 +213,6 @@ void oai_fdw_LoadOAIRecords(oai_fdw_state **state) {
 					size_t content_size = (size_t) xmlNodeDump(buffer, xmldoc, record, 0, 1);
 
 					elog(DEBUG1,"oai_fdw_LoadOAIRecords: buffer size > %ld",content_size);
-					//elog(DEBUG1,"buffer content -> %s",buffer->content);
 
 					doc->content = palloc0(sizeof(char)*content_size);
 					doc->content = (char*)buffer->content;
@@ -224,24 +223,13 @@ void oai_fdw_LoadOAIRecords(oai_fdw_state **state) {
 
 				} else if (xmlStrcmp(record->name, (xmlChar*) "resumptionToken") == 0){
 
-					elog(DEBUG1,"oai_fdw_LoadOAIRecords: resumptionToken found > %s",xmlNodeGetContent(record));
+					size_t size_token = strlen(xmlNodeGetContent(record));
+					char * token = xmlNodeGetContent(record);
 
-					(*state)->resumptionToken = palloc0(sizeof(char)*strlen(xmlNodeGetContent(record)));
-					(*state)->resumptionToken = xmlNodeGetContent(record);
-//
-//					char *list_size = (char*)xmlGetProp(record, (xmlChar*) "completeListSize");
-//					elog(DEBUG1,"completeSize    > %s (char*)",list_size);
-//
-//					//(*state)->completeListSize = xmlGetProp(record, (xmlChar*) "completeListSize");
-//
-//					elog(DEBUG1,"resumptionToken > %s",(*state)->resumptionToken);
-//
-//					if(isdigit(list_size)){
-//
-//						elog(DEBUG1,"completeSize    > %d",atoi(list_size));
-//
-//					}
-//					//
+					elog(DEBUG1,"oai_fdw_LoadOAIRecords: resumptionToken found > %s",token);
+
+					(*state)->resumptionToken = palloc0(sizeof(char)*size_token);
+					(*state)->resumptionToken = token;
 
 					continue;
 
@@ -280,9 +268,27 @@ void oai_fdw_LoadOAIRecords(oai_fdw_state **state) {
 
 						if (xmlStrcmp(header_attributes->name, (xmlChar*) "setSpec")==0){
 
-							doc->setspec= palloc0(sizeof(char)*size_node);
+							if(!doc->setspec) {
+
+								doc->setspec= palloc0(sizeof(char)*size_node);
+								doc->setspec= node_content;
+
+							} else {
+
+								//TODO: create array as result set!
+
+//								char *current_sets = palloc0(sizeof(char)*strlen(doc->setspec));
+//								size_t size_current_sets = strlen(current_sets);
+//								snprintf(current_sets,strlen(doc->setspec),"%s",doc->setspec);
+//
+//								doc->setspec= palloc0(sizeof(char)*(size_node + size_current_sets));
+//								snprintf(doc->setspec,size_node + size_current_sets + 2,"%s, %s",current_sets, node_content);
+
+
+							}
+
 							//doc->setspec= (char*) xmlNodeGetContent(header_attributes);
-							doc->setspec= node_content;
+
 
 						}
 
@@ -333,19 +339,15 @@ void oai_fdw_LoadOAIRecords(oai_fdw_state **state) {
 
 void oai_fdw_GetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid) {
 
-	char *url;
-	char *metadataPrefix;
-	char *set;
-	char *from;
-	char *until;
-
 	Relation rel = table_open(foreigntableid, NoLock);
 
-	if (rel->rd_att->natts >1024) {
+	if (rel->rd_att->natts != 4) {
 		ereport(ERROR,
 				errcode(ERRCODE_FDW_INVALID_COLUMN_NUMBER),
-				errmsg(">>>> incorrect schema for oai_fdw table %s: table must have exactly one column", NameStr(rel->rd_rel->relname)));
+				errmsg("Incorrect schema for oai_fdw table \"%s\". An OAI foreign table table must have exactly four columns.", NameStr(rel->rd_rel->relname)),
+				errhint("Expected columns are:  identifier (text), content (text/xml), set (text) and datestamp (timestamp)."));
 	}
+
 	Oid typid = rel->rd_att->attrs[0].atttypid;
 //	if (typid != INT4OID) {
 //		ereport(ERROR,
@@ -358,6 +360,7 @@ void oai_fdw_GetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid forei
 	int start = 0, end = 64;
 
 	ForeignTable *ft = GetForeignTable(foreigntableid);
+	oai_fdw_TableOptions *opts = palloc0(sizeof(oai_fdw_TableOptions));
 
 	ListCell *cell;
 	foreach(cell, ft->options) {
@@ -366,75 +369,64 @@ void oai_fdw_GetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid forei
 
 		if (strcmp("url", def->defname) == 0) {
 
-			//char *val = defGetString(def);
-			//sscanf(val, "%s", url);
-			url = defGetString(def);
+			opts->url = defGetString(def);
 
 		} else if (strcmp("metadataprefix", def->defname) == 0) {
 
-//			char *val = defGetString(def);
-//			sscanf(val, "%s", metadataPrefix);
-			metadataPrefix = defGetString(def);
+			opts->metadataPrefix = defGetString(def);
 
 		} else if (strcmp("set", def->defname) == 0) {
 
-			set = defGetString(def);
-			//char *val = defGetString(def);
-			//sscanf(val, "%s", set);
+			opts->set = defGetString(def);
 
 		} else if (strcmp("from", def->defname) == 0) {
 
-//			char *val = defGetString(def);
-//			sscanf(val, "%s", from);
-
-			from = defGetString(def);
+			opts->from= defGetString(def);
 
 		} else if (strcmp("until", def->defname) == 0) {
 
-//			char *val = defGetString(def);
-//			sscanf(val, "%s", until);
-
-			until = defGetString(def);
+			opts->until= defGetString(def);
 
 		} else {
 			ereport(ERROR,
 					(errcode(ERRCODE_FDW_INVALID_OPTION_NAME),
 							errmsg("invalid option \"%s\"", def->defname),
-							errhint("Valid table options for oai_fdw are \"url\",\"metadataPrefix\",\"setl\",\"from\" and \"until\"")));
+							errhint("Valid table options for oai_fdw are \"url\",\"metadataPrefix\",\"set\",\"from\" and \"until\"")));
 		}
 	}
 
 
-	if (start < 0) {
-		ereport(ERROR,
-				errcode(ERRCODE_FDW_ERROR),
-				errmsg("invalid value for option \"start\": must be non-negative"));
-	}
-	if (end < 0) {
-		ereport(ERROR,
-				errcode(ERRCODE_FDW_ERROR),
-				errmsg("invalid value for option \"end\": must be non-negative"));
-	}
-	if (end < start) {
-		ereport(ERROR,
-				errcode(ERRCODE_FDW_ERROR),
-				errmsg("invalid values for option \"start\" and \"end\": end must be >= start"));
-	}
+//	if (start < 0) {
+//		ereport(ERROR,
+//				errcode(ERRCODE_FDW_ERROR),
+//				errmsg("invalid value for option \"start\": must be non-negative"));
+//	}
+//	if (end < 0) {
+//		ereport(ERROR,
+//				errcode(ERRCODE_FDW_ERROR),
+//				errmsg("invalid value for option \"end\": must be non-negative"));
+//	}
+//	if (end < start) {
+//		ereport(ERROR,
+//				errcode(ERRCODE_FDW_ERROR),
+//				errmsg("invalid values for option \"start\" and \"end\": end must be >= start"));
+//	}
 
 
 	baserel->rows = end - start;
 
-	oai_fdw_TableOptions *opts = palloc0(sizeof(oai_fdw_TableOptions));
+
 //	opts->start = start;
 //	opts->end = end;
 //
-	opts->from = from;
-	opts->until = until;
-	opts->url = url;
-	opts->set = set;
-	opts->metadataPrefix = metadataPrefix;
+	//opts->from = from;
+	//opts->until = until;
+	//opts->url = url;
+	//opts->set = set;
+	//opts->metadataPrefix = metadataPrefix;
 
 	baserel->fdw_private = opts;
+
 
 }
 
@@ -501,16 +493,9 @@ TupleTableSlot *oai_fdw_IterateForeignScan(ForeignScanState *node) {
 	oai_fdw_state *state = node->fdw_state;
 	oai_Record * entry = palloc0(sizeof(oai_Record));;
 
-	if(state->current_row == 0) {
-
-		//oai_fdw_LoadOAIRecords(&state);
-
-	}
-
 	ExecClearTuple(slot);
 
 	hasnext =  fetchNextOAIRecord(state,&entry);
-
 
 	if(hasnext){
 
@@ -545,10 +530,12 @@ int fetchNextOAIRecord(oai_fdw_state *state,oai_Record **entry){
 
 	elog(DEBUG1,"fetchNextOAIRecord: current_row > %d",state->current_row);
 
+	/* Loads documents in the "oai_fdw_state" in case it is the first pass or if it reached
+	 * the end of the list and there is a resumption token for the next page. */
 	if(state->list == NIL || (state->current_row == state->list->length && state->resumptionToken) ) {
 
 		elog(DEBUG1,"fetchNextOAIRecord: RELOADING");
-		oai_fdw_LoadOAIRecords(&state);
+		loadOAIRecords(&state);
 		state->current_row = 0;
 
 	}
@@ -564,6 +551,9 @@ int fetchNextOAIRecord(oai_fdw_state *state,oai_Record **entry){
 	elog(DEBUG1,"fetchNextOAIEntry: identifier  > %s",(*entry)->identifier);
 
 	return 1;
+
+
+
 
 
 }
