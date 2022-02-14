@@ -202,8 +202,8 @@ void oai_fdw_LoadOAIDocuments(oai_fdw_state **state) {
 				doc->content = palloc(strlen((char*)buffer->content));
 				doc->content = (char*)buffer->content;
 				//doc->identifier ="id42";
-				doc->setspec ="speck";
-				doc->datestamp ="2021-04-16";
+				//doc->setspec ="speck";
+				//doc->datestamp ="2021-04-16";
 				doc->rownumber = rowcount;
 
 				xmlNodePtr header;
@@ -221,6 +221,7 @@ void oai_fdw_LoadOAIDocuments(oai_fdw_state **state) {
 
 						if (xmlStrcmp(header_attributes->name, (xmlChar*) "identifier")==0){
 
+
 							//elog(DEBUG1,"header_attributes %s",(char*) xmlNodeGetContent(header_attributes));
 							doc->identifier = palloc(strlen((char*)xmlNodeGetContent(header_attributes)));
 							doc->identifier = (char*) xmlNodeGetContent(header_attributes);
@@ -231,6 +232,13 @@ void oai_fdw_LoadOAIDocuments(oai_fdw_state **state) {
 
 							doc->setspec= palloc(strlen((char*)xmlNodeGetContent(header_attributes)));
 							doc->setspec= (char*) xmlNodeGetContent(header_attributes);
+
+						}
+
+						if (xmlStrcmp(header_attributes->name, (xmlChar*) "datestamp")==0){
+
+							doc->datestamp= palloc(strlen((char*)xmlNodeGetContent(header_attributes)));
+							doc->datestamp= (char*) xmlNodeGetContent(header_attributes);
 
 						}
 
@@ -290,11 +298,11 @@ void oai_fdw_GetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid forei
 				errmsg(">>>> incorrect schema for oai_fdw table %s: table must have exactly one column", NameStr(rel->rd_rel->relname)));
 	}
 	Oid typid = rel->rd_att->attrs[0].atttypid;
-	if (typid != INT4OID) {
-		ereport(ERROR,
-				errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
-				errmsg("incorrect schema for oai_fdw table %s: table column must have type int", NameStr(rel->rd_rel->relname)));
-	}
+//	if (typid != INT4OID) {
+//		ereport(ERROR,
+//				errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
+//				errmsg("incorrect schema for oai_fdw table %s: table column must have type int", NameStr(rel->rd_rel->relname)));
+//	}
 
 	table_close(rel, NoLock);
 
@@ -542,21 +550,23 @@ TupleTableSlot *oai_fdw_IterateForeignScan(ForeignScanState *node) {
 		elog(DEBUG1,"oai_fdw_IterateForeignScan: xml length > %d",strlen(xml));
 		elog(DEBUG1,"oai_fdw_IterateForeignScan: identifier > %s",entry->identifier);
 		elog(DEBUG1,"oai_fdw_IterateForeignScan: setSpec    > %s",entry->setspec);
+		elog(DEBUG1,"oai_fdw_IterateForeignScan: datestamp  > %s",entry->datestamp);
 
 		slot->tts_isnull[0] = false;
-		slot->tts_values[0] = Int32GetDatum(entry->rownumber);
+		//slot->tts_values[0] = Int32GetDatum(entry->rownumber);
+		slot->tts_values[0] = TextDatumGetCString(entry->identifier);
 
 		slot->tts_isnull[1] = false;
-		slot->tts_values[1] = TextDatumGetCString(entry->identifier);
+		slot->tts_values[1] = CStringGetTextDatum(entry->content);
 		//slot->tts_values[1] = CStringGetTextDatum("identifier");
 
 		slot->tts_isnull[2] = false;
 		//TextDatumGetCString
-		slot->tts_values[2] = CStringGetTextDatum(entry->content);
+		slot->tts_values[2] = CStringGetTextDatum(entry->setspec);
 		//slot->tts_values[2] = CStringGetTextDatum("xml");
 
 		slot->tts_isnull[3] = false;
-		slot->tts_values[3] = CStringGetTextDatum(entry->setspec);
+		slot->tts_values[3] = CStringGetTextDatum(entry->datestamp);
 		//slot->tts_values[3] = CStringGetTextDatum("set");
 
 
