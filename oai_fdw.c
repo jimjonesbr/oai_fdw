@@ -20,6 +20,8 @@
 #include <curl/curl.h>
 #include <libxml2/libxml/tree.h> //TODO: CORRECT PATH
 
+#include <funcapi.h> //TODO:NECESSARY?
+
 #define LIBXML_OUTPUT_ENABLED
 #define LIBXML_TREE_ENABLED
 
@@ -54,7 +56,7 @@ typedef struct oai_Record {
 	char *identifier;
 	char *content;
 	char *datestamp;
-	char *setspec;
+	ArrayType *set_array;
 
 } oai_Record;
 
@@ -89,6 +91,9 @@ void loadOAIRecords(oai_fdw_state ** state);
 void init_string(struct string *s);
 size_t writefunc(void *ptr, size_t size, size_t nmemb, struct string *s);
 int fetchNextOAIRecord(oai_fdw_state *state,oai_Record **entry);
+
+void appendTextArray(ArrayType **array, char* text_element) ;
+
 
 Datum oai_fdw_handler(PG_FUNCTION_ARGS)
 {
@@ -217,7 +222,7 @@ void loadOAIRecords(oai_fdw_state **state) {
 					doc->content = palloc0(sizeof(char)*content_size);
 					doc->content = (char*)buffer->content;
 					doc->identifier = NULL;
-					doc->setspec = NULL;
+					//doc->setspec = NULL;
 					doc->datestamp = NULL;
 					doc->rownumber = record_count;
 
@@ -268,14 +273,18 @@ void loadOAIRecords(oai_fdw_state **state) {
 
 						if (xmlStrcmp(header_attributes->name, (xmlChar*) "setSpec")==0){
 
-							if(!doc->setspec) {
 
-								doc->setspec= palloc0(sizeof(char)*size_node);
-								doc->setspec= node_content;
+							appendTextArray(&doc->set_array,node_content);
 
-							} else {
+//							if(!doc->setspec) {
+//
+//								doc->setspec= palloc0(sizeof(char)*size_node);
+//								doc->setspec= node_content;
+//
+//							} else {
 
 								//TODO: create array as result set!
+
 
 //								char *current_sets = palloc0(sizeof(char)*strlen(doc->setspec));
 //								size_t size_current_sets = strlen(current_sets);
@@ -285,7 +294,7 @@ void loadOAIRecords(oai_fdw_state **state) {
 //								snprintf(doc->setspec,size_node + size_current_sets + 2,"%s, %s",current_sets, node_content);
 
 
-							}
+							//}
 
 							//doc->setspec= (char*) xmlNodeGetContent(header_attributes);
 
@@ -501,8 +510,13 @@ TupleTableSlot *oai_fdw_IterateForeignScan(ForeignScanState *node) {
 
 		elog(DEBUG1,"oai_fdw_IterateForeignScan: xml length > %ld",strlen(entry->content));
 		elog(DEBUG1,"oai_fdw_IterateForeignScan: identifier > %s",entry->identifier);
-		elog(DEBUG1,"oai_fdw_IterateForeignScan: setSpec    > %s",entry->setspec);
+		//elog(DEBUG1,"oai_fdw_IterateForeignScan: setSpec    > %s",entry->setspec);
 		elog(DEBUG1,"oai_fdw_IterateForeignScan: datestamp  > %s",entry->datestamp);
+
+//		appendTextArray(&entry->set_array,"zemeter5");
+
+
+
 
 		slot->tts_isnull[0] = false;
 		slot->tts_values[0] = CStringGetTextDatum(entry->identifier);
@@ -511,7 +525,9 @@ TupleTableSlot *oai_fdw_IterateForeignScan(ForeignScanState *node) {
 		slot->tts_values[1] = CStringGetTextDatum(entry->content);
 
 		slot->tts_isnull[2] = false;
-		slot->tts_values[2] = CStringGetTextDatum(entry->setspec);
+		slot->tts_values[2] = DatumGetArrayTypeP(entry->set_array);
+		//slot->tts_values[2] = DatumGetArrayTypeP(arr);
+		//slot->tts_values[2] = CStringGetTextDatum(entry->setspec);
 
 		slot->tts_isnull[3] = false;
 		slot->tts_values[3] = CStringGetTextDatum(entry->datestamp);
@@ -550,13 +566,97 @@ int fetchNextOAIRecord(oai_fdw_state *state,oai_Record **entry){
 	elog(DEBUG1,"fetchNextOAIEntry: xml length  > %ld",strlen((*entry)->content));
 	elog(DEBUG1,"fetchNextOAIEntry: identifier  > %s",(*entry)->identifier);
 
-	return 1;
-
-
-
-
+	return 1; //TODO: return size content?
 
 }
+
+
+void appendTextArray(ArrayType **array, char* text_element) {
+
+	size_t arr_nelems = 0;
+	size_t arr_elems_size = 1;
+	Datum *arr_elems = palloc(arr_elems_size*sizeof(Datum));
+
+	Oid elem_type = TEXTOID;
+	int16 elem_len;
+	bool elem_byval;
+	char elem_align;
+
+	//elog(DEBUG1,"array elemen %d",ARR_SIZE((*array)));
+
+	//if(!*array) {
+
+	  // elog(DEBUG1,"array elemen before %d",ARR_SIZE(*array));
+	get_typlenbyvalalign(elem_type, &elem_len, &elem_byval, &elem_align);
+
+		if(*array == NULL) {
+
+			arr_elems[arr_nelems] = CStringGetTextDatum(text_element);
+			elog(DEBUG1,"array empty! adding value at arr_elems[%d]",arr_nelems);
+			arr_nelems++;
+		} else {
+
+			ArrayIterator iterator = array_create_iterator(*array,0,NULL);
+			elog(DEBUG1,"## current array size: %d",ArrayGetNItems(ARR_NDIM(*array), ARR_DIMS(*array)));
+
+			arr_elems_size *= ArrayGetNItems(ARR_NDIM(*array), ARR_DIMS(*array))+1;
+			arr_elems = repalloc(arr_elems, arr_elems_size*sizeof(Datum));
+
+			bool isnull;
+			Datum value;
+
+			while (array_iterate(iterator, &value, &isnull)) {
+
+				if (isnull) continue;
+
+
+
+				elog(DEBUG1,"  adding element: arr_elems[%d]. arr_elems_size > %d",arr_nelems,arr_elems_size);
+
+				arr_elems[arr_nelems] = value;
+				arr_nelems++;
+
+			}
+			array_free_iterator(iterator);
+
+			arr_elems[arr_nelems++] = CStringGetTextDatum(text_element);
+
+
+
+			//arr_elems[0] = CStringGetTextDatum(text_element);
+			//arr_elems[1] = CStringGetTextDatum(text_element);
+
+
+
+
+			//arr_nelems=2;
+
+//			get_typlenbyvalalign(elem_type, &elem_len, &elem_byval, &elem_align);
+//			arr_elems[0] = CStringGetTextDatum(text_element);
+//			arr_elems[1] = CStringGetTextDatum(text_element);
+//			arr_elems[2] = CStringGetTextDatum(text_element);
+
+		}
+
+
+		elog(DEBUG1,"construct_array called: arr_nelems > %d arr_elems_size %d",arr_nelems,arr_elems_size);
+
+		*array = construct_array(arr_elems, arr_nelems, elem_type, elem_len, elem_byval, elem_align);
+		//elog(DEBUG1,"ARR_DIMS %d",ArrayGetNItems(ARR_NDIM(*array), ARR_DIMS(*array)));
+
+	//} else {
+
+
+
+//
+	//}
+
+
+
+
+	//elog(DEBUG1,"dataoffset after > %d",(*array)->dataoffset);
+}
+
 
 void oai_fdw_ReScanForeignScan(ForeignScanState *node) {
 
