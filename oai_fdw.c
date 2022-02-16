@@ -19,11 +19,18 @@
 #include "commands/explain.h"
 #include <curl/curl.h>
 #include <libxml2/libxml/tree.h> //TODO: CORRECT PATH
+#include "catalog/pg_collation.h"
 
-#include <funcapi.h> //TODO:NECESSARY?
+//#include <funcapi.h> //TODO:NECESSARY?
+
+#include "utils/timestamp.h"
+#include <utils/formatting.h>
+#include <postgres_ext.h>
+#include <stdbool.h>
 
 #define LIBXML_OUTPUT_ENABLED
 #define LIBXML_TREE_ENABLED
+//#define LISTRECORDS_VERB "verb=ListRecords";
 
 PG_MODULE_MAGIC;
 
@@ -93,7 +100,7 @@ size_t writefunc(void *ptr, size_t size, size_t nmemb, struct string *s);
 int fetchNextOAIRecord(oai_fdw_state *state,oai_Record **entry);
 
 void appendTextArray(ArrayType **array, char* text_element) ;
-
+Datum textToTimestamp(text* value,text* format);
 
 Datum oai_fdw_handler(PG_FUNCTION_ARGS)
 {
@@ -136,8 +143,41 @@ size_t writefunc(void *ptr, size_t size, size_t nmemb, struct string *s) {
 
 }
 
+/**
+char *getHttpResponse(oai_fdw_state *state, char* postfields){
+
+	CURL *curl;
+	CURLcode curl_response_code;
+
+	curl = curl_easy_init();
+
+	if(curl) {
+
+		struct string s;
+		init_string(&s);
+		//appendBinaryStringInfo(&s, VARDATA(content_text), content_size);
+
+		curl_easy_setopt(curl, CURLOPT_URL, (*state)->url);
+		curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postfields);
+		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writefunc);
+		curl_easy_setopt(curl, CURLOPT_WRITEDATA, &s);
+
+		curl_response_code = curl_easy_perform(curl);
+
+		elog(DEBUG2, "http_return '%d'", curl_response_code);
+
+		return s.ptr;
+	}
+
+
+}
+*/
+
 void loadOAIRecords(oai_fdw_state **state) {
 
+
+	CURL *curl;
+	CURLcode res;
 
 	char *postfields;
 	int record_count = 0;
@@ -158,12 +198,22 @@ void loadOAIRecords(oai_fdw_state **state) {
 
 	elog(DEBUG1,"%s?%s",(*state)->url,postfields);
 
-	CURL *curl;
-	CURLcode res;
+
 
 	curl = curl_easy_init();
 
 	if(curl) {
+
+		xmlNodePtr xmlroot = NULL;
+		xmlDocPtr xmldoc;
+		xmlNodePtr record;
+		xmlNodePtr list_records;
+		xmlNodePtr header;
+		xmlNodePtr header_attributes;
+		oai_Record *doc;
+		xmlBufferPtr buffer;
+		//int xml_size;
+		//char *xml;
 
 		struct string s;
 		init_string(&s);
@@ -178,13 +228,6 @@ void loadOAIRecords(oai_fdw_state **state) {
 
 		elog(DEBUG2, "http_return '%d'", res);
 
-
-
-		xmlNodePtr xmlroot = NULL;
-		xmlDocPtr xmldoc;
-		int xml_size;
-		char *xml;
-
 		xmlInitParser();
 		xmldoc = xmlReadMemory(s.ptr, strlen(s.ptr), NULL, NULL, XML_PARSE_SAX1);
 
@@ -197,21 +240,19 @@ void loadOAIRecords(oai_fdw_state **state) {
 
 		}
 
-		xmlNodePtr list_records;
+
 
 		for (list_records = xmlroot->children; list_records != NULL; list_records = list_records->next) {
 
 			if (list_records->type != XML_ELEMENT_NODE) continue;
 			if (xmlStrcmp(list_records->name, (xmlChar*)"ListRecords")!=0) continue;
 
-			xmlNodePtr record;
-
 			for (record = list_records->children; record != NULL; record = record->next) {
 
 				if (record->type != XML_ELEMENT_NODE) continue;
 
-				oai_Record *doc = palloc0(sizeof(oai_Record));
-				xmlBufferPtr buffer = xmlBufferCreate();
+				doc = palloc0(sizeof(oai_Record));
+				buffer = xmlBufferCreate();
 
 				if (xmlStrcmp(record->name, (xmlChar*) "record") == 0) {
 
@@ -228,8 +269,8 @@ void loadOAIRecords(oai_fdw_state **state) {
 
 				} else if (xmlStrcmp(record->name, (xmlChar*) "resumptionToken") == 0){
 
-					size_t size_token = strlen(xmlNodeGetContent(record));
-					char * token = xmlNodeGetContent(record);
+					size_t size_token = strlen((char*)xmlNodeGetContent(record));
+					char * token = (char*)xmlNodeGetContent(record);
 
 					elog(DEBUG1,"oai_fdw_LoadOAIRecords: resumptionToken found > %s",token);
 
@@ -245,22 +286,23 @@ void loadOAIRecords(oai_fdw_state **state) {
 				}
 
 
-				xmlNodePtr header;
+
 
 				for (header = record->children; header != NULL; header = header->next) {
 
 					if (header->type != XML_ELEMENT_NODE) continue;
 					if (xmlStrcmp(header->name, (xmlChar*) "header") != 0) continue;
 
-					xmlNodePtr header_attributes;
+
 
 					for (header_attributes = header->children; header_attributes!= NULL; header_attributes = header_attributes->next) {
 
 						size_t size_node;
+						char *node_content;
 
 						if (header_attributes->type != XML_ELEMENT_NODE) continue;
 
-						 char * node_content = xmlNodeGetContent(header_attributes);
+						 node_content = (char*)xmlNodeGetContent(header_attributes);
 						 size_node = strlen(node_content);
 
 						if (xmlStrcmp(header_attributes->name, (xmlChar*) "identifier")==0){
@@ -273,31 +315,7 @@ void loadOAIRecords(oai_fdw_state **state) {
 
 						if (xmlStrcmp(header_attributes->name, (xmlChar*) "setSpec")==0){
 
-
 							appendTextArray(&doc->set_array,node_content);
-
-//							if(!doc->setspec) {
-//
-//								doc->setspec= palloc0(sizeof(char)*size_node);
-//								doc->setspec= node_content;
-//
-//							} else {
-
-								//TODO: create array as result set!
-
-
-//								char *current_sets = palloc0(sizeof(char)*strlen(doc->setspec));
-//								size_t size_current_sets = strlen(current_sets);
-//								snprintf(current_sets,strlen(doc->setspec),"%s",doc->setspec);
-//
-//								doc->setspec= palloc0(sizeof(char)*(size_node + size_current_sets));
-//								snprintf(doc->setspec,size_node + size_current_sets + 2,"%s, %s",current_sets, node_content);
-
-
-							//}
-
-							//doc->setspec= (char*) xmlNodeGetContent(header_attributes);
-
 
 						}
 
@@ -349,6 +367,12 @@ void loadOAIRecords(oai_fdw_state **state) {
 void oai_fdw_GetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid) {
 
 	Relation rel = table_open(foreigntableid, NoLock);
+	ForeignTable *ft = GetForeignTable(foreigntableid);
+	oai_fdw_TableOptions *opts = palloc0(sizeof(oai_fdw_TableOptions));
+	ListCell *cell;
+
+	int start = 0, end = 64; //TODO necessary?
+
 
 	if (rel->rd_att->natts != 4) {
 		ereport(ERROR,
@@ -366,12 +390,9 @@ void oai_fdw_GetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid forei
 
 	table_close(rel, NoLock);
 
-	int start = 0, end = 64;
 
-	ForeignTable *ft = GetForeignTable(foreigntableid);
-	oai_fdw_TableOptions *opts = palloc0(sizeof(oai_fdw_TableOptions));
 
-	ListCell *cell;
+
 	foreach(cell, ft->options) {
 
 		DefElem *def = lfirst_node(DefElem, cell);
@@ -484,10 +505,10 @@ ForeignScan *oai_fdw_GetForeignPlan(PlannerInfo *root, RelOptInfo *baserel, Oid 
 void oai_fdw_BeginForeignScan(ForeignScanState *node, int eflags) {
 
 	ForeignScan *fs = (ForeignScan *) node->ss.ps.plan;
+	oai_fdw_state *state = (oai_fdw_state *) fs->fdw_private;
 
 	if(eflags & EXEC_FLAG_EXPLAIN_ONLY) return;
 
-	oai_fdw_state *state = (oai_fdw_state *) fs->fdw_private;
 	state->current_row = 0;
 
 	node->fdw_state = state;
@@ -518,6 +539,7 @@ TupleTableSlot *oai_fdw_IterateForeignScan(ForeignScanState *node) {
 
 
 
+
 		slot->tts_isnull[0] = false;
 		slot->tts_values[0] = CStringGetTextDatum(entry->identifier);
 
@@ -530,7 +552,12 @@ TupleTableSlot *oai_fdw_IterateForeignScan(ForeignScanState *node) {
 		//slot->tts_values[2] = CStringGetTextDatum(entry->setspec);
 
 		slot->tts_isnull[3] = false;
-		slot->tts_values[3] = CStringGetTextDatum(entry->datestamp);
+		//slot->tts_values[3] = CStringGetTextDatum(entry->datestamp);
+
+		//text *format = "YYYY-MM-DDThh:mm:ssZ";
+
+		//slot->tts_values[3] = textToTimestamp(entry->datestamp,format);
+		slot->tts_values[3] = TimestampGetDatum(GetCurrentTimestamp());
 
 		ExecStoreVirtualTuple(slot);
 
@@ -559,7 +586,6 @@ int fetchNextOAIRecord(oai_fdw_state *state,oai_Record **entry){
 
 	if(state->current_row == state->list->length && !state->resumptionToken ) return 0;
 
-
 	*entry = (oai_Record *) lfirst(list_nth_cell(state->list, state->current_row));
 
 	elog(DEBUG1,"fetchNextOAIEntry: list length > %d",state->list->length);
@@ -573,45 +599,41 @@ int fetchNextOAIRecord(oai_fdw_state *state,oai_Record **entry){
 
 void appendTextArray(ArrayType **array, char* text_element) {
 
+	/* Array build variables */
 	size_t arr_nelems = 0;
 	size_t arr_elems_size = 1;
-	Datum *arr_elems = palloc(arr_elems_size*sizeof(Datum));
-
 	Oid elem_type = TEXTOID;
 	int16 elem_len;
 	bool elem_byval;
 	char elem_align;
+	Datum *arr_elems = palloc(arr_elems_size*sizeof(Datum));
 
-	//elog(DEBUG1,"array elemen %d",ARR_SIZE((*array)));
+	elog(DEBUG1,"appendTextArray called with element > %s",text_element);
 
-	//if(!*array) {
-
-	  // elog(DEBUG1,"array elemen before %d",ARR_SIZE(*array));
 	get_typlenbyvalalign(elem_type, &elem_len, &elem_byval, &elem_align);
 
 		if(*array == NULL) {
 
+			/*Array has no elements */
 			arr_elems[arr_nelems] = CStringGetTextDatum(text_element);
-			elog(DEBUG1,"array empty! adding value at arr_elems[%d]",arr_nelems);
+			elog(DEBUG1,"  array empty! adding value at arr_elems[%ld]",arr_nelems);
 			arr_nelems++;
+
 		} else {
-
-			ArrayIterator iterator = array_create_iterator(*array,0,NULL);
-			elog(DEBUG1,"## current array size: %d",ArrayGetNItems(ARR_NDIM(*array), ARR_DIMS(*array)));
-
-			arr_elems_size *= ArrayGetNItems(ARR_NDIM(*array), ARR_DIMS(*array))+1;
-			arr_elems = repalloc(arr_elems, arr_elems_size*sizeof(Datum));
 
 			bool isnull;
 			Datum value;
+			ArrayIterator iterator = array_create_iterator(*array,0,NULL);
+			elog(DEBUG1,"  current array size: %d",ArrayGetNItems(ARR_NDIM(*array), ARR_DIMS(*array)));
+
+			arr_elems_size *= ArrayGetNItems(ARR_NDIM(*array), ARR_DIMS(*array))+1;
+			arr_elems = repalloc(arr_elems, arr_elems_size*sizeof(Datum));
 
 			while (array_iterate(iterator, &value, &isnull)) {
 
 				if (isnull) continue;
 
-
-
-				elog(DEBUG1,"  adding element: arr_elems[%d]. arr_elems_size > %d",arr_nelems,arr_elems_size);
+				elog(DEBUG1,"  re-adding element: arr_elems[%ld]. arr_elems_size > %ld",arr_nelems,arr_elems_size);
 
 				arr_elems[arr_nelems] = value;
 				arr_nelems++;
@@ -619,42 +641,28 @@ void appendTextArray(ArrayType **array, char* text_element) {
 			}
 			array_free_iterator(iterator);
 
+			elog(DEBUG1,"  adding new element: arr_elems[%ld]. arr_elems_size > %ld",arr_nelems,arr_elems_size);
 			arr_elems[arr_nelems++] = CStringGetTextDatum(text_element);
-
-
-
-			//arr_elems[0] = CStringGetTextDatum(text_element);
-			//arr_elems[1] = CStringGetTextDatum(text_element);
-
-
-
-
-			//arr_nelems=2;
-
-//			get_typlenbyvalalign(elem_type, &elem_len, &elem_byval, &elem_align);
-//			arr_elems[0] = CStringGetTextDatum(text_element);
-//			arr_elems[1] = CStringGetTextDatum(text_element);
-//			arr_elems[2] = CStringGetTextDatum(text_element);
 
 		}
 
 
-		elog(DEBUG1,"construct_array called: arr_nelems > %d arr_elems_size %d",arr_nelems,arr_elems_size);
+		elog(DEBUG1,"  => construct_array called: arr_nelems > %ld arr_elems_size %ld",arr_nelems,arr_elems_size);
 
 		*array = construct_array(arr_elems, arr_nelems, elem_type, elem_len, elem_byval, elem_align);
-		//elog(DEBUG1,"ARR_DIMS %d",ArrayGetNItems(ARR_NDIM(*array), ARR_DIMS(*array)));
 
-	//} else {
+}
 
+Datum textToTimestamp(text* value,text* format){
 
+	//DatumGetTimestampTz
+	Oid collid = DEFAULT_COLLATION_OID;
+	Oid typid;
+	int32 typmod = -1;
+	int tz = 0;
+	//bool have_error = false;
 
-//
-	//}
-
-
-
-
-	//elog(DEBUG1,"dataoffset after > %d",(*array)->dataoffset);
+	return parse_datetime(value,format, collid, true, &typid, &typmod, &tz, false);
 }
 
 
