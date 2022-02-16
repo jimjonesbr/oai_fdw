@@ -16,6 +16,6 @@ SERVER oai_server OPTIONS (url 'https://sammlungen.ulb.uni-muenster.de/oai',
                            until '2015-07-15');
 
 
-SELECT * FROM oai_ulb_ulbmshs LIMIT 26;
+SELECT * FROM oai_ulb_ulbmshs LIMIT 3;
 
 --2003-01-01 05:34:51.381304

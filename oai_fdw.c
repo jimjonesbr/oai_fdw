@@ -30,7 +30,7 @@
 
 #define LIBXML_OUTPUT_ENABLED
 #define LIBXML_TREE_ENABLED
-//#define LISTRECORDS_VERB "verb=ListRecords";
+#define OAI_LISTRECORDS "ListRecords"
 
 PG_MODULE_MAGIC;
 
@@ -100,6 +100,8 @@ size_t writefunc(void *ptr, size_t size, size_t nmemb, struct string *s);
 int fetchNextOAIRecord(oai_fdw_state *state,oai_Record **entry);
 
 void appendTextArray(ArrayType **array, char* text_element) ;
+CURLcode getHttpResponse(oai_fdw_state **state, char* request, struct string *xmlResponse);
+
 Datum textToTimestamp(text* value,text* format);
 
 Datum oai_fdw_handler(PG_FUNCTION_ARGS)
@@ -143,66 +145,73 @@ size_t writefunc(void *ptr, size_t size, size_t nmemb, struct string *s) {
 
 }
 
-/**
-char *getHttpResponse(oai_fdw_state *state, char* postfields){
+CURLcode getHttpResponse(oai_fdw_state **state, char* request, struct string *xmlResponse) {
+
+	elog(DEBUG1,"getHttpResponse called");
 
 	CURL *curl;
-	CURLcode curl_response_code;
+	CURLcode res;
+	char* postfields = palloc0(sizeof(char)*5000); //todo: calculate real size for malloc!
+
+
+	if(strcmp(request,OAI_LISTRECORDS)==0) {
+
+		elog(DEBUG1,"  getHttpResponse: %s",request);
+
+		if(!(*state)->resumptionToken) {
+
+			sprintf(postfields,"verb=%s&from=%s&until=%s&metadataPrefix=%s&set=%s",request,(*state)->from,(*state)->until,(*state)->metadataPrefix,(*state)->set);
+
+
+
+		} else {
+
+			sprintf(postfields,"verb=%s&resumptionToken=%s",request,(*state)->resumptionToken);
+			(*state)->list = NIL;
+			(*state)->resumptionToken = NULL;
+
+		}
+
+
+	}
+
+	elog(DEBUG1,"  getHttpResponse: url build > %s?%s",(*state)->url,postfields);
 
 	curl = curl_easy_init();
 
 	if(curl) {
 
-		struct string s;
-		init_string(&s);
-		//appendBinaryStringInfo(&s, VARDATA(content_text), content_size);
+		init_string(xmlResponse);
 
 		curl_easy_setopt(curl, CURLOPT_URL, (*state)->url);
 		curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postfields);
 		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writefunc);
-		curl_easy_setopt(curl, CURLOPT_WRITEDATA, &s);
+		curl_easy_setopt(curl, CURLOPT_WRITEDATA, xmlResponse);
 
-		curl_response_code = curl_easy_perform(curl);
+		res = curl_easy_perform(curl);
 
-		elog(DEBUG2, "http_return '%d'", curl_response_code);
-
-		return s.ptr;
 	}
 
 
+	curl_easy_cleanup(curl);
+
+	elog(DEBUG2, "  => getHttpResponse: http_return > '%d'", res);
+
+	return res;
+
 }
-*/
+
 
 void loadOAIRecords(oai_fdw_state **state) {
 
-
-	CURL *curl;
-	CURLcode res;
-
-	char *postfields;
+	struct string xmlResponse;
 	int record_count = 0;
 
-	postfields = palloc0(sizeof(char)*5000); //todo: calculate real size for malloc!
+	CURLcode curl_response = getHttpResponse(state,OAI_LISTRECORDS,&xmlResponse);
 
-	if(!(*state)->resumptionToken) {
+	elog(DEBUG1,"oai_fdw_LoadOAIRecords: curl response > %d",curl_response);
 
-		sprintf(postfields,"verb=ListRecords&from=%s&until=%s&metadataPrefix=%s&set=%s",(*state)->from,(*state)->until,(*state)->metadataPrefix,(*state)->set);
-
-	} else {
-
-		sprintf(postfields,"verb=ListRecords&resumptionToken=%s",(*state)->resumptionToken);
-		(*state)->list = NIL;
-		(*state)->resumptionToken = NULL;
-
-	}
-
-	elog(DEBUG1,"%s?%s",(*state)->url,postfields);
-
-
-
-	curl = curl_easy_init();
-
-	if(curl) {
+	if(curl_response == CURLE_OK){
 
 		xmlNodePtr xmlroot = NULL;
 		xmlDocPtr xmldoc;
@@ -212,24 +221,10 @@ void loadOAIRecords(oai_fdw_state **state) {
 		xmlNodePtr header_attributes;
 		oai_Record *doc;
 		xmlBufferPtr buffer;
-		//int xml_size;
-		//char *xml;
 
-		struct string s;
-		init_string(&s);
-		//appendBinaryStringInfo(&s, VARDATA(content_text), content_size);
-
-		curl_easy_setopt(curl, CURLOPT_URL, (*state)->url);
-		curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postfields);
-		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writefunc);
-		curl_easy_setopt(curl, CURLOPT_WRITEDATA, &s);
-
-		res = curl_easy_perform(curl);
-
-		elog(DEBUG2, "http_return '%d'", res);
 
 		xmlInitParser();
-		xmldoc = xmlReadMemory(s.ptr, strlen(s.ptr), NULL, NULL, XML_PARSE_SAX1);
+		xmldoc = xmlReadMemory(xmlResponse.ptr, strlen(xmlResponse.ptr), NULL, NULL, XML_PARSE_SAX1);
 
 		if (!xmldoc || (xmlroot = xmlDocGetRootElement(xmldoc)) == NULL) {
 
@@ -239,7 +234,6 @@ void loadOAIRecords(oai_fdw_state **state) {
 			elog(ERROR,"invalid XML response.");
 
 		}
-
 
 
 		for (list_records = xmlroot->children; list_records != NULL; list_records = list_records->next) {
@@ -263,7 +257,6 @@ void loadOAIRecords(oai_fdw_state **state) {
 					doc->content = palloc0(sizeof(char)*content_size);
 					doc->content = (char*)buffer->content;
 					doc->identifier = NULL;
-					//doc->setspec = NULL;
 					doc->datestamp = NULL;
 					doc->rownumber = record_count;
 
@@ -308,7 +301,6 @@ void loadOAIRecords(oai_fdw_state **state) {
 						if (xmlStrcmp(header_attributes->name, (xmlChar*) "identifier")==0){
 
 							doc->identifier = palloc0(sizeof(char)*size_node);
-							//doc->identifier = (char*) xmlNodeGetContent(header_attributes);
 							doc->identifier = node_content;
 
 						}
@@ -322,7 +314,6 @@ void loadOAIRecords(oai_fdw_state **state) {
 						if (xmlStrcmp(header_attributes->name, (xmlChar*) "datestamp")==0){
 
 							doc->datestamp= palloc0(sizeof(char)*size_node);
-							//doc->datestamp= (char*) xmlNodeGetContent(header_attributes);
 							doc->datestamp= node_content;
 
 						}
@@ -355,8 +346,6 @@ void loadOAIRecords(oai_fdw_state **state) {
 		xmlCleanupParser();
 
 	}
-
-	curl_easy_cleanup(curl);
 
 	(*state)->rowcount = record_count;
 
