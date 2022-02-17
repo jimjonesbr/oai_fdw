@@ -16,21 +16,40 @@
 #include <curl/curl.h>
 #include <utils/builtins.h>
 #include <utils/array.h>
-#include "commands/explain.h"
+#include <commands/explain.h>
 #include <curl/curl.h>
 #include <libxml2/libxml/tree.h> //TODO: CORRECT PATH
-#include "catalog/pg_collation.h"
+#include <catalog/pg_collation.h>
 
+//#include <optimizer/optimizer.h>
+
+//#include <c.h>
 //#include <funcapi.h> //TODO:NECESSARY?
 
-#include "utils/timestamp.h"
-#include <utils/formatting.h>
-#include <postgres_ext.h>
-#include <stdbool.h>
+//#include <postgres_ext.h>
+//#include <stdbool.h>
+//#include <pgtime.h>
+//#include <utils/fmgrprotos.h>
 
-#define LIBXML_OUTPUT_ENABLED
-#define LIBXML_TREE_ENABLED
+//#include <time.h>
+//#include "nodes/nodes.h"
+//#include "utils/date.h"
+//#include "utils/datetime.h"
+//#include "utils/timestamp.h"
+//#include "catalog/pg_cast.h"
+//#include "utils/formatting.h"
+//#include "utils/pg_locale.h"
+//#define LIBXML_OUTPUT_ENABLED //??
+//#define LIBXML_TREE_ENABLED //??
+
+#define OAI_FDW_VERSION "1.0.0devel"
 #define OAI_LISTRECORDS "ListRecords"
+#define OAI_IDENTIFY "Identify"
+#define OAI_LISTSETS "ListSets"
+#define OAI_REQUEST_SUCCESS 0
+#define OAI_REQUEST_FAIL 1
+#define OAI_UNKNOWN_REQUEST 2
+#define ERROR_CODE_MISSING_PREFIX 1
 
 PG_MODULE_MAGIC;
 
@@ -97,10 +116,10 @@ void oai_fdw_EndForeignScan(ForeignScanState *node);
 void loadOAIRecords(oai_fdw_state ** state);
 void init_string(struct string *s);
 size_t writefunc(void *ptr, size_t size, size_t nmemb, struct string *s);
-int fetchNextOAIRecord(oai_fdw_state *state,oai_Record **entry);
+int fetchNextOAIRecord(oai_fdw_state *state,oai_Record **oai_record);
 
 void appendTextArray(ArrayType **array, char* text_element) ;
-CURLcode getHttpResponse(oai_fdw_state **state, char* request, struct string *xmlResponse);
+int getHttpResponse(oai_fdw_state **state, char* request, struct string *xmlResponse);
 
 Datum textToTimestamp(text* value,text* format);
 
@@ -145,33 +164,58 @@ size_t writefunc(void *ptr, size_t size, size_t nmemb, struct string *s) {
 
 }
 
-CURLcode getHttpResponse(oai_fdw_state **state, char* request, struct string *xmlResponse) {
-
-	elog(DEBUG1,"getHttpResponse called");
+int getHttpResponse(oai_fdw_state **state, char* request, struct string *xmlResponse) {
 
 	CURL *curl;
 	CURLcode res;
-	char* postfields = palloc0(sizeof(char)*5000); //todo: calculate real size for malloc!
+	char* postfields = palloc0(sizeof(char)*5000); //todo: estimate realistic mem size for palloc!
 
+	elog(DEBUG1,"getHttpResponse called");
 
 	if(strcmp(request,OAI_LISTRECORDS)==0) {
 
-		elog(DEBUG1,"  getHttpResponse: %s",request);
+		sprintf(postfields,"verb=%s",request);
 
-		if(!(*state)->resumptionToken) {
+		if((*state)->set) {
 
-			sprintf(postfields,"verb=%s&from=%s&until=%s&metadataPrefix=%s&set=%s",request,(*state)->from,(*state)->until,(*state)->metadataPrefix,(*state)->set);
+			sprintf(postfields,"%s&set=%s",postfields,(*state)->set);
+			elog(DEBUG1,"  getHttpResponse: appending 'set' > %s",(*state)->set);
 
+		}
 
+		if((*state)->from) {
 
-		} else {
+			sprintf(postfields,"%s&from=%s",postfields,(*state)->from);
+			elog(DEBUG1,"  getHttpResponse: appending 'from' > %s",(*state)->from);
+
+		}
+
+		if((*state)->until) {
+
+			sprintf(postfields,"%s&until=%s",postfields,(*state)->until);
+			elog(DEBUG1,"  getHttpResponse: appending 'until' > %s",(*state)->until);
+
+		}
+
+		if((*state)->metadataPrefix) {
+
+			sprintf(postfields,"%s&metadataPrefix=%s",postfields,(*state)->metadataPrefix);
+			elog(DEBUG1,"  getHttpResponse: appending 'metadataPrefix' > %s",(*state)->metadataPrefix);
+
+		}
+
+		if((*state)->resumptionToken) {
 
 			sprintf(postfields,"verb=%s&resumptionToken=%s",request,(*state)->resumptionToken);
+			elog(DEBUG1,"  getHttpResponse: appending 'resumptionToken' > %s",(*state)->resumptionToken);
 			(*state)->list = NIL;
 			(*state)->resumptionToken = NULL;
 
 		}
 
+	} else {
+
+		return OAI_UNKNOWN_REQUEST;
 
 	}
 
@@ -192,35 +236,43 @@ CURLcode getHttpResponse(oai_fdw_state **state, char* request, struct string *xm
 
 	}
 
-
 	curl_easy_cleanup(curl);
 
-	elog(DEBUG2, "  => getHttpResponse: http_return > '%d'", res);
+	elog(DEBUG2, "  => getHttpResponse: curl http_return > '%d'", res);
 
-	return res;
+	if(res != CURLE_OK) return OAI_REQUEST_FAIL;
+
+
+
+	return OAI_REQUEST_SUCCESS;
 
 }
 
+//void isOAIException(char* xmlResponse) {
+//
+//
+//
+//}
 
 void loadOAIRecords(oai_fdw_state **state) {
 
 	struct string xmlResponse;
 	int record_count = 0;
 
-	CURLcode curl_response = getHttpResponse(state,OAI_LISTRECORDS,&xmlResponse);
+	int curl_response = getHttpResponse(state,OAI_LISTRECORDS,&xmlResponse);
 
 	elog(DEBUG1,"oai_fdw_LoadOAIRecords: curl response > %d",curl_response);
 
-	if(curl_response == CURLE_OK){
+	if(curl_response == OAI_REQUEST_SUCCESS) {
 
 		xmlNodePtr xmlroot = NULL;
 		xmlDocPtr xmldoc;
-		xmlNodePtr record;
-		xmlNodePtr list_records;
+		xmlNodePtr recordsList;
+		xmlNodePtr record;		
 		xmlNodePtr header;
-		xmlNodePtr header_attributes;
-		oai_Record *doc;
-		xmlBufferPtr buffer;
+		xmlNodePtr headerList;
+		oai_Record *oai_record;
+
 
 
 		xmlInitParser();
@@ -235,17 +287,41 @@ void loadOAIRecords(oai_fdw_state **state) {
 
 		}
 
+		for (recordsList = xmlroot->children; recordsList != NULL; recordsList = recordsList->next) {
 
-		for (list_records = xmlroot->children; list_records != NULL; list_records = list_records->next) {
+			if (recordsList->type != XML_ELEMENT_NODE) continue;
 
-			if (list_records->type != XML_ELEMENT_NODE) continue;
-			if (xmlStrcmp(list_records->name, (xmlChar*)"ListRecords")!=0) continue;
+			if (xmlStrcmp(recordsList->name, (xmlChar*)"error")==0) {
 
-			for (record = list_records->children; record != NULL; record = record->next) {
+				char* oai_error_msg = (char*)xmlNodeGetContent(recordsList);
+				char* oai_error_code = (char*)xmlGetProp(recordsList, (xmlChar*) "code");
+
+				if(oai_error_msg && oai_error_code) {
+
+					ereport(ERROR,
+						errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
+						errmsg("%s (%s)",oai_error_msg,oai_error_code));
+
+				} else {
+
+					ereport(ERROR,
+						errcode(ERRCODE_FDW_UNABLE_TO_CREATE_REPLY),
+						errmsg("Unknown OAI Server Error"));
+
+				}
+
+
+			}
+
+			if (xmlStrcmp(recordsList->name, (xmlChar*)"ListRecords")!=0) continue;
+
+			for (record = recordsList->children; record != NULL; record = record->next) {
+
+				xmlBufferPtr buffer;
 
 				if (record->type != XML_ELEMENT_NODE) continue;
 
-				doc = palloc0(sizeof(oai_Record));
+				oai_record = palloc0(sizeof(oai_Record));
 				buffer = xmlBufferCreate();
 
 				if (xmlStrcmp(record->name, (xmlChar*) "record") == 0) {
@@ -254,13 +330,13 @@ void loadOAIRecords(oai_fdw_state **state) {
 
 					elog(DEBUG1,"oai_fdw_LoadOAIRecords: buffer size > %ld",content_size);
 
-					doc->content = palloc0(sizeof(char)*content_size);
-					doc->content = (char*)buffer->content;
-					doc->identifier = NULL;
-					doc->datestamp = NULL;
-					doc->rownumber = record_count;
+					oai_record->content = palloc0(sizeof(char)*content_size);
+					oai_record->content = (char*)buffer->content;
+					oai_record->identifier = NULL;
+					oai_record->datestamp = NULL;
+					oai_record->rownumber = record_count;
 
-				} else if (xmlStrcmp(record->name, (xmlChar*) "resumptionToken") == 0){
+				} else if (xmlStrcmp(record->name, (xmlChar*) "resumptionToken") == 0) {
 
 					size_t size_token = strlen((char*)xmlNodeGetContent(record));
 					char * token = (char*)xmlNodeGetContent(record);
@@ -278,9 +354,6 @@ void loadOAIRecords(oai_fdw_state **state) {
 
 				}
 
-
-
-
 				for (header = record->children; header != NULL; header = header->next) {
 
 					if (header->type != XML_ELEMENT_NODE) continue;
@@ -288,33 +361,33 @@ void loadOAIRecords(oai_fdw_state **state) {
 
 
 
-					for (header_attributes = header->children; header_attributes!= NULL; header_attributes = header_attributes->next) {
+					for (headerList = header->children; headerList!= NULL; headerList = headerList->next) {
 
 						size_t size_node;
 						char *node_content;
 
-						if (header_attributes->type != XML_ELEMENT_NODE) continue;
+						if (headerList->type != XML_ELEMENT_NODE) continue;
 
-						 node_content = (char*)xmlNodeGetContent(header_attributes);
+						 node_content = (char*)xmlNodeGetContent(headerList);
 						 size_node = strlen(node_content);
 
-						if (xmlStrcmp(header_attributes->name, (xmlChar*) "identifier")==0){
+						if (xmlStrcmp(headerList->name, (xmlChar*) "identifier")==0){
 
-							doc->identifier = palloc0(sizeof(char)*size_node);
-							doc->identifier = node_content;
-
-						}
-
-						if (xmlStrcmp(header_attributes->name, (xmlChar*) "setSpec")==0){
-
-							appendTextArray(&doc->set_array,node_content);
+							oai_record->identifier = palloc0(sizeof(char)*size_node);
+							oai_record->identifier = node_content;
 
 						}
 
-						if (xmlStrcmp(header_attributes->name, (xmlChar*) "datestamp")==0){
+						if (xmlStrcmp(headerList->name, (xmlChar*) "setSpec")==0){
 
-							doc->datestamp= palloc0(sizeof(char)*size_node);
-							doc->datestamp= node_content;
+							appendTextArray(&oai_record->set_array,node_content);
+
+						}
+
+						if (xmlStrcmp(headerList->name, (xmlChar*) "datestamp")==0){
+
+							oai_record->datestamp= palloc0(sizeof(char)*size_node);
+							oai_record->datestamp= node_content;
 
 						}
 
@@ -324,11 +397,11 @@ void loadOAIRecords(oai_fdw_state **state) {
 				}
 
 				if((*state)->list == NIL) {
-					elog(DEBUG1,"oai_fdw_LoadOAIRecords: first record -> %s",doc->identifier);
-					(*state)->list = list_make1(doc) ;
+					elog(DEBUG1,"oai_fdw_LoadOAIRecords: first record -> %s",oai_record->identifier);
+					(*state)->list = list_make1(oai_record) ;
 				} else {
-					elog(DEBUG1,"oai_fdw_LoadOAIRecords: appending record -> %s",doc->identifier);
-					list_concat((*state)->list, list_make1(doc));
+					elog(DEBUG1,"oai_fdw_LoadOAIRecords: appending record -> %s",oai_record->identifier);
+					list_concat((*state)->list, list_make1(oai_record));
 				}
 
 				record_count++;
@@ -345,6 +418,9 @@ void loadOAIRecords(oai_fdw_state **state) {
 		xmlFreeDoc(xmldoc);
 		xmlCleanupParser();
 
+	} else {
+
+		//TODO: parse OAI xml error reponses
 	}
 
 	(*state)->rowcount = record_count;
@@ -370,17 +446,21 @@ void oai_fdw_GetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid forei
 				errhint("Expected columns are:  identifier (text), content (text/xml), set (text) and datestamp (timestamp)."));
 	}
 
-	Oid typid = rel->rd_att->attrs[0].atttypid;
-//	if (typid != INT4OID) {
-//		ereport(ERROR,
-//				errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
-//				errmsg("incorrect schema for oai_fdw table %s: table column must have type int", NameStr(rel->rd_rel->relname)));
-//	}
+	//TODO: Oid typid = rel->rd_att->attrs[0].atttypid;
+
+	if( (rel->rd_att->attrs[0].atttypid != TEXTOID && rel->rd_att->attrs[0].atttypid != VARCHAROID) ||
+        (rel->rd_att->attrs[1].atttypid != TEXTOID && rel->rd_att->attrs[1].atttypid != XMLOID  && rel->rd_att->attrs[1].atttypid != VARCHAROID)||
+	    (rel->rd_att->attrs[2].atttypid != TEXTARRAYOID && rel->rd_att->attrs[2].atttypid != VARCHARARRAYOID) ||
+		 rel->rd_att->attrs[3].atttypid != TIMESTAMPOID )  {
+
+		ereport(ERROR,
+				errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
+				errmsg("Incorrect schema for oai_fdw table \"%s\".", NameStr(rel->rd_rel->relname)),
+				errhint("Expected data types are (in this exact order!): text, text/xml, text, timestamp."));
+
+	}
 
 	table_close(rel, NoLock);
-
-
-
 
 	foreach(cell, ft->options) {
 
@@ -407,42 +487,38 @@ void oai_fdw_GetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid forei
 			opts->until= defGetString(def);
 
 		} else {
+
 			ereport(ERROR,
 					(errcode(ERRCODE_FDW_INVALID_OPTION_NAME),
-							errmsg("invalid option \"%s\"", def->defname),
-							errhint("Valid table options for oai_fdw are \"url\",\"metadataPrefix\",\"set\",\"from\" and \"until\"")));
+					 errmsg("invalid option \"%s\"", def->defname),
+					 errhint("Valid table options for oai_fdw are \"url\",\"metadataPrefix\",\"set\",\"from\" and \"until\"")));
 		}
 	}
 
 
-//	if (start < 0) {
-//		ereport(ERROR,
-//				errcode(ERRCODE_FDW_ERROR),
-//				errmsg("invalid value for option \"start\": must be non-negative"));
-//	}
-//	if (end < 0) {
-//		ereport(ERROR,
-//				errcode(ERRCODE_FDW_ERROR),
-//				errmsg("invalid value for option \"end\": must be non-negative"));
-//	}
-//	if (end < start) {
-//		ereport(ERROR,
-//				errcode(ERRCODE_FDW_ERROR),
-//				errmsg("invalid values for option \"start\" and \"end\": end must be >= start"));
-//	}
+	if(!opts->url){
+
+		ereport(ERROR,
+				(errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
+				 errmsg("'url' not found"),
+				 errhint("'url' is a required option. Check the CREATE FOREIGN TABLE options.")));
+
+	}
+
+	if(!opts->metadataPrefix){
+
+		ereport(ERROR,
+				(errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
+				 errmsg("'metadataPrefix' not found"),
+				 errhint("metadataPrefix is a required argument (unless the exclusive argument resumptionToken is used). Check the CREATE FOREIGN TABLE options.")));
+
+	}
 
 
-	baserel->rows = end - start;
+
+	baserel->rows = end - start; //TODO ??
 
 
-//	opts->start = start;
-//	opts->end = end;
-//
-	//opts->from = from;
-	//opts->until = until;
-	//opts->url = url;
-	//opts->set = set;
-	//opts->metadataPrefix = metadataPrefix;
 
 	baserel->fdw_private = opts;
 
@@ -510,43 +586,39 @@ TupleTableSlot *oai_fdw_IterateForeignScan(ForeignScanState *node) {
 	int hasnext;
 	TupleTableSlot *slot = node->ss.ss_ScanTupleSlot;
 	oai_fdw_state *state = node->fdw_state;
-	oai_Record * entry = palloc0(sizeof(oai_Record));;
+	oai_Record * oai_record = palloc0(sizeof(oai_Record));;
 
 	ExecClearTuple(slot);
 
-	hasnext =  fetchNextOAIRecord(state,&entry);
+	hasnext =  fetchNextOAIRecord(state,&oai_record);
 
 	if(hasnext){
 
-		elog(DEBUG1,"oai_fdw_IterateForeignScan: xml length > %ld",strlen(entry->content));
-		elog(DEBUG1,"oai_fdw_IterateForeignScan: identifier > %s",entry->identifier);
+		elog(DEBUG1,"oai_fdw_IterateForeignScan: xml length > %ld",strlen(oai_record->content));
+		elog(DEBUG1,"oai_fdw_IterateForeignScan: identifier > %s",oai_record->identifier);
 		//elog(DEBUG1,"oai_fdw_IterateForeignScan: setSpec    > %s",entry->setspec);
-		elog(DEBUG1,"oai_fdw_IterateForeignScan: datestamp  > %s",entry->datestamp);
-
-//		appendTextArray(&entry->set_array,"zemeter5");
-
-
-
-
+		elog(DEBUG1,"oai_fdw_IterateForeignScan: datestamp  > %s",oai_record->datestamp);
 
 		slot->tts_isnull[0] = false;
-		slot->tts_values[0] = CStringGetTextDatum(entry->identifier);
+		slot->tts_values[0] = CStringGetTextDatum(oai_record->identifier);
 
 		slot->tts_isnull[1] = false;
-		slot->tts_values[1] = CStringGetTextDatum(entry->content);
+		slot->tts_values[1] = CStringGetTextDatum(oai_record->content);
 
 		slot->tts_isnull[2] = false;
-		slot->tts_values[2] = DatumGetArrayTypeP(entry->set_array);
+		slot->tts_values[2] = DatumGetArrayTypeP(oai_record->set_array);
 		//slot->tts_values[2] = DatumGetArrayTypeP(arr);
 		//slot->tts_values[2] = CStringGetTextDatum(entry->setspec);
 
 		slot->tts_isnull[3] = false;
-		//slot->tts_values[3] = CStringGetTextDatum(entry->datestamp);
+		slot->tts_values[3] = CStringGetTextDatum(oai_record->datestamp);
 
-		//text *format = "YYYY-MM-DDThh:mm:ssZ";
+		//text*format="YYYY-MM-DDThh:mi:ssZ";
 
-		//slot->tts_values[3] = textToTimestamp(entry->datestamp,format);
-		slot->tts_values[3] = TimestampGetDatum(GetCurrentTimestamp());
+
+		//slot->tts_values[3] = textToTimestamp(oai_record->datestamp,format);
+		//slot->tts_values[3] = TimestampGetDatum(GetCurrentTimestamp());
+		//slot->tts_values[3] = TimestampGetDatum(castNode(Timestamp, oai_record->set_array));
 
 		ExecStoreVirtualTuple(slot);
 
@@ -558,7 +630,7 @@ TupleTableSlot *oai_fdw_IterateForeignScan(ForeignScanState *node) {
 
 }
 
-int fetchNextOAIRecord(oai_fdw_state *state,oai_Record **entry){
+int fetchNextOAIRecord(oai_fdw_state *state,oai_Record **oai_record){
 
 	elog(DEBUG1,"fetchNextOAIRecord: current_row > %d",state->current_row);
 
@@ -566,7 +638,7 @@ int fetchNextOAIRecord(oai_fdw_state *state,oai_Record **entry){
 	 * the end of the list and there is a resumption token for the next page. */
 	if(state->list == NIL || (state->current_row == state->list->length && state->resumptionToken) ) {
 
-		elog(DEBUG1,"fetchNextOAIRecord: RELOADING");
+		elog(DEBUG1,"fetchNextOAIRecord: loading next page ...");
 		loadOAIRecords(&state);
 		state->current_row = 0;
 
@@ -575,11 +647,11 @@ int fetchNextOAIRecord(oai_fdw_state *state,oai_Record **entry){
 
 	if(state->current_row == state->list->length && !state->resumptionToken ) return 0;
 
-	*entry = (oai_Record *) lfirst(list_nth_cell(state->list, state->current_row));
+	*oai_record = (oai_Record *) lfirst(list_nth_cell(state->list, state->current_row));
 
 	elog(DEBUG1,"fetchNextOAIEntry: list length > %d",state->list->length);
-	elog(DEBUG1,"fetchNextOAIEntry: xml length  > %ld",strlen((*entry)->content));
-	elog(DEBUG1,"fetchNextOAIEntry: identifier  > %s",(*entry)->identifier);
+	elog(DEBUG1,"fetchNextOAIEntry: xml length  > %ld",strlen((*oai_record)->content));
+	elog(DEBUG1,"fetchNextOAIEntry: identifier  > %s",(*oai_record)->identifier);
 
 	return 1; //TODO: return size content?
 
@@ -645,13 +717,85 @@ void appendTextArray(ArrayType **array, char* text_element) {
 Datum textToTimestamp(text* value,text* format){
 
 	//DatumGetTimestampTz
+	elog(DEBUG1,"textToTimestamp called with value = \"%s\" and format = \"%s\"",(char*)value,(char*)format);
+
 	Oid collid = DEFAULT_COLLATION_OID;
 	Oid typid;
-	int32 typmod = -1;
 	int tz = 0;
+	int32 typmod =-1;
+
+	//struct pg_tm *tm;
+	//fsec_t *fsec;
+	//TimestampTz tstamp;
+	//bool strict;
 	//bool have_error = false;
 
-	return parse_datetime(value,format, collid, true, &typid, &typmod, &tz, false);
+	//do_to_timestamp(value, format,tm, fsec);
+	//Datum dt = to_timestamp(CStringGetTextDatum("2015-07-15T09:38:22Z","YYYY-MM-DDThh:mi:ssZ"));
+	text *date = palloc(sizeof(text)*1000);
+	date = cstring_to_text_with_len("2015-07-15T09:38:22Z",strlen("2015-07-15T09:38:22Z"));
+
+	text *date_format = palloc(sizeof(text)*1000);
+	date_format = cstring_to_text_with_len("YYYY-MM-DDThh:mi:ssZ",strlen("YYYY-MM-DDThh:mi:ssZ"));
+
+
+
+	//return parse_datetime(value,format, collid, true, &typid, &typmod, &tz, false);
+
+
+	//to_timestamp(date);
+
+
+
+//
+	struct tm tm;
+	strptime((char*)value, "%Y-%m-%dT%OH:%M:%S%Z", &time);
+	time_t loctime = mktime(&time);  // timestamp in current timezone
+
+	elog(DEBUG1,">>>> %ld",loctime);
+
+
+	//return TimestampGetDatum(pgtm);
+
+	text *dt = "2015-07-15T09:38:22Z";
+	text *frmt = "YYYY-MM-DDThh:mi:ssZ";
+
+	return castNode(Timestamp, dt);
+	//return d;
+
+	//pg_strftime(value, 128,"%Y-%m-%d %H:%M:%S %Z",pg_localtime(&tnow, log_timezone));
+
+//	//time_t gmttime = timegm(&time);  // timestamp in GMT
+//	//
+
+	//const struct pg_tm *tm;
+
+	//elog(DEBUG1,">>>>%ld",pg_strftime(value, 10000,"%Y-%m-%d %H:%M:%S %Z",tm));
+
+
+
+	//= parse_datetime(value,format, collid, true, &typid, &typmod, &tz, false);
+
+	//dt = parse_datetime(value,format, collid, true,	 typid, typmod, tz,   NULL);
+
+	//parse_datetime(date, date_format, collid, true,			      &typid, &typmod, &tz, NULL);
+
+//	int pgtz;
+//	struct pg_tm pgtm;
+//	fsec_t fsec;
+//	const char *pgtzn;
+//	struct tm tm;
+//	char buffer [128];
+//	Timestamp valueTimestamp;
+//
+//	valueTimestamp = DatumGetTimestamp(value);
+//	timestamp2tm(valueTimestamp, &pgtz, &pgtm, &fsec, &pgtzn, pg_tzset("UTC"));
+
+	//elog(DEBUG1,"PARSED DT");
+
+	//pg_strftime(value, 10000,"%Y-%m-%d %H:%M:%S %Z",tm);
+	//Datum dt = palloc(sizeof(Datum)*1000);
+	//return tm;
 }
 
 
