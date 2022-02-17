@@ -46,6 +46,7 @@
 #define OAI_LISTRECORDS "ListRecords"
 #define OAI_IDENTIFY "Identify"
 #define OAI_LISTSETS "ListSets"
+#define OAI_ROOT_ELEMENT "OAI-PMH"
 #define OAI_REQUEST_SUCCESS 0
 #define OAI_REQUEST_FAIL 1
 #define OAI_UNKNOWN_REQUEST 2
@@ -283,9 +284,23 @@ void loadOAIRecords(oai_fdw_state **state) {
 			xmlFreeDoc(xmldoc);
 			xmlCleanupParser();
 
-			elog(ERROR,"invalid XML response.");
+			ereport(ERROR,
+					errcode(ERRCODE_FDW_UNABLE_TO_CREATE_EXECUTION),
+					errmsg("Invalid XML response for URL \"%s\"",(*state)->url));
 
 		}
+
+		if (xmlStrcmp(xmlroot->name, (xmlChar*) OAI_ROOT_ELEMENT)) {
+
+			ereport(ERROR,
+					errcode(ERRCODE_FDW_UNABLE_TO_CREATE_EXECUTION),
+					errmsg("Invalid XML response for URL \"%s\"",(*state)->url),
+					errhint("Make sure that the OAI-PMH service is running or check the URL given in the CREATE FOREIGN TABLE option."));
+
+		}
+
+		elog(DEBUG1,"oai_fdw_LoadOAIRecords: xmldoc parsed (xmlReadMemory)");
+
 
 		for (recordsList = xmlroot->children; recordsList != NULL; recordsList = recordsList->next) {
 
@@ -420,7 +435,11 @@ void loadOAIRecords(oai_fdw_state **state) {
 
 	} else {
 
-		//TODO: parse OAI xml error reponses
+		ereport(ERROR,
+				errcode(ERRCODE_FDW_UNABLE_TO_ESTABLISH_CONNECTION),
+				errmsg("Unable to connect to OAI-PMH Service: \"%s\"",(*state)->url),
+				errhint("Make sure that the OAI-PMH service is running or check the URL given in the CREATE FOREIGN TABLE option."));
+
 	}
 
 	(*state)->rowcount = record_count;

@@ -81,3 +81,21 @@ SERVER oai_server OPTIONS (url 'https://sammlungen.ulb.uni-muenster.de/oai',
                            until '2025-07-15');
 
 SELECT * FROM oai_no_records;
+
+
+CREATE FOREIGN TABLE oai_wrong_url (identifier text, content xml, setpec text[], datestamp timestamp) 
+SERVER oai_server OPTIONS (url 'https://sammlungen.ulb.uni-muenster.de', 
+                           set 'ulbmshs', 
+                           metadataPrefix 'oai_dc', 
+                           from '2025-07-15', 
+                           until '2025-07-15');
+
+SELECT * FROM oai_wrong_url;
+
+
+CREATE FOREIGN TABLE oai_invalid_url (identifier text, content xml, setpec text[], datestamp timestamp) 
+SERVER oai_server OPTIONS (url 'najhakjakjhakhakhakhakjgakjajh', 
+						   metadataPrefix 'oai_dc', 
+                           set 'ulbmshs');
+
+SELECT * FROM oai_invalid_url;
