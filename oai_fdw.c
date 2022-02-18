@@ -43,15 +43,24 @@
 //#define LIBXML_OUTPUT_ENABLED //??
 //#define LIBXML_TREE_ENABLED //??
 
+#include "catalog/pg_foreign_table.h"
+
 #define OAI_FDW_VERSION "1.0dev"
-#define OAI_LISTRECORDS "ListRecords"
-#define OAI_IDENTIFY "Identify"
-#define OAI_LISTSETS "ListSets"
-#define OAI_ROOT_ELEMENT "OAI-PMH"
-#define OAI_REQUEST_SUCCESS 0
-#define OAI_REQUEST_FAIL 1
+#define OAI_REQUEST_LISTRECORDS "ListRecords"
+#define OAI_REQUEST_IDENTIFY "Identify"
+#define OAI_REQUEST_LISTSETS "ListSets"
+#define OAI_XML_ROOT_ELEMENT "OAI-PMH"
+#define OAI_ATTRIBUTE_IDENTIFIER "identifier"
+#define OAI_ATTRIBUTE_CONTENT "content"
+#define OAI_ATTRIBUTE_DATESTAMP "datestamp"
+#define OAI_ATTRIBUTE_SETSPEC "setspec"
+
+#define OAI_SUCCESS 0
+#define OAI_FAIL 1
 #define OAI_UNKNOWN_REQUEST 2
 #define ERROR_CODE_MISSING_PREFIX 1
+
+#define OAI_OPT_ATTRIBUTE "oai_attribute"
 
 PG_MODULE_MAGIC;
 
@@ -62,6 +71,9 @@ typedef struct oai_fdw_state {
 	int current_row;
 	int end;
 
+	Oid foreigntableid;
+	List *foreignColumns;
+	int numcols;
 	int  rowcount;
 	char *identifier;
 	char *document;
@@ -91,6 +103,9 @@ typedef struct oai_Record {
 
 typedef struct oai_fdw_TableOptions {
 
+	Oid foreigntableid;
+	List *foreignColumns;
+	int numcols;
 	char *metadataPrefix;
 	char *from;
 	char *until;
@@ -100,11 +115,24 @@ typedef struct oai_fdw_TableOptions {
 } oai_fdw_TableOptions;
 
 
+//static const struct OAIFdwOption valid_options[] = {
+//
+//	{ "identifier",	ForeignTableRelationId },
+//	{ "setspec",	ForeignTableRelationId },
+//	{ "datestamp",	ForeignTableRelationId },
+//	{ "content",	ForeignTableRelationId }
+//
+//};
+
 struct string {
 	char *ptr;
 	size_t len;
 };
 
+//typedef struct OAIFdwExecState {
+//
+//	oai_fdw_TableOptions *table;
+//}
 
 void oai_fdw_GetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid);
 void oai_fdw_GetForeignPaths(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid);
@@ -174,7 +202,7 @@ int getHttpResponse(oai_fdw_state **state, char* request, struct string *xmlResp
 
 	elog(DEBUG1,"getHttpResponse called");
 
-	if(strcmp(request,OAI_LISTRECORDS)==0) {
+	if(strcmp(request,OAI_REQUEST_LISTRECORDS)==0) {
 
 		sprintf(postfields,"verb=%s",request);
 
@@ -239,7 +267,7 @@ int getHttpResponse(oai_fdw_state **state, char* request, struct string *xmlResp
 	} else {
 
 		elog(DEBUG1, "  => getHttpResponse: curl failed");
-		return OAI_REQUEST_FAIL;
+		return OAI_FAIL;
 
 	}
 
@@ -251,7 +279,7 @@ int getHttpResponse(oai_fdw_state **state, char* request, struct string *xmlResp
 
 
 
-	return OAI_REQUEST_SUCCESS;
+	return OAI_SUCCESS;
 
 }
 
@@ -266,11 +294,11 @@ void loadOAIRecords(oai_fdw_state **state) {
 	struct string xmlResponse;
 	int record_count = 0;
 
-	int curl_response = getHttpResponse(state,OAI_LISTRECORDS,&xmlResponse);
+	int curl_response = getHttpResponse(state,OAI_REQUEST_LISTRECORDS,&xmlResponse);
 
 	elog(DEBUG1,"oai_fdw_LoadOAIRecords: curl response > %d",curl_response);
 
-	if(curl_response == OAI_REQUEST_SUCCESS) {
+	if(curl_response == OAI_SUCCESS) {
 
 		xmlNodePtr xmlroot = NULL;
 		xmlDocPtr xmldoc;
@@ -297,7 +325,7 @@ void loadOAIRecords(oai_fdw_state **state) {
 
 		}
 
-		if (xmlStrcmp(xmlroot->name, (xmlChar*) OAI_ROOT_ELEMENT)) {
+		if (xmlStrcmp(xmlroot->name, (xmlChar*) OAI_XML_ROOT_ELEMENT)) {
 
 			ereport(ERROR,
 					errcode(ERRCODE_FDW_UNABLE_TO_CREATE_EXECUTION),
@@ -357,8 +385,6 @@ void loadOAIRecords(oai_fdw_state **state) {
 							xmlNodePtr oai_xml_document = metadata->children;
 
 							size_t content_size = (size_t) xmlNodeDump(buffer, xmldoc, oai_xml_document, 0, 1);
-
-							//elog(DEBUG1,"oai_fdw_LoadOAIRecords: buffer size > %ld",content_size);
 
 							oai_record->content = palloc0(sizeof(char)*content_size);
 							oai_record->content = (char*)buffer->content;
@@ -431,7 +457,6 @@ void loadOAIRecords(oai_fdw_state **state) {
 
 						}
 
-
 					}
 
 				}
@@ -472,6 +497,101 @@ void loadOAIRecords(oai_fdw_state **state) {
 }
 
 
+void validateTableStructure(Relation *rel, ForeignTable *ft) {
+
+
+	for (int i = 0; i < (*rel)->rd_att->natts ; i++) {
+
+		List * options = GetForeignColumnOptions(ft->relid, i+1);
+		ListCell *lc;
+
+		foreach (lc, options) {
+
+			DefElem*    def = (DefElem*) lfirst(lc);
+
+			if (strcmp(def->defname, OAI_OPT_ATTRIBUTE)==0) {
+
+				char * option_value = defGetString(def);
+
+				if (strcmp(option_value,OAI_ATTRIBUTE_IDENTIFIER)==0){
+
+					if ((*rel)->rd_att->attrs[i].atttypid != TEXTOID &&
+						(*rel)->rd_att->attrs[i].atttypid != VARCHAROID) {
+
+						ereport(ERROR,
+								errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
+								errmsg("invalid data type for '%s.%s': %d",
+										NameStr((*rel)->rd_rel->relname),
+										NameStr((*rel)->rd_att->attrs[i].attname),
+										(*rel)->rd_att->attrs[i].atttypid),
+								errhint("OAI %s must be of type `text` or `varchar`.",
+										OAI_ATTRIBUTE_IDENTIFIER));
+
+					}
+
+				} else if (strcmp(option_value,OAI_ATTRIBUTE_CONTENT)==0){
+
+					if ((*rel)->rd_att->attrs[i].atttypid != TEXTOID &&
+						(*rel)->rd_att->attrs[i].atttypid != VARCHAROID &&
+						(*rel)->rd_att->attrs[i].atttypid != XMLOID) {
+
+						ereport(ERROR,
+								errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
+								errmsg("invalid data type for '%s.%s': %d",
+										NameStr((*rel)->rd_rel->relname),
+										NameStr((*rel)->rd_att->attrs[i].attname),
+										(*rel)->rd_att->attrs[i].atttypid),
+								errhint("OAI %s expects one of the following types: 'xml', 'text' or 'varchar'.",
+										OAI_ATTRIBUTE_CONTENT));
+					}
+
+
+				} else if (strcmp(option_value,OAI_ATTRIBUTE_SETSPEC)==0){
+
+					if ((*rel)->rd_att->attrs[i].atttypid != TEXTARRAYOID &&
+					   (*rel)->rd_att->attrs[i].atttypid != VARCHARARRAYOID) {
+
+						ereport(ERROR,
+								errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
+								errmsg("invalid data type for '%s.%s': %d",
+										NameStr((*rel)->rd_rel->relname),
+										NameStr((*rel)->rd_att->attrs[i].attname),
+										(*rel)->rd_att->attrs[i].atttypid),
+								errhint("OAI %s expects one of the following types: 'text[]', 'varchar[]'.",
+										OAI_ATTRIBUTE_SETSPEC));
+
+					}
+
+
+				}  else if (strcmp(option_value,OAI_ATTRIBUTE_DATESTAMP)==0){
+
+					if ((*rel)->rd_att->attrs[i].atttypid != TIMESTAMPOID) {
+
+						ereport(ERROR,
+								errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
+								errmsg("invalid data type for '%s.%s': %d",
+										NameStr((*rel)->rd_rel->relname),
+										NameStr((*rel)->rd_att->attrs[i].attname),
+										(*rel)->rd_att->attrs[i].atttypid),
+								errhint("OAI %s expects a 'timestamp'.",
+										OAI_ATTRIBUTE_DATESTAMP));
+
+					}
+
+				}
+
+				elog(DEBUG1,"createOAITuple: column %d option '%s'",i,option_value);
+
+			}
+
+
+		}
+
+	}
+
+
+}
+
 
 void oai_fdw_GetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid) {
 
@@ -480,22 +600,31 @@ void oai_fdw_GetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid forei
 	oai_fdw_TableOptions *opts = palloc0(sizeof(oai_fdw_TableOptions));
 	ListCell *cell;
 
+
+	validateTableStructure(&rel, ft);
+
+
 	int start = 0, end = 64; //TODO necessary?
 
+	//GetForeignColumnOptions
 
-	if (rel->rd_att->natts != 4) {
-		ereport(ERROR,
-				errcode(ERRCODE_FDW_INVALID_COLUMN_NUMBER),
-				errmsg("Incorrect schema for oai_fdw table \"%s\". An OAI foreign table table must have exactly four columns.", NameStr(rel->rd_rel->relname)),
-				errhint("Expected columns are:  identifier (text), content (text/xml), set (text) and datestamp (timestamp)."));
-	}
+	//elog(DEBUG1,">>>>>>>>>> %d",rel->rd_att->attrs[0].attnum);
+	opts->numcols = rel->rd_att->natts;
+
+	opts->foreigntableid = ft->relid;
+	//	if (rel->rd_att->natts == 0) {
+//		ereport(ERROR,
+//				errcode(ERRCODE_FDW_INVALID_COLUMN_NUMBER),
+//				errmsg("Foreign Table '%s' has no columns. An OAI foreign table table must contain at least one column.", NameStr(rel->rd_rel->relname)),
+//				errhint("Expected columns are:  identifier (text), content (text/xml), set (text) and datestamp (timestamp)."));
+//	}
 
 	//TODO: Oid typid = rel->rd_att->attrs[0].atttypid;
-
+/*
 	if( (rel->rd_att->attrs[0].atttypid != TEXTOID && rel->rd_att->attrs[0].atttypid != VARCHAROID) ||
-			(rel->rd_att->attrs[1].atttypid != TEXTOID && rel->rd_att->attrs[1].atttypid != XMLOID  && rel->rd_att->attrs[1].atttypid != VARCHAROID)||
-			(rel->rd_att->attrs[2].atttypid != TEXTARRAYOID && rel->rd_att->attrs[2].atttypid != VARCHARARRAYOID) ||
-			rel->rd_att->attrs[3].atttypid != TIMESTAMPOID )  {
+		(rel->rd_att->attrs[1].atttypid != TEXTOID && rel->rd_att->attrs[1].atttypid != XMLOID  && rel->rd_att->attrs[1].atttypid != VARCHAROID)||
+		(rel->rd_att->attrs[2].atttypid != TEXTARRAYOID && rel->rd_att->attrs[2].atttypid != VARCHARARRAYOID) ||
+  		rel->rd_att->attrs[3].atttypid != TIMESTAMPOID )  {
 
 		ereport(ERROR,
 				errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
@@ -504,7 +633,11 @@ void oai_fdw_GetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid forei
 
 	}
 
+
+	*/
+
 	table_close(rel, NoLock);
+
 
 	foreach(cell, ft->options) {
 
@@ -594,6 +727,8 @@ ForeignScan *oai_fdw_GetForeignPlan(PlannerInfo *root, RelOptInfo *baserel, Oid 
 	state->from = opts->from;
 	state->until = opts->until;
 	state->metadataPrefix = opts->metadataPrefix;
+	state->foreigntableid = opts->foreigntableid;
+	state->numcols = opts->numcols;
 
 	//elog(DEBUG1,"GetForeignPlan set = %s",opts->set);
 
@@ -623,6 +758,78 @@ void oai_fdw_BeginForeignScan(ForeignScanState *node, int eflags) {
 
 }
 
+void createOAITuple(TupleTableSlot *slot, oai_fdw_state *state, oai_Record *oai_record ) {
+
+
+	//ForeignTable *ft = GetForeignTable(state->foreigntableid);
+	Relation rel = table_open(state->foreigntableid, NoLock);
+
+	//if( (rel->rd_att->attrs[0].atttypid != TEXTOID && rel->rd_att->attrs[0].atttypid != VARCHAROID) ||
+
+	for (int i = 0; i < state->numcols; i++) {
+
+		List * options = GetForeignColumnOptions(state->foreigntableid, i+1);
+		ListCell *lc;
+
+		foreach (lc, options) {
+
+			DefElem*    def = (DefElem*) lfirst(lc);
+
+			if (strcmp(def->defname, OAI_OPT_ATTRIBUTE)==0) {
+
+				char * option_value = defGetString(def);
+
+				if (strcmp(option_value,OAI_ATTRIBUTE_IDENTIFIER)==0){
+
+					if (rel->rd_att->attrs[i].atttypid != TEXTOID && rel->rd_att->attrs[0].atttypid != VARCHAROID) {
+
+
+
+					}
+
+					slot->tts_isnull[i] = false;
+					slot->tts_values[i] = CStringGetTextDatum(oai_record->identifier);
+
+				} else if (strcmp(option_value,OAI_ATTRIBUTE_CONTENT)==0){
+
+					slot->tts_isnull[i] = false;
+					slot->tts_values[i] = CStringGetTextDatum(oai_record->content);
+
+				} else if (strcmp(option_value,OAI_ATTRIBUTE_SETSPEC)==0){
+
+					slot->tts_isnull[i] = false;
+					slot->tts_values[i] = DatumGetArrayTypeP(oai_record->setsArray);
+
+				}  else if (strcmp(option_value,OAI_ATTRIBUTE_DATESTAMP)==0){
+
+					slot->tts_isnull[i] = false;
+					slot->tts_values[i] = CStringGetTextDatum(oai_record->datestamp);
+
+				}
+
+				elog(DEBUG1,"createOAITuple: column %d option '%s'",i,option_value);
+
+			}
+
+		}
+
+	}
+
+
+
+//	slot->tts_isnull[0] = false;
+//	slot->tts_values[0] = CStringGetTextDatum(oai_record->identifier);
+
+//	slot->tts_isnull[1] = false;
+//	slot->tts_values[1] = CStringGetTextDatum(oai_record->content);
+//
+//	slot->tts_isnull[2] = false;
+//	slot->tts_values[2] = DatumGetArrayTypeP(oai_record->setsArray);
+//
+//	slot->tts_isnull[3] = false;
+//	slot->tts_values[3] = CStringGetTextDatum(oai_record->datestamp);
+
+}
 
 TupleTableSlot *oai_fdw_IterateForeignScan(ForeignScanState *node) {
 
@@ -633,28 +840,15 @@ TupleTableSlot *oai_fdw_IterateForeignScan(ForeignScanState *node) {
 
 	ExecClearTuple(slot);
 
-	hasnext =  fetchNextOAIRecord(state,&oai_record);
+	hasnext = fetchNextOAIRecord(state,&oai_record);
 
 	if(hasnext){
 
 		elog(DEBUG1,"oai_fdw_IterateForeignScan: xml length > %ld",strlen(oai_record->content));
 		elog(DEBUG1,"oai_fdw_IterateForeignScan: identifier > %s",oai_record->identifier);
-		//elog(DEBUG1,"oai_fdw_IterateForeignScan: setSpec    > %s",entry->setspec);
 		elog(DEBUG1,"oai_fdw_IterateForeignScan: datestamp  > %s",oai_record->datestamp);
 
-		slot->tts_isnull[0] = false;
-		slot->tts_values[0] = CStringGetTextDatum(oai_record->identifier);
-
-		slot->tts_isnull[1] = false;
-		slot->tts_values[1] = CStringGetTextDatum(oai_record->content);
-
-		slot->tts_isnull[2] = false;
-		slot->tts_values[2] = DatumGetArrayTypeP(oai_record->setsArray);
-		//slot->tts_values[2] = DatumGetArrayTypeP(arr);
-		//slot->tts_values[2] = CStringGetTextDatum(entry->setspec);
-
-		slot->tts_isnull[3] = false;
-		slot->tts_values[3] = CStringGetTextDatum(oai_record->datestamp);
+		createOAITuple(slot, state, oai_record);
 
 		//text*format="YYYY-MM-DDThh:mi:ssZ";
 
