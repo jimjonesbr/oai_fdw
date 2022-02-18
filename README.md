@@ -24,7 +24,22 @@ CREATE SERVER oai_server FOREIGN DATA WRAPPER oai_fdw;
 
 The next step is to create a `FOREIGN TABLE` and map its columns to the supported `oai_attributes`. The attributes must be mapped using the `OPTION` clause of each column, as shown in the exaple bellow. The `oai_attribute` values expected are:
 
-* `identifier`: the unique identifier of an item in a repository (OAI Header);
+
+| oai_attribute | PostgreSQL type | Description |
+|---------------|-----------------|-------------|
+|               |                 |             |
+|               |                 |             |
+|               |                 |             |
+|               |                 |             |
+|               |                 |             |
+|               |                 |             |
+|               |                 |             |
+|               |                 |             |
+|               |                 |             |
+
+
+
+* `identifier`: the unique identifier of an item in a repository (OAI Header). Columns mapped to this attribute PostgreSQL data type req `text`
 * `setspec`: the set membership of the item for the purpose of selective harvesting. (OAI Header)
 * `datestamp`: the date of creation, modification or deletion of the record for the purpose of selective harvesting. (OAI Header)
 * `content`: the XML document representing the retrieved recored (OAI Record)
