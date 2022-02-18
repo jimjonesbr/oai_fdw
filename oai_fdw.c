@@ -497,10 +497,14 @@ void loadOAIRecords(oai_fdw_state **state) {
 }
 
 
-void validateTableStructure(Relation *rel, ForeignTable *ft) {
+void validateTableStructure(oai_fdw_TableOptions *opts, ForeignTable *ft) {
 
 
-	for (int i = 0; i < (*rel)->rd_att->natts ; i++) {
+	Relation rel = table_open(ft->relid, NoLock);
+	opts->numcols = rel->rd_att->natts;
+	opts->foreigntableid = ft->relid;
+
+	for (int i = 0; i < rel->rd_att->natts ; i++) {
 
 		List * options = GetForeignColumnOptions(ft->relid, i+1);
 		ListCell *lc;
@@ -515,15 +519,17 @@ void validateTableStructure(Relation *rel, ForeignTable *ft) {
 
 				if (strcmp(option_value,OAI_ATTRIBUTE_IDENTIFIER)==0){
 
-					if ((*rel)->rd_att->attrs[i].atttypid != TEXTOID &&
-						(*rel)->rd_att->attrs[i].atttypid != VARCHAROID) {
+					if (rel->rd_att->attrs[i].atttypid != TEXTOID &&
+						rel->rd_att->attrs[i].atttypid != VARCHAROID) {
+
+						//table_close(rel, NoLock);
 
 						ereport(ERROR,
 								errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
 								errmsg("invalid data type for '%s.%s': %d",
-										NameStr((*rel)->rd_rel->relname),
-										NameStr((*rel)->rd_att->attrs[i].attname),
-										(*rel)->rd_att->attrs[i].atttypid),
+										NameStr(rel->rd_rel->relname),
+										NameStr(rel->rd_att->attrs[i].attname),
+										rel->rd_att->attrs[i].atttypid),
 								errhint("OAI %s must be of type `text` or `varchar`.",
 										OAI_ATTRIBUTE_IDENTIFIER));
 
@@ -531,16 +537,18 @@ void validateTableStructure(Relation *rel, ForeignTable *ft) {
 
 				} else if (strcmp(option_value,OAI_ATTRIBUTE_CONTENT)==0){
 
-					if ((*rel)->rd_att->attrs[i].atttypid != TEXTOID &&
-						(*rel)->rd_att->attrs[i].atttypid != VARCHAROID &&
-						(*rel)->rd_att->attrs[i].atttypid != XMLOID) {
+					if (rel->rd_att->attrs[i].atttypid != TEXTOID &&
+						rel->rd_att->attrs[i].atttypid != VARCHAROID &&
+						rel->rd_att->attrs[i].atttypid != XMLOID) {
+
+						//table_close(rel, NoLock);
 
 						ereport(ERROR,
 								errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
 								errmsg("invalid data type for '%s.%s': %d",
-										NameStr((*rel)->rd_rel->relname),
-										NameStr((*rel)->rd_att->attrs[i].attname),
-										(*rel)->rd_att->attrs[i].atttypid),
+										NameStr(rel->rd_rel->relname),
+										NameStr(rel->rd_att->attrs[i].attname),
+										rel->rd_att->attrs[i].atttypid),
 								errhint("OAI %s expects one of the following types: 'xml', 'text' or 'varchar'.",
 										OAI_ATTRIBUTE_CONTENT));
 					}
@@ -548,15 +556,17 @@ void validateTableStructure(Relation *rel, ForeignTable *ft) {
 
 				} else if (strcmp(option_value,OAI_ATTRIBUTE_SETSPEC)==0){
 
-					if ((*rel)->rd_att->attrs[i].atttypid != TEXTARRAYOID &&
-					   (*rel)->rd_att->attrs[i].atttypid != VARCHARARRAYOID) {
+					if (rel->rd_att->attrs[i].atttypid != TEXTARRAYOID &&
+					    rel->rd_att->attrs[i].atttypid != VARCHARARRAYOID) {
+
+						//table_close(rel, NoLock);
 
 						ereport(ERROR,
 								errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
 								errmsg("invalid data type for '%s.%s': %d",
-										NameStr((*rel)->rd_rel->relname),
-										NameStr((*rel)->rd_att->attrs[i].attname),
-										(*rel)->rd_att->attrs[i].atttypid),
+										NameStr(rel->rd_rel->relname),
+										NameStr(rel->rd_att->attrs[i].attname),
+										rel->rd_att->attrs[i].atttypid),
 								errhint("OAI %s expects one of the following types: 'text[]', 'varchar[]'.",
 										OAI_ATTRIBUTE_SETSPEC));
 
@@ -565,14 +575,16 @@ void validateTableStructure(Relation *rel, ForeignTable *ft) {
 
 				}  else if (strcmp(option_value,OAI_ATTRIBUTE_DATESTAMP)==0){
 
-					if ((*rel)->rd_att->attrs[i].atttypid != TIMESTAMPOID) {
+					if (rel->rd_att->attrs[i].atttypid != TIMESTAMPOID) {
+
+						//table_close(rel, NoLock);
 
 						ereport(ERROR,
 								errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
 								errmsg("invalid data type for '%s.%s': %d",
-										NameStr((*rel)->rd_rel->relname),
-										NameStr((*rel)->rd_att->attrs[i].attname),
-										(*rel)->rd_att->attrs[i].atttypid),
+										NameStr(rel->rd_rel->relname),
+										NameStr(rel->rd_att->attrs[i].attname),
+										rel->rd_att->attrs[i].atttypid),
 								errhint("OAI %s expects a 'timestamp'.",
 										OAI_ATTRIBUTE_DATESTAMP));
 
@@ -589,19 +601,20 @@ void validateTableStructure(Relation *rel, ForeignTable *ft) {
 
 	}
 
+	table_close(rel, NoLock);
 
 }
 
 
 void oai_fdw_GetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid) {
 
-	Relation rel = table_open(foreigntableid, NoLock);
+	//Relation rel = table_open(foreigntableid, NoLock);
 	ForeignTable *ft = GetForeignTable(foreigntableid);
 	oai_fdw_TableOptions *opts = palloc0(sizeof(oai_fdw_TableOptions));
 	ListCell *cell;
 
 
-	validateTableStructure(&rel, ft);
+	validateTableStructure(opts, ft);
 
 
 	int start = 0, end = 64; //TODO necessary?
@@ -609,9 +622,9 @@ void oai_fdw_GetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid forei
 	//GetForeignColumnOptions
 
 	//elog(DEBUG1,">>>>>>>>>> %d",rel->rd_att->attrs[0].attnum);
-	opts->numcols = rel->rd_att->natts;
 
-	opts->foreigntableid = ft->relid;
+
+
 	//	if (rel->rd_att->natts == 0) {
 //		ereport(ERROR,
 //				errcode(ERRCODE_FDW_INVALID_COLUMN_NUMBER),
@@ -636,7 +649,7 @@ void oai_fdw_GetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid forei
 
 	*/
 
-	table_close(rel, NoLock);
+
 
 
 	foreach(cell, ft->options) {
@@ -762,7 +775,7 @@ void createOAITuple(TupleTableSlot *slot, oai_fdw_state *state, oai_Record *oai_
 
 
 	//ForeignTable *ft = GetForeignTable(state->foreigntableid);
-	Relation rel = table_open(state->foreigntableid, NoLock);
+//	Relation rel = table_open(state->foreigntableid, NoLock);
 
 	//if( (rel->rd_att->attrs[0].atttypid != TEXTOID && rel->rd_att->attrs[0].atttypid != VARCHAROID) ||
 
@@ -780,12 +793,6 @@ void createOAITuple(TupleTableSlot *slot, oai_fdw_state *state, oai_Record *oai_
 				char * option_value = defGetString(def);
 
 				if (strcmp(option_value,OAI_ATTRIBUTE_IDENTIFIER)==0){
-
-					if (rel->rd_att->attrs[i].atttypid != TEXTOID && rel->rd_att->attrs[0].atttypid != VARCHAROID) {
-
-
-
-					}
 
 					slot->tts_isnull[i] = false;
 					slot->tts_values[i] = CStringGetTextDatum(oai_record->identifier);
