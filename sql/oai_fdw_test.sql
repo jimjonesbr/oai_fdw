@@ -1,7 +1,7 @@
 --DROP EXTENSION IF EXISTS oai_fdw;
 --CREATE EXTENSION oai_fdw;
 
-SET client_min_messages to 'debug';
+--SET client_min_messages to 'debug';
 
 CREATE SERVER oai_server FOREIGN DATA WRAPPER oai_fdw;
 
@@ -16,8 +16,9 @@ SERVER oai_server OPTIONS (url 'https://sammlungen.ulb.uni-muenster.de/oai',
                            until '2015-07-15');
 
 
-SELECT identifier, content, setpec, datestamp FROM oai_ulb_ulbmshs LIMIT 12;
+SELECT identifier, content, setpec, datestamp FROM oai_ulb_ulbmshs LIMIT 2;
 
+/*
 
 CREATE FOREIGN TABLE oai_ulb_ulbmshs_no_interval (identifier text, content xml, setpec text[], datestamp timestamp) 
 SERVER oai_server OPTIONS (url 'https://sammlungen.ulb.uni-muenster.de/oai', 
@@ -99,3 +100,5 @@ SERVER oai_server OPTIONS (url 'najhakjakjhakhakhakhakjgakjajh',
                            set 'ulbmshs');
 
 SELECT * FROM oai_invalid_url;
+
+*/

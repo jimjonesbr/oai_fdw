@@ -2,6 +2,12 @@
 ---------------------------------------------
 # PostgreSQL Foreign Data Wrapper for OAI-PMH (oai_fdw)
 
+
+## Requirements
+
+* [libxml2](http://www.xmlsoft.org/)
+* [libcurl](https://curl.se/libcurl/)
+
 ## Usage
 
 Create a `oai_fdw` server
