@@ -25,24 +25,12 @@ CREATE SERVER oai_server FOREIGN DATA WRAPPER oai_fdw;
 The next step is to create a `FOREIGN TABLE` and map its columns to the supported `oai_attributes`. The attributes must be mapped using the `OPTION` clause of each column, as shown in the exaple bellow. The `oai_attribute` values expected are:
 
 
-| oai_attribute | PostgreSQL type | Description |
-|---------------|-----------------|-------------|
-|               |                 |             |
-|               |                 |             |
-|               |                 |             |
-|               |                 |             |
-|               |                 |             |
-|               |                 |             |
-|               |                 |             |
-|               |                 |             |
-|               |                 |             |
-
-
-
-* `identifier`: the unique identifier of an item in a repository (OAI Header). Columns mapped to this attribute PostgreSQL data type req `text`
-* `setspec`: the set membership of the item for the purpose of selective harvesting. (OAI Header)
-* `datestamp`: the date of creation, modification or deletion of the record for the purpose of selective harvesting. (OAI Header)
-* `content`: the XML document representing the retrieved recored (OAI Record)
+| oai_attribute | PostgreSQL type          | Description                                                                                                        |
+|---------------|--------------------------|--------------------------------------------------------------------------------------------------------------------|
+| `identifier`  | `text`, `varchar`        | The unique identifier of an item in a repository (OAI Header).                                                     |
+| `setspec`     | `text[]`, `varchar[]`    | The set membership of the item for the purpose of selective harvesting. (OAI Header)                               |
+| `datestamp`   | `timestamp`              | The date of creation, modification or deletion of the record for the purpose of selective harvesting. (OAI Header) |
+| `content`     | `text`, `varchar`, `xml` | The XML document representing the retrieved recored (OAI Record)                                                   |
 
 
 We still need to tell the server where the OAI-PMH server is and which information we're looking for. These information can be attached to the table using the `SERVER` clause and, similar to the he column mapping, also has a `OPTION` clause. These options allow to limit harvest requests to portions of the metadata available from a repository. Expected options are:
