@@ -33,13 +33,16 @@ The next step is to create a `FOREIGN TABLE` and map its columns to the supporte
 | `content`     | `text`, `varchar`, `xml` | The XML document representing the retrieved recored (OAI Record)                                                   |
 
 
-We still need to tell the server where the OAI-PMH server is and which information we're looking for. These information can be attached to the table using the `SERVER` clause and, similar to the he column mapping, also has a `OPTION` clause. These options allow to limit harvest requests to portions of the metadata available from a repository. Expected options are:
+Now we just need to tell the `oai_fdw` server where the OAI-PMH server is, and which information we're looking for. These information are also attached to the table using the `SERVER` clause, which similar to the he column mapping also has an `OPTION` clause. These options allow to limit harvest requests to portions of the metadata available from a repository. Expected options are:
 
-* `url` OAI-PMH Werbserice URL. 
-* `metadataPrefix` specifies the metadataPrefix of the format that should be included in the metadata part of the returned records. Records should be included only for items from which the metadata format matching the metadataPrefix can be disseminated. The metadata formats supported by a repository and for a particular item can be retrieved using the [ListMetadataFormats](http://www.openarchives.org/OAI/openarchivesprotocol.html#ListMetadataFormats) request. 
-* `from` an *optional* argument with a UTCdatetime value, which specifies a lower bound for datestamp-based selective harvesting. 
-* `until` an *optional* argument with a UTCdatetime value, which specifies a upper bound for datestamp-based selective harvesting. 
-* `set` an *optional* argument with a setSpec value , which specifies set criteria for selective harvesting. 
+| oai_fdw option   | Description                                                                                                                                                                                                                                                                         |
+|------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `url`            | OAI-PMH Werbserice URL.                                                                                                                                                                                                                                                             |
+| `metadataPrefix` | specifies the metadataPrefix of the format that should be included in the metadata part of the returned records. Records should be included only for items from which the                                                                                                           |
+| `from`           | metadata format matching the metadataPrefix can be disseminated. The metadata formats supported by a repository and for a particular item can be retrieved using the [ListMetadataFormats](http://www.openarchives.org/OAI/openarchivesprotocol.html#ListMetadataFormats) request.  |
+| `until`          | an *optional* argument with a UTCdatetime value, which specifies a upper bound for datestamp-based selective harvesting.                                                                                                                                                            |
+| `set`            | undefinedan *optional* argument with a setSpec value , which specifies set criteria for selective harvesting.                                                                                                                                                                       |
+
 
 ####  Example:
 
