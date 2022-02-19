@@ -2,6 +2,7 @@
 ---------------------------------------------
 # PostgreSQL Foreign Data Wrapper for OAI-PMH (oai_fdw)
 
+A PostgreSQL Foreign Data Wrapper to access OAI-PMH Werbservices (Open Archives Initiative Protocol for Metadata Harvesting). It supports the [OAI-PMH 2.0 Protocol](http://www.openarchives.org/OAI/openarchivesprotocol.html). 
 
 ## Requirements
 
@@ -37,12 +38,11 @@ Now we just need to tell the `oai_fdw` server where the OAI-PMH server is, and w
 
 | oai_fdw option   | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 |------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `url`            | URL of the OAI-PMH Werbserice                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| `metadataPrefix` | a required argument (unless the exclusive argument resumptionToken is used) that specifies the metadataPrefix of the format that should be included in the metadata part of the returned records. Records should be included only for items from which the metadata format
-matching the metadataPrefix can be disseminated. The metadata formats supported by a repository and for a particular item can be retrieved using the ListMetadataFormats request. |
-| `from`           | an optional argument with a UTCdatetime value, which specifies a lower bound for datestamp-based selective harvesting.                                                                                                                                                                                                                                                                                                                                       |
-| `until`          | an optional argument with a UTCdatetime value, which specifies a upper bound for datestamp-based selective harvesting.                                                                                                                                                                                                                                                                                                                                       |
-| `set`            | an optional argument with a setSpec value , which specifies set criteria for selective harvesting.                                                                                                                                                                                                                                                                                                                                                           |
+| `url`            | URL of the OAI-PMH Werbserice                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `metadataPrefix` | an argument that specifies the metadataPrefix of the format that should be included in the metadata part of the returned records. Records should be included only for items from which the metadata format matching the metadataPrefix can be disseminated. The metadata formats supported by a repository and for a particular item can be retrieved using the [ListMetadataFormats](http://www.openarchives.org/OAI/openarchivesprotocol.html#ListMetadataFormats) request. |
+| `from`           | an *optional* argument with a UTCdatetime value, which specifies a lower bound for datestamp-based selective harvesting.|
+| `until`          | an *optional* argument with a UTCdatetime value, which specifies a upper bound for datestamp-based selective harvesting.|
+| `set`            | an *optional* argument with a setSpec value , which specifies set criteria for selective harvesting.|
 
 
 ####  Example:
