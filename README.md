@@ -20,7 +20,7 @@ CREATE EXTENSION oai_fdw;
 In order to access the `oai_fdw` features you first need to create a `SERVER` 
 
 ```sql
-CREATE SERVER oai_server FOREIGN DATA WRAPPER oai_fdw;
+CREATE SERVER my_oai_server FOREIGN DATA WRAPPER oai_fdw;
 ```
 
 The next step is to create a `FOREIGN TABLE` and map its columns to the supported `oai_attributes`. The attributes must be mapped using the `OPTION` clause of each column, as shown in the exaple bellow. The `oai_attribute` values expected are:
@@ -50,10 +50,10 @@ Now we just need to tell the `oai_fdw` server where the OAI-PMH server is, and w
 ```sql
 CREATE FOREIGN TABLE oai_ulb_ulbmshs (
   id text                OPTIONS (oai_attribute 'identifier'), 
-  xmldoc text            OPTIONS (oai_attribute 'content'), 
+  xmldoc xml             OPTIONS (oai_attribute 'content'), 
   sets text[]            OPTIONS (oai_attribute 'setspec'), 
   updatedate timestamp   OPTIONS (oai_attribute 'datestamp')) 
-SERVER oai_server OPTIONS (url 'https://sammlungen.ulb.uni-muenster.de/oai', 
+SERVER my_oai_server OPTIONS (url 'https://sammlungen.ulb.uni-muenster.de/oai', 
                            set 'ulbmshs', 
                            metadataPrefix 'oai_dc', 
                            from '2015-07-15', 
