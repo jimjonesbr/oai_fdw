@@ -2,7 +2,6 @@
 ---------------------------------------------
 # PostgreSQL Foreign Data Wrapper for OAI-PMH (oai_fdw)
 
-A PostgreSQL Foreign Data Wrapper to access OAI-PMH Werbservices (Open Archives Initiative Protocol for Metadata Harvesting). It supports the [OAI-PMH 2.0 Protocol](http://www.openarchives.org/OAI/openarchivesprotocol.html). 
 
 ## Requirements
 
@@ -20,7 +19,7 @@ CREATE EXTENSION oai_fdw;
 In order to access the `oai_fdw` features you first need to create a `SERVER` 
 
 ```sql
-CREATE SERVER my_oai_server FOREIGN DATA WRAPPER oai_fdw;
+CREATE SERVER oai_server FOREIGN DATA WRAPPER oai_fdw;
 ```
 
 The next step is to create a `FOREIGN TABLE` and map its columns to the supported `oai_attributes`. The attributes must be mapped using the `OPTION` clause of each column, as shown in the exaple bellow. The `oai_attribute` values expected are:
@@ -38,11 +37,11 @@ Now we just need to tell the `oai_fdw` server where the OAI-PMH server is, and w
 
 | oai_fdw option   | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 |------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `url`            | URL of the OAI-PMH Werbserice                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| `metadataPrefix` | an argument that specifies the metadataPrefix of the format that should be included in the metadata part of the returned records. Records should be included only for items from which the metadata format matching the metadataPrefix can be disseminated. The metadata formats supported by a repository and for a particular item can be retrieved using the [ListMetadataFormats](http://www.openarchives.org/OAI/openarchivesprotocol.html#ListMetadataFormats) request. |
-| `from`           | an *optional* argument with a UTCdatetime value, which specifies a lower bound for datestamp-based selective harvesting.|
-| `until`          | an *optional* argument with a UTCdatetime value, which specifies a upper bound for datestamp-based selective harvesting.|
-| `set`            | an *optional* argument with a setSpec value , which specifies set criteria for selective harvesting.|
+| `url`            | URL of the OAI-PMH Werbserice                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `metadataPrefix` | a required argument (unless the exclusive argument resumptionToken is used) that specifies the metadataPrefix of the format that should be included in the metadata part of the returned records. Records should be included only for items from which the metadata format matching the metadataPrefix can be disseminated. The metadata formats supported by a repository and for a particular item can be retrieved using the ListMetadataFormats request. |
+| `from`           | an *optional* argument with a UTCdatetime value, which specifies a lower bound for datestamp-based selective harvesting.                                                                                                                                                                                                                                                                                                                                       |
+| `until`          | an *optional* argument with a UTCdatetime value, which specifies a upper bound for datestamp-based selective harvesting.                                                                                                                                                                                                                                                                                                                                       |
+| `set`            | an *optional* argument with a setSpec value , which specifies set criteria for selective harvesting.                                                                                                                                                                                                                                                                                                                                                           |
 
 
 ####  Example:
@@ -50,10 +49,10 @@ Now we just need to tell the `oai_fdw` server where the OAI-PMH server is, and w
 ```sql
 CREATE FOREIGN TABLE oai_ulb_ulbmshs (
   id text                OPTIONS (oai_attribute 'identifier'), 
-  xmldoc xml             OPTIONS (oai_attribute 'content'), 
+  xmldoc text            OPTIONS (oai_attribute 'content'), 
   sets text[]            OPTIONS (oai_attribute 'setspec'), 
   updatedate timestamp   OPTIONS (oai_attribute 'datestamp')) 
-SERVER my_oai_server OPTIONS (url 'https://sammlungen.ulb.uni-muenster.de/oai', 
+SERVER oai_server OPTIONS (url 'https://sammlungen.ulb.uni-muenster.de/oai', 
                            set 'ulbmshs', 
                            metadataPrefix 'oai_dc', 
                            from '2015-07-15', 
