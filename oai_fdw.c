@@ -36,9 +36,9 @@
 //#include "nodes/nodes.h"
 //#include "utils/date.h"
 //#include "utils/datetime.h"
-//#include "utils/timestamp.h"
+#include "utils/timestamp.h"
 //#include "catalog/pg_cast.h"
-//#include "utils/formatting.h"
+#include "utils/formatting.h"
 //#include "utils/pg_locale.h"
 //#define LIBXML_OUTPUT_ENABLED //??
 //#define LIBXML_TREE_ENABLED //??
@@ -143,7 +143,7 @@ void oai_fdw_ReScanForeignScan(ForeignScanState *node);
 void oai_fdw_EndForeignScan(ForeignScanState *node);
 
 //void oai_fdw_LoadOAIDocuments(List **list, char *url, char *metadataPrefix, char *set, char *from, char * until);
-void loadOAIRecords(oai_fdw_state ** state);
+void listRecordsRequest(oai_fdw_state ** state);
 void init_string(struct string *s);
 size_t writefunc(void *ptr, size_t size, size_t nmemb, struct string *s);
 int fetchNextOAIRecord(oai_fdw_state *state,oai_Record **oai_record);
@@ -302,210 +302,209 @@ int executeOAIRequest(oai_fdw_state **state, char* request, struct string *xmlRe
 //
 //}
 
-void loadOAIRecords(oai_fdw_state **state) {
+void listRecordsRequest(oai_fdw_state **state) {
 
 	struct string xmlResponse;
-	int record_count = 0;
+		int record_count = 0;
 
-	int curl_response = executeOAIRequest(state,OAI_REQUEST_LISTRECORDS,&xmlResponse);
+		int oaiExecuteResponse = executeOAIRequest(state,OAI_REQUEST_LISTRECORDS,&xmlResponse);
 
-	elog(DEBUG1,"oai_fdw_LoadOAIRecords: curl response > %d",curl_response);
+		elog(DEBUG1,"listRecordsRequest: curl response > %d",oaiExecuteResponse);
 
-	if(curl_response == OAI_SUCCESS) {
+		if(oaiExecuteResponse == OAI_SUCCESS) {
 
-		xmlNodePtr xmlroot = NULL;
-		xmlDocPtr xmldoc;
-		xmlNodePtr recordsList;
-		xmlNodePtr record;		
-		xmlNodePtr header;
-		xmlNodePtr metadata;
-		xmlNodePtr headerList;
-		oai_Record *oai_record;
+			xmlNodePtr xmlroot = NULL;
+			xmlDocPtr xmldoc;
+			xmlNodePtr recordsList;
+			xmlNodePtr record;
+			xmlNodePtr header;
+			xmlNodePtr metadata;
+			xmlNodePtr headerList;
+			oai_Record *oai_record;
+
+
+			xmlInitParser();
+			xmldoc = xmlReadMemory(xmlResponse.ptr, strlen(xmlResponse.ptr), NULL, NULL, XML_PARSE_SAX1);
+
+			if (!xmldoc || (xmlroot = xmlDocGetRootElement(xmldoc)) == NULL) {
+
+				xmlFreeDoc(xmldoc);
+				xmlCleanupParser();
+
+				ereport(ERROR,
+						errcode(ERRCODE_FDW_UNABLE_TO_CREATE_EXECUTION),
+						errmsg("Invalid XML response for URL \"%s\"",(*state)->url));
+
+			}
+
+			if (xmlStrcmp(xmlroot->name, (xmlChar*) OAI_XML_ROOT_ELEMENT)) {
+
+				ereport(ERROR,
+						errcode(ERRCODE_FDW_UNABLE_TO_CREATE_EXECUTION),
+						errmsg("Invalid XML response for URL \"%s\"",(*state)->url),
+						errhint("Make sure that the OAI-PMH service is running or check the URL given in the CREATE FOREIGN TABLE option."));
+
+			}
+
+			elog(DEBUG1,"  listRecordsRequest: xmldoc parsed (xmlReadMemory)");
+
+
+			for (recordsList = xmlroot->children; recordsList != NULL; recordsList = recordsList->next) {
+
+				if (recordsList->type != XML_ELEMENT_NODE) continue;
+
+				if (xmlStrcmp(recordsList->name, (xmlChar*)"error")==0) {
+
+					char* oai_error_msg = (char*)xmlNodeGetContent(recordsList);
+					char* oai_error_code = (char*)xmlGetProp(recordsList, (xmlChar*) "code");
+
+					if(oai_error_msg && oai_error_code) {
+
+						ereport(ERROR,
+								errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
+								errmsg("%s (%s)",oai_error_msg,oai_error_code));
+
+					} else {
+
+						ereport(ERROR,
+								errcode(ERRCODE_FDW_UNABLE_TO_CREATE_REPLY),
+								errmsg("Unknown OAI Server Error"));
+
+					}
+
+
+				}
+
+				if (xmlStrcmp(recordsList->name, (xmlChar*)"ListRecords")!=0) continue;
+
+				for (record = recordsList->children; record != NULL; record = record->next) {
+
+					xmlBufferPtr buffer;
+
+					if (record->type != XML_ELEMENT_NODE) continue;
+
+					oai_record = palloc0(sizeof(oai_Record));
+					buffer = xmlBufferCreate();
+
+					if (xmlStrcmp(record->name, (xmlChar*) "record") == 0) {
+
+						for (metadata = record->children; metadata != NULL; metadata = metadata->next) {
+
+							if (metadata->type != XML_ELEMENT_NODE) continue;
+
+							if (xmlStrcmp(metadata->name, (xmlChar*) "metadata") == 0) {
+
+								xmlNodePtr oai_xml_document = metadata->children;
+
+								size_t content_size = (size_t) xmlNodeDump(buffer, xmldoc, oai_xml_document, 0, 1);
+
+								oai_record->content = palloc0(sizeof(char)*content_size);
+								oai_record->content = (char*)buffer->content;
+								oai_record->identifier = NULL;
+								oai_record->datestamp = NULL;
+								oai_record->rownumber = record_count;
+
+								elog(DEBUG1,"  listRecordsRequest: buffer size > %ld",content_size);
+
+							}
 
 
 
-		xmlInitParser();
-		xmldoc = xmlReadMemory(xmlResponse.ptr, strlen(xmlResponse.ptr), NULL, NULL, XML_PARSE_SAX1);
+						}
 
-		if (!xmldoc || (xmlroot = xmlDocGetRootElement(xmldoc)) == NULL) {
+
+
+
+
+					} else if (xmlStrcmp(record->name, (xmlChar*) "resumptionToken") == 0) {
+
+						size_t size_token = strlen((char*)xmlNodeGetContent(record));
+						char * token = (char*)xmlNodeGetContent(record);
+
+						elog(DEBUG1,"  listRecordsRequest: resumptionToken found > %s",token);
+
+						(*state)->resumptionToken = palloc0(sizeof(char)*size_token);
+						(*state)->resumptionToken = token;
+
+						continue;
+
+					} else {
+
+						continue;
+
+					}
+
+					for (header = record->children; header != NULL; header = header->next) {
+
+						if (header->type != XML_ELEMENT_NODE) continue;
+						if (xmlStrcmp(header->name, (xmlChar*) "header") != 0) continue;
+
+						for (headerList = header->children; headerList!= NULL; headerList = headerList->next) {
+
+							size_t size_node;
+							char *node_content;
+
+							if (headerList->type != XML_ELEMENT_NODE) continue;
+
+							node_content = (char*)xmlNodeGetContent(headerList);
+							size_node = strlen(node_content);
+
+							if (xmlStrcmp(headerList->name, (xmlChar*) "identifier")==0){
+
+								oai_record->identifier = palloc0(sizeof(char)*size_node);
+								oai_record->identifier = node_content;
+
+							}
+
+							if (xmlStrcmp(headerList->name, (xmlChar*) "setSpec")==0){
+
+								appendTextArray(&oai_record->setsArray,node_content);
+
+							}
+
+							if (xmlStrcmp(headerList->name, (xmlChar*) "datestamp")==0){
+
+								oai_record->datestamp= palloc0(sizeof(char)*size_node);
+								oai_record->datestamp= node_content;
+
+							}
+
+						}
+
+					}
+
+					if((*state)->list == NIL) {
+						elog(DEBUG1,"  listRecordsRequest: first record -> %s",oai_record->identifier);
+						(*state)->list = list_make1(oai_record) ;
+					} else {
+						elog(DEBUG1,"  listRecordsRequest: appending record -> %s",oai_record->identifier);
+						list_concat((*state)->list, list_make1(oai_record));
+					}
+
+					record_count++;
+
+					xmlBufferDetach(buffer);
+					xmlBufferFree(buffer);
+
+				}
+
+			}
 
 			xmlFreeDoc(xmldoc);
 			xmlCleanupParser();
 
-			ereport(ERROR,
-					errcode(ERRCODE_FDW_UNABLE_TO_CREATE_EXECUTION),
-					errmsg("Invalid XML response for URL \"%s\"",(*state)->url));
-
-		}
-
-		if (xmlStrcmp(xmlroot->name, (xmlChar*) OAI_XML_ROOT_ELEMENT)) {
+		} else {
 
 			ereport(ERROR,
-					errcode(ERRCODE_FDW_UNABLE_TO_CREATE_EXECUTION),
-					errmsg("Invalid XML response for URL \"%s\"",(*state)->url),
+					errcode(ERRCODE_FDW_UNABLE_TO_ESTABLISH_CONNECTION),
+					errmsg("Unable to connect to OAI-PMH Service: \"%s\"",(*state)->url),
 					errhint("Make sure that the OAI-PMH service is running or check the URL given in the CREATE FOREIGN TABLE option."));
 
 		}
 
-		elog(DEBUG1,"oai_fdw_LoadOAIRecords: xmldoc parsed (xmlReadMemory)");
+		(*state)->rowcount = record_count;
 
-
-		for (recordsList = xmlroot->children; recordsList != NULL; recordsList = recordsList->next) {
-
-			if (recordsList->type != XML_ELEMENT_NODE) continue;
-
-			if (xmlStrcmp(recordsList->name, (xmlChar*)"error")==0) {
-
-				char* oai_error_msg = (char*)xmlNodeGetContent(recordsList);
-				char* oai_error_code = (char*)xmlGetProp(recordsList, (xmlChar*) "code");
-
-				if(oai_error_msg && oai_error_code) {
-
-					ereport(ERROR,
-							errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
-							errmsg("%s (%s)",oai_error_msg,oai_error_code));
-
-				} else {
-
-					ereport(ERROR,
-							errcode(ERRCODE_FDW_UNABLE_TO_CREATE_REPLY),
-							errmsg("Unknown OAI Server Error"));
-
-				}
-
-
-			}
-
-			if (xmlStrcmp(recordsList->name, (xmlChar*)"ListRecords")!=0) continue;
-
-			for (record = recordsList->children; record != NULL; record = record->next) {
-
-				xmlBufferPtr buffer;
-
-				if (record->type != XML_ELEMENT_NODE) continue;
-
-				oai_record = palloc0(sizeof(oai_Record));
-				buffer = xmlBufferCreate();
-
-				if (xmlStrcmp(record->name, (xmlChar*) "record") == 0) {
-
-					for (metadata = record->children; metadata != NULL; metadata = metadata->next) {
-
-						if (metadata->type != XML_ELEMENT_NODE) continue;
-
-						if (xmlStrcmp(metadata->name, (xmlChar*) "metadata") == 0) {
-
-							xmlNodePtr oai_xml_document = metadata->children;
-
-							size_t content_size = (size_t) xmlNodeDump(buffer, xmldoc, oai_xml_document, 0, 1);
-
-							oai_record->content = palloc0(sizeof(char)*content_size);
-							oai_record->content = (char*)buffer->content;
-							oai_record->identifier = NULL;
-							oai_record->datestamp = NULL;
-							oai_record->rownumber = record_count;
-
-							elog(DEBUG1,"oai_fdw_LoadOAIRecords: buffer size > %ld",content_size);
-
-						}
-
-
-
-					}
-
-
-
-
-
-				} else if (xmlStrcmp(record->name, (xmlChar*) "resumptionToken") == 0) {
-
-					size_t size_token = strlen((char*)xmlNodeGetContent(record));
-					char * token = (char*)xmlNodeGetContent(record);
-
-					elog(DEBUG1,"oai_fdw_LoadOAIRecords: resumptionToken found > %s",token);
-
-					(*state)->resumptionToken = palloc0(sizeof(char)*size_token);
-					(*state)->resumptionToken = token;
-
-					continue;
-
-				} else {
-
-					continue;
-
-				}
-
-				for (header = record->children; header != NULL; header = header->next) {
-
-					if (header->type != XML_ELEMENT_NODE) continue;
-					if (xmlStrcmp(header->name, (xmlChar*) "header") != 0) continue;
-
-					for (headerList = header->children; headerList!= NULL; headerList = headerList->next) {
-
-						size_t size_node;
-						char *node_content;
-
-						if (headerList->type != XML_ELEMENT_NODE) continue;
-
-						node_content = (char*)xmlNodeGetContent(headerList);
-						size_node = strlen(node_content);
-
-						if (xmlStrcmp(headerList->name, (xmlChar*) "identifier")==0){
-
-							oai_record->identifier = palloc0(sizeof(char)*size_node);
-							oai_record->identifier = node_content;
-
-						}
-
-						if (xmlStrcmp(headerList->name, (xmlChar*) "setSpec")==0){
-
-							appendTextArray(&oai_record->setsArray,node_content);
-
-						}
-
-						if (xmlStrcmp(headerList->name, (xmlChar*) "datestamp")==0){
-
-							oai_record->datestamp= palloc0(sizeof(char)*size_node);
-							oai_record->datestamp= node_content;
-
-						}
-
-					}
-
-				}
-
-				if((*state)->list == NIL) {
-					elog(DEBUG1,"oai_fdw_LoadOAIRecords: first record -> %s",oai_record->identifier);
-					(*state)->list = list_make1(oai_record) ;
-				} else {
-					elog(DEBUG1,"oai_fdw_LoadOAIRecords: appending record -> %s",oai_record->identifier);
-					list_concat((*state)->list, list_make1(oai_record));
-				}
-
-				record_count++;
-
-				elog(DEBUG1,"oai_fdw_LoadOAIRecords: list size -> %d",(*state)->list->length);
-
-				xmlBufferDetach(buffer);
-				xmlBufferFree(buffer);
-
-			}
-
-		}
-
-		xmlFreeDoc(xmldoc);
-		xmlCleanupParser();
-
-	} else {
-
-		ereport(ERROR,
-				errcode(ERRCODE_FDW_UNABLE_TO_ESTABLISH_CONNECTION),
-				errmsg("Unable to connect to OAI-PMH Service: \"%s\"",(*state)->url),
-				errhint("Make sure that the OAI-PMH service is running or check the URL given in the CREATE FOREIGN TABLE option."));
-
-	}
-
-	(*state)->rowcount = record_count;
+		elog(DEBUG1,"  => listRecordsRequest: returned %d records",record_count);
 
 }
 
@@ -519,23 +518,21 @@ void validateTableStructure(oai_fdw_TableOptions *opts, ForeignTable *ft) {
 
 	for (int i = 0; i < rel->rd_att->natts ; i++) {
 
-		List * options = GetForeignColumnOptions(ft->relid, i+1);
+		List *options = GetForeignColumnOptions(ft->relid, i+1);
 		ListCell *lc;
 
 		foreach (lc, options) {
 
-			DefElem*    def = (DefElem*) lfirst(lc);
+			DefElem *def = (DefElem*) lfirst(lc);
 
 			if (strcmp(def->defname, OAI_OPT_ATTRIBUTE)==0) {
 
-				char * option_value = defGetString(def);
+				char *option_value = defGetString(def);
 
 				if (strcmp(option_value,OAI_ATTRIBUTE_IDENTIFIER)==0){
 
 					if (rel->rd_att->attrs[i].atttypid != TEXTOID &&
 						rel->rd_att->attrs[i].atttypid != VARCHAROID) {
-
-						//table_close(rel, NoLock);
 
 						ereport(ERROR,
 								errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
@@ -548,13 +545,12 @@ void validateTableStructure(oai_fdw_TableOptions *opts, ForeignTable *ft) {
 
 					}
 
+
 				} else if (strcmp(option_value,OAI_ATTRIBUTE_CONTENT)==0){
 
 					if (rel->rd_att->attrs[i].atttypid != TEXTOID &&
 						rel->rd_att->attrs[i].atttypid != VARCHAROID &&
 						rel->rd_att->attrs[i].atttypid != XMLOID) {
-
-						//table_close(rel, NoLock);
 
 						ereport(ERROR,
 								errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
@@ -572,7 +568,6 @@ void validateTableStructure(oai_fdw_TableOptions *opts, ForeignTable *ft) {
 					if (rel->rd_att->attrs[i].atttypid != TEXTARRAYOID &&
 					    rel->rd_att->attrs[i].atttypid != VARCHARARRAYOID) {
 
-						//table_close(rel, NoLock);
 
 						ereport(ERROR,
 								errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
@@ -589,8 +584,6 @@ void validateTableStructure(oai_fdw_TableOptions *opts, ForeignTable *ft) {
 				}  else if (strcmp(option_value,OAI_ATTRIBUTE_DATESTAMP)==0){
 
 					if (rel->rd_att->attrs[i].atttypid != TIMESTAMPOID) {
-
-						//table_close(rel, NoLock);
 
 						ereport(ERROR,
 								errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
@@ -823,7 +816,52 @@ void createOAITuple(TupleTableSlot *slot, oai_fdw_state *state, oai_Record *oai_
 				}  else if (strcmp(option_value,OAI_ATTRIBUTE_DATESTAMP)==0){
 
 					slot->tts_isnull[i] = false;
-					slot->tts_values[i] = CStringGetTextDatum(oai_record->datestamp);
+					//slot->tts_values[i] = TimestampGetDatum(GetCurrentTimestamp());
+
+
+					char workBuffer[10000+ 1];
+					char *fieldArray[100];
+					int fieldTypeArray[100];
+					int fieldCount = 0;
+
+					int parseError = ParseDateTime(oai_record->datestamp, workBuffer, sizeof(workBuffer), fieldArray, fieldTypeArray, 10, &fieldCount);
+
+
+
+
+					if (parseError == 0) {
+
+						int dateType = 0;
+						struct pg_tm tm;
+						fsec_t fsec = 0;
+						int timezone = 0;
+
+						int decodeError = DecodeDateTime(fieldArray, fieldTypeArray, fieldCount, &dateType, &tm, &fsec, &timezone);
+
+
+
+						//fsec_t	fsec;
+
+						//tm2timestamp(dateTime, fsec, NULL, dt);
+						Timestamp tmsp;
+						tm2timestamp(&tm, fsec, fieldTypeArray, &tmsp);
+
+						//slot->tts_isnull[i] = false;
+						slot->tts_values[i] = DatumGetTimestamp(tmsp);
+						//slot->tts_values[i] = NULL;
+
+						elog(DEBUG1,"############### >>>>>>>>>>>>>>>> ParseDateTime > %d",tm.tm_sec);
+
+
+					} else {
+
+						slot->tts_isnull[i] = true;
+						slot->tts_values[i] = NULL;
+
+
+					}
+
+
 
 				}
 
@@ -896,7 +934,7 @@ int fetchNextOAIRecord(oai_fdw_state *state,oai_Record **oai_record){
 	if(state->list == NIL || (state->current_row == state->list->length && state->resumptionToken) ) {
 
 		elog(DEBUG1,"fetchNextOAIRecord: loading next page ...");
-		loadOAIRecords(&state);
+		listRecordsRequest(&state);
 		state->current_row = 0;
 
 	}
@@ -968,6 +1006,17 @@ void appendTextArray(ArrayType **array, char* text_element) {
 	elog(DEBUG1,"  => construct_array called: arr_nelems > %ld arr_elems_size %ld",arr_nelems,arr_elems_size);
 
 	*array = construct_array(arr_elems, arr_nelems, elem_type, elem_len, elem_byval, elem_align);
+
+}
+
+void strToTimestamp(char* value,char* format){
+
+
+	//struct pg_tm time;
+	//pg_strftime("2011-04-01", "%Y-%m-%d", &time);
+	//time_t loctime = mktime(&time);  // timestamp in current timezone
+	//time_t gmttime = timegm(&time);
+
 
 }
 
