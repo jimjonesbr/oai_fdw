@@ -149,7 +149,7 @@ size_t writefunc(void *ptr, size_t size, size_t nmemb, struct string *s);
 int fetchNextOAIRecord(oai_fdw_state *state,oai_Record **oai_record);
 
 void appendTextArray(ArrayType **array, char* text_element) ;
-int getHttpResponse(oai_fdw_state **state, char* request, struct string *xmlResponse);
+int executeOAIRequest(oai_fdw_state **state, char* request, struct string *xmlResponse);
 
 //Datum textToTimestamp(text* value,text* format);
 
@@ -194,49 +194,61 @@ size_t writefunc(void *ptr, size_t size, size_t nmemb, struct string *s) {
 
 }
 
-int getHttpResponse(oai_fdw_state **state, char* request, struct string *xmlResponse) {
+int executeOAIRequest(oai_fdw_state **state, char* request, struct string *xmlResponse) {
 
 	CURL *curl;
 	CURLcode res;
-	char* postfields = palloc0(sizeof(char)*5000); //todo: estimate realistic mem size for palloc!
+	char* postfields;
 
-	elog(DEBUG1,"getHttpResponse called");
+	elog(DEBUG1,"executeOAIRequest called. url > %s ",(*state)->url);
 
 	if(strcmp(request,OAI_REQUEST_LISTRECORDS)==0) {
 
-		sprintf(postfields,"verb=%s",request);
+		size_t buffer_size = strlen(request) + strlen("verb=")+1;
+		postfields = palloc0(sizeof(char*)*buffer_size);
+		snprintf(postfields,buffer_size,"verb=%s",request);
 
 		if((*state)->set) {
 
-			sprintf(postfields,"%s&set=%s",postfields,(*state)->set);
+			buffer_size = buffer_size + strlen((*state)->set) + strlen("&set=") + 1;
+			postfields = repalloc(postfields, sizeof(char*) * buffer_size);
+			snprintf(postfields,buffer_size,"%s&set=%s",postfields,(*state)->set);
 			elog(DEBUG1,"  getHttpResponse: appending 'set' > %s",(*state)->set);
 
 		}
 
 		if((*state)->from) {
 
-			sprintf(postfields,"%s&from=%s",postfields,(*state)->from);
+			buffer_size = buffer_size + strlen((*state)->from) + strlen("&from=") +1;
+			postfields = repalloc(postfields, sizeof(char*) * buffer_size);
+			snprintf(postfields,buffer_size,"%s&from=%s",postfields,(*state)->from);
 			elog(DEBUG1,"  getHttpResponse: appending 'from' > %s",(*state)->from);
 
 		}
 
 		if((*state)->until) {
 
-			sprintf(postfields,"%s&until=%s",postfields,(*state)->until);
+			buffer_size = buffer_size + strlen((*state)->until) + strlen("&until=") +1;
+			postfields = repalloc(postfields, sizeof(char*) * buffer_size);
+			snprintf(postfields,buffer_size,"%s&until=%s",postfields,(*state)->until);
 			elog(DEBUG1,"  getHttpResponse: appending 'until' > %s",(*state)->until);
 
 		}
 
 		if((*state)->metadataPrefix) {
 
-			sprintf(postfields,"%s&metadataPrefix=%s",postfields,(*state)->metadataPrefix);
+			buffer_size = buffer_size + strlen((*state)->metadataPrefix) + strlen("&metadataPrefix=")+1;
+			postfields = repalloc(postfields, sizeof(char*) * buffer_size);
+			snprintf(postfields,buffer_size,"%s&metadataPrefix=%s",postfields,(*state)->metadataPrefix);
 			elog(DEBUG1,"  getHttpResponse: appending 'metadataPrefix' > %s",(*state)->metadataPrefix);
 
 		}
 
 		if((*state)->resumptionToken) {
 
-			sprintf(postfields,"verb=%s&resumptionToken=%s",request,(*state)->resumptionToken);
+			buffer_size = buffer_size + strlen((*state)->resumptionToken)+1;
+			postfields = repalloc(postfields, sizeof(char*) * buffer_size);
+			snprintf(postfields,buffer_size,"verb=%s&resumptionToken=%s",request,(*state)->resumptionToken);
 			elog(DEBUG1,"  getHttpResponse: appending 'resumptionToken' > %s",(*state)->resumptionToken);
 			(*state)->list = NIL;
 			(*state)->resumptionToken = NULL;
@@ -281,6 +293,7 @@ int getHttpResponse(oai_fdw_state **state, char* request, struct string *xmlResp
 
 	return OAI_SUCCESS;
 
+
 }
 
 //void isOAIException(char* xmlResponse) {
@@ -294,7 +307,7 @@ void loadOAIRecords(oai_fdw_state **state) {
 	struct string xmlResponse;
 	int record_count = 0;
 
-	int curl_response = getHttpResponse(state,OAI_REQUEST_LISTRECORDS,&xmlResponse);
+	int curl_response = executeOAIRequest(state,OAI_REQUEST_LISTRECORDS,&xmlResponse);
 
 	elog(DEBUG1,"oai_fdw_LoadOAIRecords: curl response > %d",curl_response);
 
