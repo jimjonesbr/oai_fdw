@@ -33,23 +33,24 @@
 //#include <utils/fmgrprotos.h>
 
 //#include <time.h>
-#include "nodes/nodes.h"
-//#include "nodes/primnodes.h"
-//#include "utils/date.h"
-#include "utils/datetime.h"
-
 #include "lib/stringinfo.h"
 
+#include "nodes/nodes.h"
+#include "nodes/primnodes.h"
+#include "utils/datetime.h"
 #include "utils/timestamp.h"
-//#include "catalog/pg_cast.h"
 #include "utils/formatting.h"
 
-
-//#include "utils/pg_locale.h"
-//#define LIBXML_OUTPUT_ENABLED //??
-//#define LIBXML_TREE_ENABLED //??
-
+#include "catalog/pg_operator.h"
+#include "utils/syscache.h"
 #include "catalog/pg_foreign_table.h"
+//#include "catalog/pg_aggregate.h"
+//#include "catalog/pg_collation.h"
+#include "catalog/pg_namespace.h"
+//#include "catalog/pg_operator.h"
+//#include "catalog/pg_proc.h"
+//#include "catalog/pg_type.h"
+
 
 #define OAI_FDW_VERSION "1.0.0dev"
 #define OAI_REQUEST_LISTRECORDS "ListRecords"
@@ -96,6 +97,8 @@ typedef struct oai_fdw_state {
 	char *resumptionToken;
 	int  completeListSize;
 
+	char* requestType;
+
 	//xmlNodePtr xmlroot;
 	xmlNodePtr xmlroot_listrecords;
 
@@ -127,6 +130,9 @@ typedef struct oai_fdw_TableOptions {
 	char *until;
 	char *url;
 	char * set;
+
+	char* identifier;
+	char* requestType;
 
 } oai_fdw_TableOptions;
 
@@ -213,9 +219,10 @@ int executeOAIRequest(oai_fdw_state **state, char* request, struct string *xmlRe
 
 	elog(DEBUG1,"executeOAIRequest called: url > %s ",(*state)->url);
 
-	appendStringInfo(&url_bufffer,"verb=%s",request);
+	appendStringInfo(&url_bufffer,"verb=%s",(*state)->requestType);
 
-	if(strcmp(request,OAI_REQUEST_LISTRECORDS)==0) {
+	//if(strcmp(request,OAI_REQUEST_LISTRECORDS)==0) {
+	if(strcmp((*state)->requestType,OAI_REQUEST_LISTRECORDS)==0) {
 
 		if((*state)->set) {
 
@@ -257,7 +264,8 @@ int executeOAIRequest(oai_fdw_state **state, char* request, struct string *xmlRe
 
 		}
 
-	} else if(strcmp(request,OAI_REQUEST_GETRECORD)==0) {
+//	} else if(strcmp(request,OAI_REQUEST_GETRECORD)==0) {
+	} else if(strcmp((*state)->requestType,OAI_REQUEST_GETRECORD)==0) {
 
 		if((*state)->identifier) {
 
@@ -311,12 +319,62 @@ int executeOAIRequest(oai_fdw_state **state, char* request, struct string *xmlRe
 
 }
 
+//void getRecordRequest(oai_fdw_state *state) {
+//
+//	struct string xmlStream;
+//	int oaiExecuteResponse;
+//
+//	elog(DEBUG1,"GetRecordsRequest called");
+//
+//	oaiExecuteResponse = executeOAIRequest(&state,OAI_REQUEST_GETRECORD,&xmlStream);
+//
+//	if(oaiExecuteResponse == OAI_SUCCESS) {
+//
+//		xmlDocPtr xmldoc;
+//		xmlNodePtr recordsList;
+//
+//		xmlInitParser();
+//
+//		xmldoc = xmlReadMemory(xmlStream.ptr, strlen(xmlStream.ptr), NULL, NULL, XML_PARSE_SAX1);
+//
+//
+//		if (!xmldoc || (state->xmlroot_listrecords = xmlDocGetRootElement(xmldoc)) == NULL) {
+//
+//			xmlFreeDoc(xmldoc);
+//			xmlCleanupParser();
+//
+//			ereport(ERROR, errcode(ERRCODE_FDW_UNABLE_TO_CREATE_EXECUTION),	errmsg("Invalid XML response for URL \"%s\"",state->url));
+//
+//		}
+//
+//		for (recordsList = state->xmlroot_listrecords->children; recordsList != NULL; recordsList = recordsList->next) {
+//
+//			if (recordsList->type != XML_ELEMENT_NODE) continue;
+//
+//			if (xmlStrcmp(recordsList->name, (xmlChar*)"GetRecord")==0) {
+//
+//				if (!xmldoc || (state->xmlroot_listrecords = xmlDocGetRootElement(xmldoc)) == NULL) {
+//
+//					xmlFreeDoc(xmldoc);
+//					xmlCleanupParser();
+//
+//				}
+//
+//			}
+//
+//		}
+//
+//	}
+//
+//
+//}
+
 void listRecordsRequest(oai_fdw_state *state) {
 
 	struct string xmlStream;
 	int oaiExecuteResponse;
 
-	elog(DEBUG1,"listRecordsRequest called");
+	elog(DEBUG1,"ListRecordsRequest called");
 
 	oaiExecuteResponse = executeOAIRequest(&state,OAI_REQUEST_LISTRECORDS,&xmlStream);
 
@@ -343,7 +401,7 @@ void listRecordsRequest(oai_fdw_state *state) {
 
 			if (recordsList->type != XML_ELEMENT_NODE) continue;
 
-			if (xmlStrcmp(recordsList->name, (xmlChar*)"ListRecords")==0) {
+			if (xmlStrcmp(recordsList->name, (xmlChar*)state->requestType)==0) {
 
 				if (!xmldoc || (state->xmlroot_listrecords = xmlDocGetRootElement(xmldoc)) == NULL) {
 
@@ -461,45 +519,217 @@ void validateTableStructure(oai_fdw_TableOptions *opts, ForeignTable *ft) {
 
 }
 
+
+char *getColumnOption(oai_fdw_TableOptions *opts, int16 attnum) {
+
+	elog(DEBUG1,"get col 1");
+
+	Relation rel = table_open(opts->foreigntableid, NoLock);
+
+
+
+	for (int i = 0; i < rel->rd_att->natts ; i++) {
+
+		List *options = GetForeignColumnOptions(opts->foreigntableid, i+1);
+		ListCell *lc;
+
+		if(rel->rd_att->attrs[i].attnum == attnum){
+
+			foreach (lc, options) {
+
+				DefElem *def = (DefElem*) lfirst(lc);
+
+				if (strcmp(def->defname, OAI_OPT_ATTRIBUTE)==0) {
+
+					char *option_value = defGetString(def);
+					return option_value;
+
+				}
+
+			}
+
+
+		}
+
+
+
+
+
+	}
+
+	table_close(rel, NoLock);
+}
+
+void deparseExpr(Expr *expr, oai_fdw_TableOptions *opts){
+
+	OpExpr *oper;
+	Var *varleft;
+	Var *varright;
+	HeapTuple tuple;
+	char *opername, *left, *right, *arg, oprkind;
+	Oid leftargtype, rightargtype, schema;
+
+	char* leftargOption;
+
+	elog(DEBUG1,"deparseExpr: expr->type %u",expr->type);
+
+	switch (expr->type)	{
+
+	case T_Var:
+		elog(DEBUG1,"  deparseExpr: T_Var");
+		varleft = (Var *)expr;
+		//varattno = att num of col in table
+		elog(DEBUG1,"  variable NUMBER %u", varleft->varattnosyn);
+
+		elog(DEBUG1,"  result getColumn %s", getColumnOption(opts,varleft->varattnosyn));
+		//TEXTOID=25
+
+		leftargOption = getColumnOption(opts,varleft->varattnosyn);
+
+		if (strcmp(leftargOption,OAI_ATTRIBUTE_IDENTIFIER) ==0 ) {
+
+			elog(DEBUG1,"  GetIdentifier Request > %s",leftargOption);
+
+
+		}
+
+
+		break;
+	case T_OpExpr:
+
+		elog(DEBUG1,"  OPERATOR EXPR");
+		oper = (OpExpr *)expr;
+
+		tuple = SearchSysCache1(OPEROID, ObjectIdGetDatum(oper->opno));
+
+		if (!HeapTupleIsValid(tuple)) elog(ERROR, "cache lookup failed for operator %u", oper->opno);
+
+		opername = pstrdup(((Form_pg_operator)GETSTRUCT(tuple))->oprname.data);
+		oprkind = ((Form_pg_operator)GETSTRUCT(tuple))->oprkind;
+		leftargtype = ((Form_pg_operator)GETSTRUCT(tuple))->oprleft;
+		rightargtype = ((Form_pg_operator)GETSTRUCT(tuple))->oprright;
+		schema = ((Form_pg_operator)GETSTRUCT(tuple))->oprnamespace;
+		ReleaseSysCache(tuple);
+
+		if (strcmp(opername, "=") == 0){
+
+			elog(DEBUG1,"  opername     : %s",opername);
+
+
+			varleft  = (Var *) linitial(oper->args);
+			varright = (Var *) lsecond(oper->args);
+
+			leftargOption = getColumnOption(opts,varleft->varattnosyn);
+
+
+			if (strcmp(leftargOption,OAI_ATTRIBUTE_IDENTIFIER) ==0 && (varleft->vartype == TEXTOID || varleft->vartype == VARCHAROID)) {
+
+				opts->requestType = OAI_REQUEST_GETRECORD;
+				opts->identifier = "oai:dnb.de/zdb/1250800153";
+
+				elog(DEBUG1,"  GetIdentifier Request > %s",leftargOption);
+				//elog(DEBUG1,"  GetIdentifier Request > %s",varright->);
+
+
+
+			}
+
+
+
+//			deparseExpr(linitial(oper->args),opts);
+
+		}
+
+
+		//elog(DEBUG1,"  leftargtype  : %u",leftargtype);
+
+			//elog(DEBUG1,"  rightargtype : %u",rightargtype);
+
+
+
+		//}
+		//elog(ERROR,"TEST: %s",opername);
+		//mysql_deparse_op_expr((OpExpr *) node, context);
+		break;
+
+	default:
+		elog(DEBUG1,"NONE");
+		break;
+
+	}
+
+}
+
+void deparseWhereClause(List *conditions, oai_fdw_TableOptions *opts){
+
+//	StringInfo buf;
+//	Form_pg_operator opform;
+//
+//
+//	tuple = SearchSysCache1(OPEROID, ObjectIdGetDatum(node->opno));
+
+//	List *conditions = baserel->baserestrictinfo;
+	ListCell *cell;
+	OpExpr *oper;
+	HeapTuple tuple;
+	char *opername, *left, *right, *arg, oprkind;
+	Oid leftargtype, rightargtype, schema;
+
+	int i = 0;
+
+	foreach(cell, conditions) {
+
+		Expr  *expr = (Expr *) lfirst(cell);
+
+		elog(DEBUG1,"round %d, expr->type %u",++i,expr->type);
+
+
+		/* extract clause from RestrictInfo, if required */
+		if (IsA(expr, RestrictInfo)) {
+
+			elog(DEBUG1,"  IsA RestrictInfo");
+
+			RestrictInfo *ri = (RestrictInfo *) expr;
+			expr = ri->clause;
+
+		} else {
+
+			elog(DEBUG1,"  NOT IsA RestrictInfo");
+		}
+
+
+		deparseExpr(expr,opts);
+
+
+	}
+
+
+	//elog(ERROR,"LEAVING FOR NOW");
+
+}
+
 void oai_fdw_GetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid) {
 
 	//Relation rel = table_open(foreigntableid, NoLock);
 	ForeignTable *ft = GetForeignTable(foreigntableid);
 	oai_fdw_TableOptions *opts = (oai_fdw_TableOptions *)palloc0(sizeof(oai_fdw_TableOptions));
+	List *conditions = baserel->baserestrictinfo;
 	ListCell *cell;
 
+	opts->foreigntableid = ft->relid;
 
 	validateTableStructure(opts, ft);
 
 
+	/* Default request type: OAI_REQUEST_LISTRECORDS
+	 * It can be altered after depending on the WHERE clause*/
+	opts->requestType = OAI_REQUEST_LISTRECORDS;
+
+	deparseWhereClause(conditions,opts);
 
 
-//	List* conditions = baserel->baserestrictinfo;
-//	ListCell *cell2;
-//
-//	conditions = extract_actual_clauses(conditions, false);
-//
-//	foreach(cell2, conditions){
-//
-//		//Expr *expr =((RestrictInfo*)cell)->clause;
-//
-//		elog(DEBUG1,"GOT HERE!");
-//
-//		Expr  *expr = (Expr *) lfirst(cell2);
-//
-//				/* extract clause from RestrictInfo, if required */
-//				if (IsA(expr, RestrictInfo))
-//				{
-//					RestrictInfo *ri = (RestrictInfo *) expr;
-//					expr = ri->clause;
-//				}
-//
-//		//elog(ERROR,"GOT HERE!: %s", clause->type);
-//		//elog(ERROR,"GOT HERE!: %s", ((RestrictInfo*)cell)->clause->type);
-//
-//	}
 
-
+	elog(DEBUG1,"oai_fdw_GetForeignRelSize: requestType > %s", opts->requestType);
 
 	int start = 0, end = 64; //TODO necessary?
 
@@ -534,8 +764,8 @@ void oai_fdw_GetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid forei
 
 			ereport(ERROR,
 					(errcode(ERRCODE_FDW_INVALID_OPTION_NAME),
-							errmsg("invalid option \"%s\"", def->defname),
-							errhint("Valid table options for oai_fdw are \"url\",\"metadataPrefix\",\"set\",\"from\" and \"until\"")));
+					 errmsg("invalid option \"%s\"", def->defname),
+					 errhint("Valid table options for oai_fdw are \"url\",\"metadataPrefix\",\"set\",\"from\" and \"until\"")));
 		}
 	}
 
@@ -544,8 +774,8 @@ void oai_fdw_GetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid forei
 
 		ereport(ERROR,
 				(errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
-						errmsg("'url' not found"),
-						errhint("'url' is a required option. Check the CREATE FOREIGN TABLE options.")));
+				 errmsg("'url' not found"),
+				 errhint("'url' is a required option. Check the CREATE FOREIGN TABLE options.")));
 
 	}
 
@@ -553,8 +783,8 @@ void oai_fdw_GetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid forei
 
 		ereport(ERROR,
 				(errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
-						errmsg("'metadataPrefix' not found"),
-						errhint("metadataPrefix is a required argument (unless the exclusive argument resumptionToken is used). Check the CREATE FOREIGN TABLE options.")));
+				 errmsg("'metadataPrefix' not found"),
+				 errhint("metadataPrefix is a required argument (unless the exclusive argument resumptionToken is used). Check the CREATE FOREIGN TABLE options.")));
 
 	}
 
@@ -594,7 +824,8 @@ ForeignScan *oai_fdw_GetForeignPlan(PlannerInfo *root, RelOptInfo *baserel, Oid 
 	state->metadataPrefix = opts->metadataPrefix;
 	state->foreigntableid = opts->foreigntableid;
 	state->numcols = opts->numcols;
-
+	state->requestType = opts->requestType;
+	state->identifier = opts->identifier;
 	//elog(DEBUG1,"GetForeignPlan set = %s",opts->set);
 
 	scan_clauses = extract_actual_clauses(scan_clauses, false);
@@ -647,7 +878,7 @@ oai_Record *fetchNextRecord(TupleTableSlot *slot, oai_fdw_state *state) {
 
 		if (recordsList->type != XML_ELEMENT_NODE) continue;
 
-		if (xmlStrcmp(recordsList->name, (xmlChar*)"ListRecords")!=0) continue;
+		if (xmlStrcmp(recordsList->name, (xmlChar*)state->requestType)!=0) continue;
 
 		for (rec = recordsList->children; rec != NULL; rec = rec->next) {
 
@@ -960,6 +1191,7 @@ int loadOAIRecords(oai_fdw_state *state) {
 
 	elog(DEBUG1,"loadOAIRecords called: current_row > %d",state->current_row);
 
+
 	if(state->resumptionToken || state->rowcount == 0) {
 
 		elog(DEBUG2,"  fetchNextOAIRecord: loading page ...");
@@ -969,6 +1201,7 @@ int loadOAIRecords(oai_fdw_state *state) {
 
 		return 0;
 	}
+
 
 	return 1;
 
@@ -1040,3 +1273,185 @@ void oai_fdw_ReScanForeignScan(ForeignScanState *node) {
 void oai_fdw_EndForeignScan(ForeignScanState *node) {
 
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+//
+///*
+// * Context for deparseExpr
+// */
+//typedef struct deparse_expr_cxt
+//{
+//	PlannerInfo *root;			/* global planner state */
+//	RelOptInfo *foreignrel;		/* the foreign relation we are planning for */
+//	RelOptInfo *scanrel;		/* the underlying scan relation. Same as
+//								 * foreignrel, when that represents a join or
+//								 * a base relation. */
+//	StringInfo	buf;			/* output buffer to append to */
+//	List	  **params_list;	/* exprs that will become remote Params */
+//} deparse_expr_cxt;
+//
+//
+//
+// void
+//deparseExpr(Expr *node, deparse_expr_cxt *context) {
+//	if (node == NULL)
+//		return;
+//
+//	switch (nodeTag(node))
+//	{
+//		case T_Var:
+//			//mysql_deparse_var((Var *) node, context);
+//			break;
+//		case T_Const:
+//			//mysql_deparse_const((Const *) node, context);
+//			break;
+//		case T_Param:
+//			//mysql_deparse_param((Param *) node, context);
+//			break;
+//#if PG_VERSION_NUM < 120000
+//		case T_ArrayRef:
+//			//mysql_deparse_array_ref((ArrayRef *) node, context);
+//#else
+//		case T_SubscriptingRef:
+//			//mysql_deparse_array_ref((SubscriptingRef *) node, context);
+//#endif
+//			break;
+//		case T_FuncExpr:
+//			//mysql_deparse_func_expr((FuncExpr *) node, context);
+//			break;
+//		case T_OpExpr:
+//			mysql_deparse_op_expr((OpExpr *) node, context);
+//			break;
+//		case T_DistinctExpr:
+//			//mysql_deparse_distinct_expr((DistinctExpr *) node, context);
+//			break;
+//		case T_ScalarArrayOpExpr:
+//			//mysql_deparse_scalar_array_op_expr((ScalarArrayOpExpr *) node, context);
+//			break;
+//		case T_RelabelType:
+//			//mysql_deparse_relabel_type((RelabelType *) node, context);
+//			break;
+//		case T_BoolExpr:
+//			//mysql_deparse_bool_expr((BoolExpr *) node, context);
+//			break;
+//		case T_NullTest:
+//			//mysql_deparse_null_test((NullTest *) node, context);
+//			break;
+//		case T_ArrayExpr:
+//			//mysql_deparse_array_expr((ArrayExpr *) node, context);
+//			break;
+//		case T_Aggref:
+//			//mysql_deparse_aggref((Aggref *) node, context);
+//			break;
+//		default:
+//			elog(ERROR, "unsupported expression type for deparse: %d", (int) nodeTag(node));
+//			break;
+//	}
+//}
+//
+//
+//
+// void
+//mysql_deparse_op_expr(OpExpr *node, deparse_expr_cxt *context)
+//{
+//	StringInfo	buf = context->buf;
+//	HeapTuple	tuple;
+//	Form_pg_operator form;
+//	char		oprkind;
+//	ListCell   *arg;
+//
+//	/* Retrieve information about the operator from system catalog. */
+//	tuple = SearchSysCache1(OPEROID, ObjectIdGetDatum(node->opno));
+//	if (!HeapTupleIsValid(tuple))
+//		elog(ERROR, "cache lookup failed for operator %u", node->opno);
+//
+//	form = (Form_pg_operator) GETSTRUCT(tuple);
+//	oprkind = form->oprkind;
+//
+//	/* Sanity check. */
+//	Assert((oprkind == 'r' && list_length(node->args) == 1) ||
+//		   (oprkind == 'l' && list_length(node->args) == 1) ||
+//		   (oprkind == 'b' && list_length(node->args) == 2));
+//
+//	/* Always parenthesize the expression. */
+//	appendStringInfoChar(buf, '(');
+//
+//	/* Deparse left operand. */
+//	if (oprkind == 'r' || oprkind == 'b')
+//	{
+//		arg = list_head(node->args);
+//		deparseExpr(lfirst(arg), context);
+//		appendStringInfoChar(buf, ' ');
+//	}
+//
+//	/* Deparse operator name. */
+//	mysql_deparse_operator_name(buf, form);
+//
+//	/* Deparse right operand. */
+//	if (oprkind == 'l' || oprkind == 'b')
+//	{
+//		arg = list_tail(node->args);
+//		appendStringInfoChar(buf, ' ');
+//		deparseExpr(lfirst(arg), context);
+//	}
+//
+//	appendStringInfoChar(buf, ')');
+//
+//	ReleaseSysCache(tuple);
+//}
+//
+// void
+//mysql_deparse_operator_name(StringInfo buf, Form_pg_operator opform)
+//{
+//	/* opname is not a SQL identifier, so we should not quote it. */
+//	char *cur_opname = NameStr(opform->oprname);
+//
+//	/* Print schema name only if it's not pg_catalog */
+//	if (opform->oprnamespace != PG_CATALOG_NAMESPACE)
+//	{
+//		const char *opnspname;
+//
+//		opnspname = get_namespace_name(opform->oprnamespace);
+//		/* Print fully qualified operator name. */
+//		appendStringInfo(buf, "OPERATOR(%s.%s)",
+//						 mysql_quote_identifier(opnspname, '`'), cur_opname);
+//	}
+//	else
+//	{
+//		if (strcmp(cur_opname, "~~") == 0)
+//			appendStringInfoString(buf, "LIKE BINARY");
+//		else if (strcmp(cur_opname, "~~*") == 0)
+//			appendStringInfoString(buf, "LIKE");
+//		else if (strcmp(cur_opname, "!~~") == 0)
+//			appendStringInfoString(buf, "NOT LIKE BINARY");
+//		else if (strcmp(cur_opname, "!~~*") == 0)
+//			appendStringInfoString(buf, "NOT LIKE");
+//		else if (strcmp(cur_opname, "~") == 0)
+//			appendStringInfoString(buf, "REGEXP BINARY");
+//		else if (strcmp(cur_opname, "~*") == 0)
+//			appendStringInfoString(buf, "REGEXP");
+//		else if (strcmp(cur_opname, "!~") == 0)
+//			appendStringInfoString(buf, "NOT REGEXP BINARY");
+//		else if (strcmp(cur_opname, "!~*") == 0)
+//			appendStringInfoString(buf, "NOT REGEXP");
+//		else
+//			appendStringInfoString(buf, cur_opname);
+//	}
+//}
