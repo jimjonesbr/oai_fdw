@@ -44,6 +44,7 @@
 #include "catalog/pg_operator.h"
 #include "utils/syscache.h"
 #include "catalog/pg_foreign_table.h"
+#include "catalog/pg_type.h"
 //#include "catalog/pg_aggregate.h"
 //#include "catalog/pg_collation.h"
 #include "catalog/pg_namespace.h"
@@ -168,6 +169,8 @@ void listRecordsRequest(oai_fdw_state *state);
 void createOAITuple(TupleTableSlot *slot, oai_fdw_state *state, oai_Record *oai );
 oai_Record *fetchNextRecord(TupleTableSlot *slot, oai_fdw_state *state);
 int loadOAIRecords(oai_fdw_state *state);
+void* deparseExpr(Expr *expr, oai_fdw_TableOptions *opts);
+static char *datumToString(Datum datum, Oid type);
 
 Datum oai_fdw_handler(PG_FUNCTION_ARGS)
 {
@@ -522,7 +525,7 @@ void validateTableStructure(oai_fdw_TableOptions *opts, ForeignTable *ft) {
 
 char *getColumnOption(oai_fdw_TableOptions *opts, int16 attnum) {
 
-	elog(DEBUG1,"get col 1");
+	elog(DEBUG1,"####################");
 
 	Relation rel = table_open(opts->foreigntableid, NoLock);
 
@@ -538,6 +541,8 @@ char *getColumnOption(oai_fdw_TableOptions *opts, int16 attnum) {
 			foreach (lc, options) {
 
 				DefElem *def = (DefElem*) lfirst(lc);
+
+				elog(DEBUG1,"	----------------");
 
 				if (strcmp(def->defname, OAI_OPT_ATTRIBUTE)==0) {
 
@@ -560,7 +565,39 @@ char *getColumnOption(oai_fdw_TableOptions *opts, int16 attnum) {
 	table_close(rel, NoLock);
 }
 
-void deparseExpr(Expr *expr, oai_fdw_TableOptions *opts){
+
+static char *datumToString(Datum datum, Oid type) {
+
+	StringInfoData result;
+	regproc typoutput;
+	HeapTuple tuple;
+	char *str, *p;
+
+	tuple = SearchSysCache1(TYPEOID, ObjectIdGetDatum(type));
+
+	if (!HeapTupleIsValid(tuple)) elog(ERROR, "cache lookup failed for type %u", type);
+
+	typoutput = ((Form_pg_type)GETSTRUCT(tuple))->typoutput;
+
+	ReleaseSysCache(tuple);
+
+	switch (type) {
+
+	case TEXTOID:
+	case VARCHAROID:
+		str =  DatumGetCString(OidFunctionCall1(typoutput, datum));
+		break;
+	default:
+		return NULL;
+	}
+
+	return str;
+
+}
+
+
+
+void* deparseExpr(Expr *expr, oai_fdw_TableOptions *opts){
 
 	OpExpr *oper;
 	Var *varleft;
@@ -576,6 +613,7 @@ void deparseExpr(Expr *expr, oai_fdw_TableOptions *opts){
 	switch (expr->type)	{
 
 	case T_Var:
+
 		elog(DEBUG1,"  deparseExpr: T_Var");
 		varleft = (Var *)expr;
 		//varattno = att num of col in table
@@ -588,16 +626,16 @@ void deparseExpr(Expr *expr, oai_fdw_TableOptions *opts){
 
 		if (strcmp(leftargOption,OAI_ATTRIBUTE_IDENTIFIER) ==0 ) {
 
-			elog(DEBUG1,"  GetIdentifier Request > %s",leftargOption);
-
+			elog(DEBUG1,"  deparseExpr: GetIdentifier Request > %s",leftargOption);
 
 		}
 
 
 		break;
+
 	case T_OpExpr:
 
-		elog(DEBUG1,"  OPERATOR EXPR");
+		elog(DEBUG1,"  deparseExpr: case T_OpExpr");
 		oper = (OpExpr *)expr;
 
 		tuple = SearchSysCache1(OPEROID, ObjectIdGetDatum(oper->opno));
@@ -609,11 +647,15 @@ void deparseExpr(Expr *expr, oai_fdw_TableOptions *opts){
 		leftargtype = ((Form_pg_operator)GETSTRUCT(tuple))->oprleft;
 		rightargtype = ((Form_pg_operator)GETSTRUCT(tuple))->oprright;
 		schema = ((Form_pg_operator)GETSTRUCT(tuple))->oprnamespace;
+
+//		return opername;
+
+
 		ReleaseSysCache(tuple);
 
 		if (strcmp(opername, "=") == 0){
 
-			elog(DEBUG1,"  opername     : %s",opername);
+			elog(DEBUG1,"  deparseExpr: opername > %s",opername);
 
 
 			varleft  = (Var *) linitial(oper->args);
@@ -625,17 +667,21 @@ void deparseExpr(Expr *expr, oai_fdw_TableOptions *opts){
 			if (strcmp(leftargOption,OAI_ATTRIBUTE_IDENTIFIER) ==0 && (varleft->vartype == TEXTOID || varleft->vartype == VARCHAROID)) {
 
 				opts->requestType = OAI_REQUEST_GETRECORD;
-				opts->identifier = "oai:dnb.de/zdb/1250800153";
 
-				elog(DEBUG1,"  GetIdentifier Request > %s",leftargOption);
-				//elog(DEBUG1,"  GetIdentifier Request > %s",varright->);
+				Const *constant = (Const*) lsecond(oper->args);
 
+				opts->identifier = datumToString(constant->constvalue,constant->consttype);
 
+				elog(DEBUG1,"  GetRecord: identifier: %s",opts->identifier);
+				//elog(DEBUG1,"  GetIdentifier Request > %s",pstrdup(tuple->t_data));
 
 			}
 
+			//leftargOption = getColumnOption(opts,varright->varattnosyn);
 
 
+			elog(DEBUG1,">>>>>>>>>> %u",((Expr *)lsecond(oper->args))->type);
+			//111 = T_Const
 //			deparseExpr(linitial(oper->args),opts);
 
 		}
@@ -669,10 +715,15 @@ void deparseWhereClause(List *conditions, oai_fdw_TableOptions *opts){
 //	tuple = SearchSysCache1(OPEROID, ObjectIdGetDatum(node->opno));
 
 //	List *conditions = baserel->baserestrictinfo;
+
+
+
 	ListCell *cell;
-	OpExpr *oper;
-	HeapTuple tuple;
+	//OpExpr *oper;
+	//HeapTuple tuple;
 	char *opername, *left, *right, *arg, oprkind;
+
+	char* operator;
 	Oid leftargtype, rightargtype, schema;
 
 	int i = 0;
@@ -692,19 +743,27 @@ void deparseWhereClause(List *conditions, oai_fdw_TableOptions *opts){
 			RestrictInfo *ri = (RestrictInfo *) expr;
 			expr = ri->clause;
 
-		} else {
-
-			elog(DEBUG1,"  NOT IsA RestrictInfo");
 		}
 
+//		if (expr->type == T_OpExpr){
+//
+//			OpExpr *oper = (OpExpr *)expr;
+//			HeapTuple tuple;
+//
+//			tuple = SearchSysCache1(OPEROID, ObjectIdGetDatum(oper->opno));
+//
+//			operator = deparseExpr(expr,opts);
+//
+//		}
+
+//		deparseExpr(expr,opts);
 
 		deparseExpr(expr,opts);
-
 
 	}
 
 
-	//elog(ERROR,"LEAVING FOR NOW");
+	//elog(ERROR,"LEAVING FOR - Operator: %s",operator);
 
 }
 
