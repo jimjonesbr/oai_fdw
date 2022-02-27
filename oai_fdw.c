@@ -63,6 +63,7 @@
 #define OAI_ATTRIBUTE_CONTENT "content"
 #define OAI_ATTRIBUTE_DATESTAMP "datestamp"
 #define OAI_ATTRIBUTE_SETSPEC "setspec"
+#define OAI_ATTRIBUTE_METADATAPREFIX "metadataPrefix"
 
 #define OAI_SUCCESS 0
 #define OAI_FAIL 1
@@ -113,6 +114,7 @@ typedef struct oai_Record {
 	char *identifier;
 	char *content;
 	char *datestamp;
+	char *metadataPrefix;
 	ArrayType *setsArray;
 
 	xmlBufferPtr doc;
@@ -653,23 +655,22 @@ void* deparseExpr(Expr *expr, oai_fdw_TableOptions *opts){
 
 		ReleaseSysCache(tuple);
 
+
+		elog(DEBUG1,"  deparseExpr: opername > %s",opername);
+
 		if (strcmp(opername, "=") == 0){
 
-			elog(DEBUG1,"  deparseExpr: opername > %s",opername);
-
-
 			varleft  = (Var *) linitial(oper->args);
-			varright = (Var *) lsecond(oper->args);
+			//varright = (Var *) lsecond(oper->args);
 
 			leftargOption = getColumnOption(opts,varleft->varattnosyn);
 
 
 			if (strcmp(leftargOption,OAI_ATTRIBUTE_IDENTIFIER) ==0 && (varleft->vartype == TEXTOID || varleft->vartype == VARCHAROID)) {
 
-				opts->requestType = OAI_REQUEST_GETRECORD;
-
 				Const *constant = (Const*) lsecond(oper->args);
 
+				opts->requestType = OAI_REQUEST_GETRECORD;
 				opts->identifier = datumToString(constant->constvalue,constant->consttype);
 
 				elog(DEBUG1,"  GetRecord: identifier: %s",opts->identifier);
@@ -680,9 +681,19 @@ void* deparseExpr(Expr *expr, oai_fdw_TableOptions *opts){
 			//leftargOption = getColumnOption(opts,varright->varattnosyn);
 
 
-			elog(DEBUG1,">>>>>>>>>> %u",((Expr *)lsecond(oper->args))->type);
+			//elog(DEBUG1,">>>>>>>>>> %u",((Expr *)lsecond(oper->args))->type);
 			//111 = T_Const
 //			deparseExpr(linitial(oper->args),opts);
+
+		}
+
+		if (strcmp(opername, ">=") == 0){
+
+
+		}
+
+		if (strcmp(opername, "<=") == 0){
+
 
 		}
 
@@ -929,6 +940,8 @@ oai_Record *fetchNextRecord(TupleTableSlot *slot, oai_fdw_state *state) {
 
 	oai_Record *oai = (oai_Record*) palloc0(sizeof(oai_Record));
 
+	oai->metadataPrefix = state->metadataPrefix;
+
 	bool getNext = false;
 
 	xmlInitParser(); //????????????????
@@ -1105,6 +1118,14 @@ void createOAITuple(TupleTableSlot *slot, oai_fdw_state *state, oai_Record *oai 
 
 						slot->tts_isnull[i] = false;
 						slot->tts_values[i] = CStringGetTextDatum(oai->identifier);
+
+
+					} else if (strcmp(option_value,OAI_ATTRIBUTE_METADATAPREFIX)==0){
+
+						elog(DEBUG2,"  createOAITuple: column %d option '%s'",i,option_value);
+
+						slot->tts_isnull[i] = false;
+						slot->tts_values[i] = CStringGetTextDatum(oai->metadataPrefix);
 
 
 					} else if (strcmp(option_value,OAI_ATTRIBUTE_CONTENT)==0){
@@ -1335,182 +1356,3 @@ void oai_fdw_EndForeignScan(ForeignScanState *node) {
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-//
-///*
-// * Context for deparseExpr
-// */
-//typedef struct deparse_expr_cxt
-//{
-//	PlannerInfo *root;			/* global planner state */
-//	RelOptInfo *foreignrel;		/* the foreign relation we are planning for */
-//	RelOptInfo *scanrel;		/* the underlying scan relation. Same as
-//								 * foreignrel, when that represents a join or
-//								 * a base relation. */
-//	StringInfo	buf;			/* output buffer to append to */
-//	List	  **params_list;	/* exprs that will become remote Params */
-//} deparse_expr_cxt;
-//
-//
-//
-// void
-//deparseExpr(Expr *node, deparse_expr_cxt *context) {
-//	if (node == NULL)
-//		return;
-//
-//	switch (nodeTag(node))
-//	{
-//		case T_Var:
-//			//mysql_deparse_var((Var *) node, context);
-//			break;
-//		case T_Const:
-//			//mysql_deparse_const((Const *) node, context);
-//			break;
-//		case T_Param:
-//			//mysql_deparse_param((Param *) node, context);
-//			break;
-//#if PG_VERSION_NUM < 120000
-//		case T_ArrayRef:
-//			//mysql_deparse_array_ref((ArrayRef *) node, context);
-//#else
-//		case T_SubscriptingRef:
-//			//mysql_deparse_array_ref((SubscriptingRef *) node, context);
-//#endif
-//			break;
-//		case T_FuncExpr:
-//			//mysql_deparse_func_expr((FuncExpr *) node, context);
-//			break;
-//		case T_OpExpr:
-//			mysql_deparse_op_expr((OpExpr *) node, context);
-//			break;
-//		case T_DistinctExpr:
-//			//mysql_deparse_distinct_expr((DistinctExpr *) node, context);
-//			break;
-//		case T_ScalarArrayOpExpr:
-//			//mysql_deparse_scalar_array_op_expr((ScalarArrayOpExpr *) node, context);
-//			break;
-//		case T_RelabelType:
-//			//mysql_deparse_relabel_type((RelabelType *) node, context);
-//			break;
-//		case T_BoolExpr:
-//			//mysql_deparse_bool_expr((BoolExpr *) node, context);
-//			break;
-//		case T_NullTest:
-//			//mysql_deparse_null_test((NullTest *) node, context);
-//			break;
-//		case T_ArrayExpr:
-//			//mysql_deparse_array_expr((ArrayExpr *) node, context);
-//			break;
-//		case T_Aggref:
-//			//mysql_deparse_aggref((Aggref *) node, context);
-//			break;
-//		default:
-//			elog(ERROR, "unsupported expression type for deparse: %d", (int) nodeTag(node));
-//			break;
-//	}
-//}
-//
-//
-//
-// void
-//mysql_deparse_op_expr(OpExpr *node, deparse_expr_cxt *context)
-//{
-//	StringInfo	buf = context->buf;
-//	HeapTuple	tuple;
-//	Form_pg_operator form;
-//	char		oprkind;
-//	ListCell   *arg;
-//
-//	/* Retrieve information about the operator from system catalog. */
-//	tuple = SearchSysCache1(OPEROID, ObjectIdGetDatum(node->opno));
-//	if (!HeapTupleIsValid(tuple))
-//		elog(ERROR, "cache lookup failed for operator %u", node->opno);
-//
-//	form = (Form_pg_operator) GETSTRUCT(tuple);
-//	oprkind = form->oprkind;
-//
-//	/* Sanity check. */
-//	Assert((oprkind == 'r' && list_length(node->args) == 1) ||
-//		   (oprkind == 'l' && list_length(node->args) == 1) ||
-//		   (oprkind == 'b' && list_length(node->args) == 2));
-//
-//	/* Always parenthesize the expression. */
-//	appendStringInfoChar(buf, '(');
-//
-//	/* Deparse left operand. */
-//	if (oprkind == 'r' || oprkind == 'b')
-//	{
-//		arg = list_head(node->args);
-//		deparseExpr(lfirst(arg), context);
-//		appendStringInfoChar(buf, ' ');
-//	}
-//
-//	/* Deparse operator name. */
-//	mysql_deparse_operator_name(buf, form);
-//
-//	/* Deparse right operand. */
-//	if (oprkind == 'l' || oprkind == 'b')
-//	{
-//		arg = list_tail(node->args);
-//		appendStringInfoChar(buf, ' ');
-//		deparseExpr(lfirst(arg), context);
-//	}
-//
-//	appendStringInfoChar(buf, ')');
-//
-//	ReleaseSysCache(tuple);
-//}
-//
-// void
-//mysql_deparse_operator_name(StringInfo buf, Form_pg_operator opform)
-//{
-//	/* opname is not a SQL identifier, so we should not quote it. */
-//	char *cur_opname = NameStr(opform->oprname);
-//
-//	/* Print schema name only if it's not pg_catalog */
-//	if (opform->oprnamespace != PG_CATALOG_NAMESPACE)
-//	{
-//		const char *opnspname;
-//
-//		opnspname = get_namespace_name(opform->oprnamespace);
-//		/* Print fully qualified operator name. */
-//		appendStringInfo(buf, "OPERATOR(%s.%s)",
-//						 mysql_quote_identifier(opnspname, '`'), cur_opname);
-//	}
-//	else
-//	{
-//		if (strcmp(cur_opname, "~~") == 0)
-//			appendStringInfoString(buf, "LIKE BINARY");
-//		else if (strcmp(cur_opname, "~~*") == 0)
-//			appendStringInfoString(buf, "LIKE");
-//		else if (strcmp(cur_opname, "!~~") == 0)
-//			appendStringInfoString(buf, "NOT LIKE BINARY");
-//		else if (strcmp(cur_opname, "!~~*") == 0)
-//			appendStringInfoString(buf, "NOT LIKE");
-//		else if (strcmp(cur_opname, "~") == 0)
-//			appendStringInfoString(buf, "REGEXP BINARY");
-//		else if (strcmp(cur_opname, "~*") == 0)
-//			appendStringInfoString(buf, "REGEXP");
-//		else if (strcmp(cur_opname, "!~") == 0)
-//			appendStringInfoString(buf, "NOT REGEXP BINARY");
-//		else if (strcmp(cur_opname, "!~*") == 0)
-//			appendStringInfoString(buf, "NOT REGEXP");
-//		else
-//			appendStringInfoString(buf, cur_opname);
-//	}
-//}
