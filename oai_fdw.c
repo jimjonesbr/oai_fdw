@@ -694,6 +694,15 @@ void* deparseExpr(Expr *expr, oai_fdw_TableOptions *opts){
 
 			}
 
+
+			if (strcmp(leftargOption,OAI_ATTRIBUTE_DATESTAMP) ==0 && (varleft->vartype == TIMESTAMPOID)) {
+
+				Const *constant = (Const*) lsecond(oper->args);
+				opts->from = deparseTimestamp(constant->constvalue);
+				opts->until = deparseTimestamp(constant->constvalue);
+
+			}
+
 			//leftargOption = getColumnOption(opts,varright->varattnosyn);
 
 
@@ -789,7 +798,7 @@ char *deparseTimestamp(Datum datum) {
 	/* get the parts */
 	tzoffset = 0;
 	(void)timestamp2tm(DatumGetTimestampTz(datum),
-				false ? &tzoffset : NULL,
+				NULL,
 				&datetime_tm,
 				&datetime_fsec,
 				NULL,
@@ -799,7 +808,7 @@ char *deparseTimestamp(Datum datum) {
 	appendStringInfo(&s, "%04d-%02d-%02dT%02d:%02d:%02dZ",
 		datetime_tm.tm_year > 0 ? datetime_tm.tm_year : -datetime_tm.tm_year + 1,
 		datetime_tm.tm_mon, datetime_tm.tm_mday, datetime_tm.tm_hour,
-		datetime_tm.tm_min, (int32)datetime_fsec);
+		datetime_tm.tm_min, datetime_tm.tm_sec);
 
 	return s.data;
 
@@ -1388,7 +1397,7 @@ void createOAITuple(TupleTableSlot *slot, oai_fdw_state *state, oai_Record *oai 
 						int decodeError = DecodeDateTime(fieldArray, fieldTypeArray, fieldCount, &dateType, &tm, &fsec, &timezone);
 
 						Timestamp tmsp;
-						tm2timestamp(&tm, fsec, fieldTypeArray, &tmsp);
+						tm2timestamp(&tm, (int32)fsec, fieldTypeArray, &tmsp);
 
 
 						if (decodeError == 0) {
