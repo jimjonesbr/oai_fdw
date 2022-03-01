@@ -101,6 +101,7 @@ typedef struct oai_fdw_state {
 	char* current_identifier;
 
 	Oid foreigntableid;
+	List *columnlist;
 	xmlNodePtr xmlroot;
 
 } oai_fdw_state;
@@ -119,6 +120,7 @@ typedef struct oai_Record {
 typedef struct oai_fdw_TableOptions {
 
 	Oid foreigntableid;
+	List *columnlist;
 
 	int numcols;
 	char *metadataPrefix;
@@ -156,9 +158,9 @@ int loadOAIRecords(oai_fdw_state *state);
 void* deparseExpr(Expr *expr, oai_fdw_TableOptions *opts);
 static char *datumToString(Datum datum, Oid type);
 
-char *getColumnOption(oai_fdw_TableOptions *opts, int16 attnum);
+char *getColumnOption(Oid foreigntableid, int16 attnum);
 void deparseWhereClause(List *conditions, oai_fdw_TableOptions *opts);
-void deparseSelectColumns(List *columns, oai_fdw_TableOptions *opts);
+void deparseSelectColumns(oai_fdw_TableOptions *opts);
 void requestPlanner(oai_fdw_TableOptions *opts, ForeignTable *ft, RelOptInfo *baserel);
 
 
@@ -422,11 +424,12 @@ void listRecordsRequest(oai_fdw_state *state) {
 void requestPlanner(oai_fdw_TableOptions *opts, ForeignTable *ft, RelOptInfo *baserel) {
 
 	List *conditions = baserel->baserestrictinfo;
-	List *columnlist = baserel->reltarget->exprs;
+
 	bool hasContentForeignColumn = false;
 	Relation rel = table_open(ft->relid, NoLock);
 
 	opts->numcols = rel->rd_att->natts;
+
 	opts->foreigntableid = ft->relid;
 	/* The default request type is OAI_REQUEST_LISTRECORDS.
 	 * This can be altered after depending on the columns
@@ -519,7 +522,7 @@ void requestPlanner(oai_fdw_TableOptions *opts, ForeignTable *ft, RelOptInfo *ba
 
 				}
 
-				elog(DEBUG1,"createOAITuple: column %d option '%s'",i,option_value);
+				//elog(DEBUG1,"requestPlanner: column %d option '%s'",i,option_value);
 
 			}
 
@@ -530,23 +533,35 @@ void requestPlanner(oai_fdw_TableOptions *opts, ForeignTable *ft, RelOptInfo *ba
 	/* If the foreign table has no "oai_attribute = 'content'" there is no need
 	 * to retrieve the document itself. The ListIdentifiers request lists the
 	 * whole OAI header */
-	if(!hasContentForeignColumn) opts->requestType = OAI_REQUEST_LISTIDENTIFIERS;
+	if(!hasContentForeignColumn) {
 
-	table_close(rel, NoLock);
+		opts->requestType = OAI_REQUEST_LISTIDENTIFIERS;
+		elog(DEBUG1,"  requestPlanner: the foreign table '%s' has no 'content' OAI attribute. Request type set to '%s'",
+				NameStr(rel->rd_rel->relname),OAI_REQUEST_LISTIDENTIFIERS);
+
+	}
+
+
 
 	deparseWhereClause(conditions,opts);
-	deparseSelectColumns(conditions,opts);
+
+	opts->columnlist = baserel->reltarget->exprs;
+	deparseSelectColumns(opts);
+
+	table_close(rel, NoLock);
 
 }
 
 
-char *getColumnOption(oai_fdw_TableOptions *opts, int16 attnum) {
+char *getColumnOption(Oid foreigntableid, int16 attnum) {
 
-	Relation rel = table_open(opts->foreigntableid, NoLock);
+	Relation rel = table_open(foreigntableid, NoLock);
+	List *options;
+	char *option_value;
 
 	for (int i = 0; i < rel->rd_att->natts ; i++) {
 
-		List *options = GetForeignColumnOptions(opts->foreigntableid, i+1);
+		options = GetForeignColumnOptions(foreigntableid, i+1);
 		ListCell *lc;
 
 		if(rel->rd_att->attrs[i].attnum == attnum){
@@ -557,8 +572,10 @@ char *getColumnOption(oai_fdw_TableOptions *opts, int16 attnum) {
 
 				if (strcmp(def->defname, OAI_FDW_OPTION)==0) {
 
-					char *option_value = defGetString(def);
-					return option_value;
+					option_value = defGetString(def);
+
+					break;
+
 
 				}
 
@@ -569,6 +586,9 @@ char *getColumnOption(oai_fdw_TableOptions *opts, int16 attnum) {
 	}
 
 	table_close(rel, NoLock);
+
+	return option_value;
+
 }
 
 
@@ -622,16 +642,7 @@ void* deparseExpr(Expr *expr, oai_fdw_TableOptions *opts){
 
 		elog(DEBUG1,"  deparseExpr: T_Var");
 		varleft = (Var *)expr;
-		elog(DEBUG1,"  variable NUMBER %u", varleft->varattnosyn);
-		elog(DEBUG1,"  result getColumn %s", getColumnOption(opts,varleft->varattnosyn));
-
-		leftargOption = getColumnOption(opts,varleft->varattnosyn);
-
-		if (strcmp(leftargOption,OAI_ATTRIBUTE_IDENTIFIER) ==0 ) {
-
-			elog(DEBUG1,"  deparseExpr: GetIdentifier Request > %s",leftargOption);
-
-		}
+		leftargOption = getColumnOption(opts->foreigntableid,varleft->varattnosyn);
 
 
 		break;
@@ -664,7 +675,7 @@ void* deparseExpr(Expr *expr, oai_fdw_TableOptions *opts){
 			varleft  = (Var *) linitial(oper->args);
 			//varright = (Var *) lsecond(oper->args);
 
-			leftargOption = getColumnOption(opts,varleft->varattnosyn);
+			leftargOption = getColumnOption(opts->foreigntableid,varleft->varattnosyn);
 
 
 			if (strcmp(leftargOption,OAI_ATTRIBUTE_IDENTIFIER) ==0 && (varleft->vartype == TEXTOID || varleft->vartype == VARCHAROID)) {
@@ -709,16 +720,42 @@ void* deparseExpr(Expr *expr, oai_fdw_TableOptions *opts){
 }
 
 
-void deparseSelectColumns(List *columns, oai_fdw_TableOptions *opts){
+void deparseSelectColumns(oai_fdw_TableOptions *opts){
 
 	ListCell *cell;
+	Var *variable;
+	bool hasContentForeignColumn = false;
+	char *columnOption;
 
 	elog(DEBUG1,"deparseSelectColumns called");
 
-	foreach(cell, columns) {
+	foreach(cell, opts->columnlist) {
 
-		elog(DEBUG1,"  >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>");
+		//opts->numcols++;
 
+		Expr * expr = (Expr *) lfirst(cell);
+
+		if(expr->type == T_Var)	{
+
+			variable = (Var *)expr;
+			columnOption = getColumnOption(opts->foreigntableid,variable->varattnosyn);
+
+			if(strcmp(columnOption,OAI_ATTRIBUTE_CONTENT)==0) {
+
+				elog(DEBUG1,"  deparseSelectColumns: content OAI option detected");
+				hasContentForeignColumn = true;
+
+			}
+
+
+		}
+
+
+	}
+
+	if(!hasContentForeignColumn) {
+		opts->requestType = OAI_REQUEST_LISTIDENTIFIERS;
+		elog(DEBUG1,"  deparseSelectColumns: no content OAI option detected. Request type set to '%s'",OAI_REQUEST_LISTIDENTIFIERS);
 	}
 
 }
@@ -857,6 +894,7 @@ ForeignScan *oai_fdw_GetForeignPlan(PlannerInfo *root, RelOptInfo *baserel, Oid 
 	state->numcols = opts->numcols;
 	state->requestType = opts->requestType;
 	state->identifier = opts->identifier;
+	state->columnlist = opts->columnlist;
 
 	scan_clauses = extract_actual_clauses(scan_clauses, false);
 
@@ -1107,110 +1145,227 @@ oai_Record *fetchNextRecord(TupleTableSlot *slot, oai_fdw_state *state) {
 void createOAITuple(TupleTableSlot *slot, oai_fdw_state *state, oai_Record *oai ) {
 
 	//elog(DEBUG2,"createOAITuple called: numcols = %d",state->numcols);
-	elog(DEBUG2,"createOAITuple called: numcols = %d\n\n "
+	elog(DEBUG1,"createOAITuple called: numcols = %d\n\n "
 			"- identifier > %s\n "
 			"- datestamp: %s\n "
 			"- content: %s\n",state->numcols,oai->identifier,oai->datestamp,oai->content);
 
-		for (int i = 0; i < state->numcols; i++) {
-
-			List * options = GetForeignColumnOptions(state->foreigntableid, i+1);
-			ListCell *lc;
-
-			foreach (lc, options) {
-
-				DefElem *def = (DefElem*) lfirst(lc);
-
-				if (strcmp(def->defname, OAI_FDW_OPTION)==0) {
-
-					char * option_value = defGetString(def);
-
-					if (strcmp(option_value,OAI_ATTRIBUTE_IDENTIFIER)==0){
-
-						elog(DEBUG2,"  createOAITuple: column %d option '%s'",i,option_value);
-
-						slot->tts_isnull[i] = false;
-						slot->tts_values[i] = CStringGetTextDatum(oai->identifier);
+	//elog(DEBUG1,"createOAITuple called: numcols = %d",state->numcols);
 
 
-					} else if (strcmp(option_value,OAI_ATTRIBUTE_METADATAPREFIX)==0){
+//	for (int i = 0; i < state->numcols; i++) {
+//
+//		ListCell *lc;
+//
+//		foreach (lc, state->columnlist) {
+//
+//			Expr * expr = (Expr *) lfirst(lc);
+//
+//
+//			elog(DEBUG1,"passing %d",i);
+//
+//		}
+//
+//	}
 
-						elog(DEBUG2,"  createOAITuple: column %d option '%s'",i,option_value);
+	/*
 
-						slot->tts_isnull[i] = false;
-						slot->tts_values[i] = CStringGetTextDatum(oai->metadataPrefix);
+	for (int i = 0; i < state->numcols; i++) {
 
+		ListCell *cell;
+		int columnIndex = 0;
+		List * options = GetForeignColumnOptions(state->foreigntableid, i+1);
 
-					} else if (strcmp(option_value,OAI_ATTRIBUTE_CONTENT)==0){
+		foreach (cell, options) {
 
-						elog(DEBUG2,"  createOAITuple: column %d option '%s'",i,option_value);
-						//elog(DEBUG1,"  createOAITuple: StringInfo data > '%s'",oai_record->xmlContent->data);
-						//elog(DEBUG1,"    createOAITuple: content size > '%d'",strlen(oai_record->content));
-						slot->tts_isnull[i] = false;
-						slot->tts_values[i] = CStringGetTextDatum((char*)oai->content);
-						//slot->tts_values[i] = CStringGetTextDatum(pstrdup(oai_record->xmlContent.data));
-						//elog(DEBUG1,"    createOAITuple: content added to tuple > '%s'",oai_record->xmlContent.data);
-						//elog(DEBUG1,"    createOAITuple: content added to tuple > '%d'",strlen(oai_record->xmlContent.data));
+			Expr * expr = (Expr *) lfirst(cell);
 
-					} else if (strcmp(option_value,OAI_ATTRIBUTE_SETSPEC)==0){
+			if(expr->type == T_Var) {
 
-						elog(DEBUG2,"  createOAITuple: column %d option '%s'",i,option_value);
-						//elog(DEBUG1,"  createOAITuple: array ndim %d",oai_record->setsArray->ndim);
+				char* columnOption ;
+				Var *variable = (Var *)expr;
+				columnOption = getColumnOption(state->foreigntableid,variable->varattnosyn);
 
-						slot->tts_isnull[i] = false;
-						slot->tts_values[i] = DatumGetArrayTypeP(oai->setsArray);
-						elog(DEBUG2,"    createOAITuple: setspec added to tuple");
+				if (strcmp(columnOption,OAI_ATTRIBUTE_IDENTIFIER)==0){
 
+					elog(DEBUG2,"    createOAITuple: index '%d' value '%s'",columnIndex,oai->identifier);
 
-
-
-					}  else if (strcmp(option_value,OAI_ATTRIBUTE_DATESTAMP)==0){
-
-						char workBuffer[MAXDATELEN + 1];
-						char *fieldArray[MAXDATEFIELDS];
-						int fieldTypeArray[MAXDATEFIELDS];
-						int fieldCount = 0;
-						int parseError = ParseDateTime(oai->datestamp, workBuffer, sizeof(workBuffer), fieldArray, fieldTypeArray, MAXDATEFIELDS, &fieldCount);
-
-						elog(DEBUG2,"  createOAITuple: column %d option '%s'",i,option_value);
-
-						//elog(DEBUG2,"    createOAITuple: parsing datestamp \"%s\"",oai->datestamp);
+					slot->tts_isnull[columnIndex] = false;
+					slot->tts_values[columnIndex] = CStringGetTextDatum(oai->identifier);
 
 
+				} else if (strcmp(columnOption,OAI_ATTRIBUTE_METADATAPREFIX)==0){
 
-						//elog(DEBUG2,"    createOAITuple: datestamp parser OK");
+					elog(DEBUG2,"    createOAITuple: index '%d' value '%s'",columnIndex,oai->metadataPrefix);
 
-						if (parseError == 0) {
-
-							int dateType = 0;
-							struct pg_tm tm;
-							fsec_t fsec = 0;
-							int timezone = 0;
-
-							int decodeError = DecodeDateTime(fieldArray, fieldTypeArray, fieldCount, &dateType, &tm, &fsec, &timezone);
-
-							Timestamp tmsp;
-							tm2timestamp(&tm, fsec, fieldTypeArray, &tmsp);
+					slot->tts_isnull[columnIndex] = false;
+					slot->tts_values[columnIndex] = CStringGetTextDatum(oai->metadataPrefix);
 
 
-							if (decodeError == 0) {
+				} else if (strcmp(columnOption,OAI_ATTRIBUTE_CONTENT)==0){
 
-								elog(DEBUG2,"    createOAITuple: datestamp can be decoded");
+					elog(DEBUG2,"    createOAITuple: index '%d' value '%s'",columnIndex,oai->content);
 
-								slot->tts_isnull[i] = false;
-								slot->tts_values[i] = DatumGetTimestamp(tmsp);
+					slot->tts_isnull[columnIndex] = false;
+					slot->tts_values[columnIndex] = CStringGetTextDatum((char*)oai->content);
 
-								elog(DEBUG2,"  createOAITuple: datestamp (\"%s\") parsed and decoded.",oai->datestamp);
+				} else if (strcmp(columnOption,OAI_ATTRIBUTE_SETSPEC)==0){
+
+					elog(DEBUG2,"    createOAITuple: index '%d' value '%u'",columnIndex,oai->identifier);
+
+					slot->tts_isnull[columnIndex] = false;
+					slot->tts_values[columnIndex] = DatumGetArrayTypeP(oai->setsArray);
 
 
-							} else {
+				} else if (strcmp(columnOption,OAI_ATTRIBUTE_DATESTAMP)==0){
+
+					elog(DEBUG2,"    createOAITuple: index '%d' value '%s'",columnIndex,oai->datestamp);
+
+					char workBuffer[MAXDATELEN + 1];
+					char *fieldArray[MAXDATEFIELDS];
+					int fieldTypeArray[MAXDATEFIELDS];
+					int fieldCount = 0;
+					int parseError = ParseDateTime(oai->datestamp, workBuffer, sizeof(workBuffer), fieldArray, fieldTypeArray, MAXDATEFIELDS, &fieldCount);
+
+					//elog(DEBUG2,"  createOAITuple: column %d option '%s'",i,option_value);
 
 
-								slot->tts_isnull[i] = true;
-								slot->tts_values[i] = NULL;
-								elog(WARNING,"  createOAITuple: could not decode datestamp: %s", oai->datestamp);
+					if (parseError == 0) {
 
-							}
+						int dateType = 0;
+						struct pg_tm tm;
+						fsec_t fsec = 0;
+						int timezone = 0;
+
+						int decodeError = DecodeDateTime(fieldArray, fieldTypeArray, fieldCount, &dateType, &tm, &fsec, &timezone);
+
+						Timestamp tmsp;
+						tm2timestamp(&tm, fsec, fieldTypeArray, &tmsp);
+
+
+						if (decodeError == 0) {
+
+							elog(DEBUG2,"    createOAITuple: datestamp can be decoded");
+
+							slot->tts_isnull[columnIndex] = false;
+							slot->tts_values[columnIndex] = DatumGetTimestamp(tmsp);
+
+							elog(DEBUG2,"    createOAITuple: datestamp (\"%s\") parsed and decoded.",oai->datestamp);
+
+
+						} else {
+
+
+							slot->tts_isnull[columnIndex] = true;
+							slot->tts_values[columnIndex] = NULL;
+							elog(WARNING,"    createOAITuple: could not decode datestamp: %s", oai->datestamp);
+
+						}
+
+
+					} else {
+
+
+						slot->tts_isnull[columnIndex] = true;
+						slot->tts_values[columnIndex] = NULL;
+
+						elog(WARNING,"    createOAITuple: could not parse datestamp: %s", oai->datestamp);
+
+
+					}
+
+				}
+
+			}
+
+			columnIndex++;
+		}
+
+	}
+
+	*/
+
+	for (int i = 0; i < state->numcols; i++) {
+
+		List * options = GetForeignColumnOptions(state->foreigntableid, i+1);
+		ListCell *lc;
+
+		foreach (lc, options) {
+
+			DefElem *def = (DefElem*) lfirst(lc);
+
+			if (strcmp(def->defname, OAI_FDW_OPTION)==0) {
+
+				char * option_value = defGetString(def);
+
+				if (strcmp(option_value,OAI_ATTRIBUTE_IDENTIFIER)==0 && oai->identifier){
+
+					elog(DEBUG2,"  createOAITuple: column %d option '%s'",i,option_value);
+
+					slot->tts_isnull[i] = false;
+					slot->tts_values[i] = CStringGetTextDatum(oai->identifier);
+
+
+				} else if (strcmp(option_value,OAI_ATTRIBUTE_METADATAPREFIX)==0 && oai->metadataPrefix){
+
+					elog(DEBUG2,"  createOAITuple: column %d option '%s'",i,option_value);
+
+					slot->tts_isnull[i] = false;
+					slot->tts_values[i] = CStringGetTextDatum(oai->metadataPrefix);
+
+
+				} else if (strcmp(option_value,OAI_ATTRIBUTE_CONTENT)==0 && oai->content){
+
+					elog(DEBUG2,"  createOAITuple: column %d option '%s'",i,option_value);
+					//elog(DEBUG1,"  createOAITuple: StringInfo data > '%s'",oai_record->xmlContent->data);
+					//elog(DEBUG1,"    createOAITuple: content size > '%d'",strlen(oai_record->content));
+					slot->tts_isnull[i] = false;
+					slot->tts_values[i] = CStringGetTextDatum((char*)oai->content);
+					//slot->tts_values[i] = CStringGetTextDatum(pstrdup(oai_record->xmlContent.data));
+					//elog(DEBUG1,"    createOAITuple: content added to tuple > '%s'",oai_record->xmlContent.data);
+					//elog(DEBUG1,"    createOAITuple: content added to tuple > '%d'",strlen(oai_record->xmlContent.data));
+
+				} else if (strcmp(option_value,OAI_ATTRIBUTE_SETSPEC)==0 && oai->setsArray){
+
+					elog(DEBUG2,"  createOAITuple: column %d option '%s'",i,option_value);
+					//elog(DEBUG1,"  createOAITuple: array ndim %d",oai_record->setsArray->ndim);
+
+					slot->tts_isnull[i] = false;
+					slot->tts_values[i] = DatumGetArrayTypeP(oai->setsArray);
+					elog(DEBUG2,"    createOAITuple: setspec added to tuple");
+
+				}  else if (strcmp(option_value,OAI_ATTRIBUTE_DATESTAMP)==0 && oai->datestamp){
+
+					char workBuffer[MAXDATELEN + 1];
+					char *fieldArray[MAXDATEFIELDS];
+					int fieldTypeArray[MAXDATEFIELDS];
+					int fieldCount = 0;
+					int parseError = ParseDateTime(oai->datestamp, workBuffer, sizeof(workBuffer), fieldArray, fieldTypeArray, MAXDATEFIELDS, &fieldCount);
+
+					elog(DEBUG2,"  createOAITuple: column %d option '%s'",i,option_value);
+
+
+					if (parseError == 0) {
+
+						int dateType = 0;
+						struct pg_tm tm;
+						fsec_t fsec = 0;
+						int timezone = 0;
+
+						int decodeError = DecodeDateTime(fieldArray, fieldTypeArray, fieldCount, &dateType, &tm, &fsec, &timezone);
+
+						Timestamp tmsp;
+						tm2timestamp(&tm, fsec, fieldTypeArray, &tmsp);
+
+
+						if (decodeError == 0) {
+
+							elog(DEBUG2,"    createOAITuple: datestamp can be decoded");
+
+							slot->tts_isnull[i] = false;
+							slot->tts_values[i] = DatumGetTimestamp(tmsp);
+
+							elog(DEBUG2,"  createOAITuple: datestamp (\"%s\") parsed and decoded.",oai->datestamp);
 
 
 						} else {
@@ -1218,12 +1373,18 @@ void createOAITuple(TupleTableSlot *slot, oai_fdw_state *state, oai_Record *oai 
 
 							slot->tts_isnull[i] = true;
 							slot->tts_values[i] = NULL;
-
-							elog(WARNING,"  createOAITuple: could not parse datestamp: %s", oai->datestamp);
-
+							elog(WARNING,"  createOAITuple: could not decode datestamp: %s", oai->datestamp);
 
 						}
 
+
+					} else {
+
+
+						slot->tts_isnull[i] = true;
+						slot->tts_values[i] = NULL;
+
+						elog(WARNING,"  createOAITuple: could not parse datestamp: %s", oai->datestamp);
 
 
 					}
@@ -1232,12 +1393,16 @@ void createOAITuple(TupleTableSlot *slot, oai_fdw_state *state, oai_Record *oai 
 
 				}
 
+
+
 			}
 
 		}
 
-		state->rowcount++;
-		elog(DEBUG1,"  createOAITuple finished (rowcount: %d)",state->rowcount);
+	}
+
+	state->rowcount++;
+	elog(DEBUG1,"  createOAITuple finished (rowcount: %d)",state->rowcount);
 
 }
 
@@ -1255,7 +1420,7 @@ TupleTableSlot *oai_fdw_IterateForeignScan(ForeignScanState *node) {
 
 	if(state->rowcount == 0 || state->resumptionToken) {
 
-		elog(DEBUG2,"  oai_fdw_IterateForeignScan: loading OAI records (token: \"%s\")",state->resumptionToken);
+		elog(DEBUG2,"  oai_fdw_IterateForeignScan: loading OAI records (token: \"%s\")", state->resumptionToken);
 
 		loadOAIRecords(state);
 		state->current_identifier = NULL;
@@ -1268,13 +1433,20 @@ TupleTableSlot *oai_fdw_IterateForeignScan(ForeignScanState *node) {
 	if(oai) {
 
 		createOAITuple(slot, state, oai);
+		elog(DEBUG2,"  oai_fdw_IterateForeignScan: OAI tuple created");
 
 		ExecStoreVirtualTuple(slot);
-
+		elog(DEBUG2,"  oai_fdw_IterateForeignScan: virtual tuple stored");
 	}
 
-	elog(DEBUG2,"  => oai_fdw_IterateForeignScan: returning tuple (rowcount: %d)",state->rowcount);
 
+
+//	slot->tts_isnull[3] = true;
+//	slot->tts_values[3] = NULL;
+//	slot->tts_isnull[4] = true;
+//	slot->tts_values[4] = NULL;
+
+	elog(DEBUG1,"  => oai_fdw_IterateForeignScan: returning tuple (rowcount: %d)", state->rowcount);
 	return slot;
 
 
