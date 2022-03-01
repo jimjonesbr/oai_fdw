@@ -163,6 +163,7 @@ void deparseWhereClause(List *conditions, oai_fdw_TableOptions *opts);
 void deparseSelectColumns(oai_fdw_TableOptions *opts);
 void requestPlanner(oai_fdw_TableOptions *opts, ForeignTable *ft, RelOptInfo *baserel);
 
+char *deparseTimestamp(Datum datum);
 
 Datum oai_fdw_handler(PG_FUNCTION_ARGS)
 {
@@ -209,6 +210,7 @@ int executeOAIRequest(oai_fdw_state **state, struct string *xmlResponse) {
 
 	CURL *curl;
 	CURLcode res;
+	//long resCode;
 	StringInfoData url_bufffer;
 	initStringInfo(&url_bufffer);
 
@@ -334,8 +336,12 @@ int executeOAIRequest(oai_fdw_state **state, struct string *xmlResponse) {
 		curl_easy_setopt(curl, CURLOPT_POSTFIELDS, url_bufffer.data);
 		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writefunc);
 		curl_easy_setopt(curl, CURLOPT_WRITEDATA, xmlResponse);
+		curl_easy_setopt(curl, CURLOPT_FAILONERROR, true);
+//		curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &resCode);
 
 		res = curl_easy_perform(curl);
+
+//		elog(ERROR,"res = %d",res);
 
 		if (res != CURLE_OK) {
 
@@ -670,13 +676,12 @@ void* deparseExpr(Expr *expr, oai_fdw_TableOptions *opts){
 
 		elog(DEBUG1,"  deparseExpr: opername > %s",opername);
 
+		varleft  = (Var *) linitial(oper->args);
+		leftargOption = getColumnOption(opts->foreigntableid,varleft->varattnosyn);
+
 		if (strcmp(opername, "=") == 0){
 
-			varleft  = (Var *) linitial(oper->args);
 			//varright = (Var *) lsecond(oper->args);
-
-			leftargOption = getColumnOption(opts->foreigntableid,varleft->varattnosyn);
-
 
 			if (strcmp(leftargOption,OAI_ATTRIBUTE_IDENTIFIER) ==0 && (varleft->vartype == TEXTOID || varleft->vartype == VARCHAROID)) {
 
@@ -698,12 +703,25 @@ void* deparseExpr(Expr *expr, oai_fdw_TableOptions *opts){
 
 		}
 
-		if (strcmp(opername, ">=") == 0){
+		if (strcmp(opername, ">=") == 0 || strcmp(opername, ">") == 0){
 
+			if (strcmp(leftargOption,OAI_ATTRIBUTE_DATESTAMP) ==0 && (varleft->vartype == TIMESTAMPOID)) {
+
+				Const *constant = (Const*) lsecond(oper->args);
+				opts->from = deparseTimestamp(constant->constvalue);
+
+			}
 
 		}
 
-		if (strcmp(opername, "<=") == 0){
+		if (strcmp(opername, "<=") == 0 || strcmp(opername, "<") == 0){
+
+			if (strcmp(leftargOption,OAI_ATTRIBUTE_DATESTAMP) ==0 && (varleft->vartype == TIMESTAMPOID)) {
+
+				Const *constant = (Const*) lsecond(oper->args);
+				opts->until = deparseTimestamp(constant->constvalue);
+
+			}
 
 
 		}
@@ -761,6 +779,33 @@ void deparseSelectColumns(oai_fdw_TableOptions *opts){
 }
 
 
+char *deparseTimestamp(Datum datum) {
+
+	struct pg_tm datetime_tm;
+	int32 tzoffset;
+	fsec_t datetime_fsec;
+	StringInfoData s;
+
+	/* get the parts */
+	tzoffset = 0;
+	(void)timestamp2tm(DatumGetTimestampTz(datum),
+				false ? &tzoffset : NULL,
+				&datetime_tm,
+				&datetime_fsec,
+				NULL,
+				NULL);
+
+	initStringInfo(&s);
+	appendStringInfo(&s, "%04d-%02d-%02dT%02d:%02d:%02dZ",
+		datetime_tm.tm_year > 0 ? datetime_tm.tm_year : -datetime_tm.tm_year + 1,
+		datetime_tm.tm_mon, datetime_tm.tm_mday, datetime_tm.tm_hour,
+		datetime_tm.tm_min, (int32)datetime_fsec);
+
+	return s.data;
+
+}
+
+
 void deparseWhereClause(List *conditions, oai_fdw_TableOptions *opts){
 
 	ListCell *cell;
@@ -798,7 +843,7 @@ void oai_fdw_GetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid forei
 	oai_fdw_TableOptions *opts = (oai_fdw_TableOptions *)palloc0(sizeof(oai_fdw_TableOptions));
 	ListCell *cell;
 
-	requestPlanner(opts, ft, baserel);
+//	requestPlanner(opts, ft, baserel);
 
 	elog(DEBUG1,"oai_fdw_GetForeignRelSize: requestType > %s", opts->requestType);
 
@@ -857,6 +902,7 @@ void oai_fdw_GetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid forei
 	}
 
 
+	requestPlanner(opts, ft, baserel);
 
 	baserel->rows = end - start; //TODO ??
 
@@ -962,31 +1008,37 @@ oai_Record *fetchNextRecord(TupleTableSlot *slot, oai_fdw_state *state) {
 							state->resumptionToken = token;
 							elog(DEBUG1,"  fetchNextRecord: (%s) token detected in current page > %s",state->requestType,token);
 
+						} else {
+
+							elog(DEBUG1,"  fetchNextRecord: empty token in '%s' (EOF) %s",state->requestType);
+
 						}
 					}
 
 
+					if (xmlStrcmp(header->name, (xmlChar*) "header") != 0) continue;
+
+
+					for (headerList = header->children; headerList!= NULL; headerList = headerList->next) {
+
+						char *node_content;
+
+						if (headerList->type != XML_ELEMENT_NODE) continue;
+
+						node_content = (char*)xmlNodeGetContent(headerList);
+
+						if (xmlStrcmp(headerList->name, (xmlChar*) "identifier")==0)  oai->identifier = node_content;
+
+						if (xmlStrcmp(headerList->name, (xmlChar*) "setSpec")==0) appendTextArray(&oai->setsArray,node_content);
+
+						if (xmlStrcmp(headerList->name, (xmlChar*) "datestamp")==0)	oai->datestamp= node_content;
+
+					}
+
 				}
 
 
-				if (xmlStrcmp(header->name, (xmlChar*) "header") != 0) continue;
 
-
-				for (headerList = header->children; headerList!= NULL; headerList = headerList->next) {
-
-					char *node_content;
-
-					if (headerList->type != XML_ELEMENT_NODE) continue;
-
-					node_content = (char*)xmlNodeGetContent(headerList);
-
-					if (xmlStrcmp(headerList->name, (xmlChar*) "identifier")==0)  oai->identifier = node_content;
-
-					if (xmlStrcmp(headerList->name, (xmlChar*) "setSpec")==0) appendTextArray(&oai->setsArray,node_content);
-
-					if (xmlStrcmp(headerList->name, (xmlChar*) "datestamp")==0)	oai->datestamp= node_content;
-
-				}
 
 
 				if(!state->current_identifier) {
@@ -1144,29 +1196,10 @@ oai_Record *fetchNextRecord(TupleTableSlot *slot, oai_fdw_state *state) {
 
 void createOAITuple(TupleTableSlot *slot, oai_fdw_state *state, oai_Record *oai ) {
 
-	//elog(DEBUG2,"createOAITuple called: numcols = %d",state->numcols);
 	elog(DEBUG1,"createOAITuple called: numcols = %d\n\n "
 			"- identifier > %s\n "
 			"- datestamp: %s\n "
 			"- content: %s\n",state->numcols,oai->identifier,oai->datestamp,oai->content);
-
-	//elog(DEBUG1,"createOAITuple called: numcols = %d",state->numcols);
-
-
-//	for (int i = 0; i < state->numcols; i++) {
-//
-//		ListCell *lc;
-//
-//		foreach (lc, state->columnlist) {
-//
-//			Expr * expr = (Expr *) lfirst(lc);
-//
-//
-//			elog(DEBUG1,"passing %d",i);
-//
-//		}
-//
-//	}
 
 	/*
 
@@ -1439,16 +1472,8 @@ TupleTableSlot *oai_fdw_IterateForeignScan(ForeignScanState *node) {
 		elog(DEBUG2,"  oai_fdw_IterateForeignScan: virtual tuple stored");
 	}
 
-
-
-//	slot->tts_isnull[3] = true;
-//	slot->tts_values[3] = NULL;
-//	slot->tts_isnull[4] = true;
-//	slot->tts_values[4] = NULL;
-
 	elog(DEBUG1,"  => oai_fdw_IterateForeignScan: returning tuple (rowcount: %d)", state->rowcount);
 	return slot;
-
 
 }
 
