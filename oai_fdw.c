@@ -689,7 +689,7 @@ void* deparseExpr(Expr *expr, oai_fdw_TableOptions *opts){
 				opts->requestType = OAI_REQUEST_GETRECORD;
 				opts->identifier = datumToString(constant->constvalue,constant->consttype);
 
-				elog(DEBUG1,"  deparseExpr: request Type set to '%s' with identifier '%s'",OAI_REQUEST_GETRECORD,opts->identifier);
+				elog(DEBUG1,"  deparseExpr: request type set to '%s' with identifier '%s'",OAI_REQUEST_GETRECORD,opts->identifier);
 
 			}
 
@@ -699,6 +699,16 @@ void* deparseExpr(Expr *expr, oai_fdw_TableOptions *opts){
 				Const *constant = (Const*) lsecond(oper->args);
 				opts->from = deparseTimestamp(constant->constvalue);
 				opts->until = deparseTimestamp(constant->constvalue);
+
+			}
+
+			if (strcmp(leftargOption,OAI_ATTRIBUTE_METADATAPREFIX) ==0 && (varleft->vartype == TEXTOID || varleft->vartype == VARCHAROID)) {
+
+				Const *constant = (Const*) lsecond(oper->args);
+
+				opts->metadataPrefix = datumToString(constant->constvalue,constant->consttype);
+
+				elog(DEBUG1,"  deparseExpr: metadataPrefix set to '%s'",opts->metadataPrefix);
 
 			}
 
@@ -999,8 +1009,6 @@ oai_Record *fetchNextRecord(TupleTableSlot *slot, oai_fdw_state *state) {
 
 		for (rootNode = state->xmlroot->children; rootNode!= NULL; rootNode = rootNode->next) {
 
-			//if(eof) return NULL;
-
 			if (rootNode->type != XML_ELEMENT_NODE) continue;
 			if (xmlStrcmp(rootNode->name, (xmlChar*)state->requestType)!=0) continue;
 
@@ -1023,25 +1031,12 @@ oai_Record *fetchNextRecord(TupleTableSlot *slot, oai_fdw_state *state) {
 
 							elog(DEBUG1,"  fetchNextRecord: empty token in '%s' (EOF)",state->requestType);
 							eof = true;
+
 						}
 					}
 
 
 				}
-
-//				if (xmlStrcmp(header->name, (xmlChar*)"resumptionToken")==0) {
-//
-//					char *token = (char*)xmlNodeGetContent(header->next);
-//
-//					if(strlen(token) != 0) {
-//
-//						elog(DEBUG1,"  fetchNextRecord: empty token in '%s' (EOF) %s",state->requestType);
-//
-//						return NULL;
-//
-//					}
-//
-//				}
 
 
 				if (xmlStrcmp(header->name, (xmlChar*) "header") != 0) continue;
