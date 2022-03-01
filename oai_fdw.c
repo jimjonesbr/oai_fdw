@@ -113,7 +113,6 @@ typedef struct oai_Record {
 	char *datestamp;
 	char *metadataPrefix;
 	ArrayType *setsArray;
-
 } oai_Record;
 
 
@@ -988,16 +987,19 @@ oai_Record *fetchNextRecord(TupleTableSlot *slot, oai_fdw_state *state) {
 
 	oai->metadataPrefix = state->metadataPrefix;
 
-	elog(DEBUG1,"fetchNextRecord for %s",state->requestType);
+	elog(DEBUG1,"fetchNextRecord for '%s'",state->requestType);
 
 
 	bool getNext = false;
+    bool eof = false;
 
 	xmlInitParser(); //????????????????
 
 	if(strcmp(state->requestType,OAI_REQUEST_LISTIDENTIFIERS)==0) {
 
 		for (rootNode = state->xmlroot->children; rootNode!= NULL; rootNode = rootNode->next) {
+
+			//if(eof) return NULL;
 
 			if (rootNode->type != XML_ELEMENT_NODE) continue;
 			if (xmlStrcmp(rootNode->name, (xmlChar*)state->requestType)!=0) continue;
@@ -1019,35 +1021,46 @@ oai_Record *fetchNextRecord(TupleTableSlot *slot, oai_fdw_state *state) {
 
 						} else {
 
-							elog(DEBUG1,"  fetchNextRecord: empty token in '%s' (EOF) %s",state->requestType);
-
+							elog(DEBUG1,"  fetchNextRecord: empty token in '%s' (EOF)",state->requestType);
+							eof = true;
 						}
 					}
 
 
-					if (xmlStrcmp(header->name, (xmlChar*) "header") != 0) continue;
-
-
-					for (headerList = header->children; headerList!= NULL; headerList = headerList->next) {
-
-						char *node_content;
-
-						if (headerList->type != XML_ELEMENT_NODE) continue;
-
-						node_content = (char*)xmlNodeGetContent(headerList);
-
-						if (xmlStrcmp(headerList->name, (xmlChar*) "identifier")==0)  oai->identifier = node_content;
-
-						if (xmlStrcmp(headerList->name, (xmlChar*) "setSpec")==0) appendTextArray(&oai->setsArray,node_content);
-
-						if (xmlStrcmp(headerList->name, (xmlChar*) "datestamp")==0)	oai->datestamp= node_content;
-
-					}
-
 				}
 
+//				if (xmlStrcmp(header->name, (xmlChar*)"resumptionToken")==0) {
+//
+//					char *token = (char*)xmlNodeGetContent(header->next);
+//
+//					if(strlen(token) != 0) {
+//
+//						elog(DEBUG1,"  fetchNextRecord: empty token in '%s' (EOF) %s",state->requestType);
+//
+//						return NULL;
+//
+//					}
+//
+//				}
 
 
+				if (xmlStrcmp(header->name, (xmlChar*) "header") != 0) continue;
+
+				for (headerList = header->children; headerList!= NULL; headerList = headerList->next) {
+
+					char *node_content;
+
+					if (headerList->type != XML_ELEMENT_NODE) continue;
+
+					node_content = (char*)xmlNodeGetContent(headerList);
+
+					if (xmlStrcmp(headerList->name, (xmlChar*) "identifier")==0)  oai->identifier = node_content;
+
+					if (xmlStrcmp(headerList->name, (xmlChar*) "setSpec")==0) appendTextArray(&oai->setsArray,node_content);
+
+					if (xmlStrcmp(headerList->name, (xmlChar*) "datestamp")==0)	oai->datestamp= node_content;
+
+				}
 
 
 				if(!state->current_identifier) {
@@ -1064,6 +1077,7 @@ oai_Record *fetchNextRecord(TupleTableSlot *slot, oai_fdw_state *state) {
 					oai->setsArray = NULL;
 					getNext = true;
 
+					if(eof) return NULL;
 
 				} else if(getNext == true) {
 
@@ -1210,123 +1224,6 @@ void createOAITuple(TupleTableSlot *slot, oai_fdw_state *state, oai_Record *oai 
 			"- datestamp: %s\n "
 			"- content: %s\n",state->numcols,oai->identifier,oai->datestamp,oai->content);
 
-	/*
-
-	for (int i = 0; i < state->numcols; i++) {
-
-		ListCell *cell;
-		int columnIndex = 0;
-		List * options = GetForeignColumnOptions(state->foreigntableid, i+1);
-
-		foreach (cell, options) {
-
-			Expr * expr = (Expr *) lfirst(cell);
-
-			if(expr->type == T_Var) {
-
-				char* columnOption ;
-				Var *variable = (Var *)expr;
-				columnOption = getColumnOption(state->foreigntableid,variable->varattnosyn);
-
-				if (strcmp(columnOption,OAI_ATTRIBUTE_IDENTIFIER)==0){
-
-					elog(DEBUG2,"    createOAITuple: index '%d' value '%s'",columnIndex,oai->identifier);
-
-					slot->tts_isnull[columnIndex] = false;
-					slot->tts_values[columnIndex] = CStringGetTextDatum(oai->identifier);
-
-
-				} else if (strcmp(columnOption,OAI_ATTRIBUTE_METADATAPREFIX)==0){
-
-					elog(DEBUG2,"    createOAITuple: index '%d' value '%s'",columnIndex,oai->metadataPrefix);
-
-					slot->tts_isnull[columnIndex] = false;
-					slot->tts_values[columnIndex] = CStringGetTextDatum(oai->metadataPrefix);
-
-
-				} else if (strcmp(columnOption,OAI_ATTRIBUTE_CONTENT)==0){
-
-					elog(DEBUG2,"    createOAITuple: index '%d' value '%s'",columnIndex,oai->content);
-
-					slot->tts_isnull[columnIndex] = false;
-					slot->tts_values[columnIndex] = CStringGetTextDatum((char*)oai->content);
-
-				} else if (strcmp(columnOption,OAI_ATTRIBUTE_SETSPEC)==0){
-
-					elog(DEBUG2,"    createOAITuple: index '%d' value '%u'",columnIndex,oai->identifier);
-
-					slot->tts_isnull[columnIndex] = false;
-					slot->tts_values[columnIndex] = DatumGetArrayTypeP(oai->setsArray);
-
-
-				} else if (strcmp(columnOption,OAI_ATTRIBUTE_DATESTAMP)==0){
-
-					elog(DEBUG2,"    createOAITuple: index '%d' value '%s'",columnIndex,oai->datestamp);
-
-					char workBuffer[MAXDATELEN + 1];
-					char *fieldArray[MAXDATEFIELDS];
-					int fieldTypeArray[MAXDATEFIELDS];
-					int fieldCount = 0;
-					int parseError = ParseDateTime(oai->datestamp, workBuffer, sizeof(workBuffer), fieldArray, fieldTypeArray, MAXDATEFIELDS, &fieldCount);
-
-					//elog(DEBUG2,"  createOAITuple: column %d option '%s'",i,option_value);
-
-
-					if (parseError == 0) {
-
-						int dateType = 0;
-						struct pg_tm tm;
-						fsec_t fsec = 0;
-						int timezone = 0;
-
-						int decodeError = DecodeDateTime(fieldArray, fieldTypeArray, fieldCount, &dateType, &tm, &fsec, &timezone);
-
-						Timestamp tmsp;
-						tm2timestamp(&tm, fsec, fieldTypeArray, &tmsp);
-
-
-						if (decodeError == 0) {
-
-							elog(DEBUG2,"    createOAITuple: datestamp can be decoded");
-
-							slot->tts_isnull[columnIndex] = false;
-							slot->tts_values[columnIndex] = DatumGetTimestamp(tmsp);
-
-							elog(DEBUG2,"    createOAITuple: datestamp (\"%s\") parsed and decoded.",oai->datestamp);
-
-
-						} else {
-
-
-							slot->tts_isnull[columnIndex] = true;
-							slot->tts_values[columnIndex] = NULL;
-							elog(WARNING,"    createOAITuple: could not decode datestamp: %s", oai->datestamp);
-
-						}
-
-
-					} else {
-
-
-						slot->tts_isnull[columnIndex] = true;
-						slot->tts_values[columnIndex] = NULL;
-
-						elog(WARNING,"    createOAITuple: could not parse datestamp: %s", oai->datestamp);
-
-
-					}
-
-				}
-
-			}
-
-			columnIndex++;
-		}
-
-	}
-
-	*/
-
 	for (int i = 0; i < state->numcols; i++) {
 
 		List * options = GetForeignColumnOptions(state->foreigntableid, i+1);
@@ -1378,34 +1275,34 @@ void createOAITuple(TupleTableSlot *slot, oai_fdw_state *state, oai_Record *oai 
 
 				}  else if (strcmp(option_value,OAI_ATTRIBUTE_DATESTAMP)==0 && oai->datestamp){
 
-					char workBuffer[MAXDATELEN + 1];
-					char *fieldArray[MAXDATEFIELDS];
-					int fieldTypeArray[MAXDATEFIELDS];
-					int fieldCount = 0;
-					int parseError = ParseDateTime(oai->datestamp, workBuffer, sizeof(workBuffer), fieldArray, fieldTypeArray, MAXDATEFIELDS, &fieldCount);
+					char lowstr[MAXDATELEN + 1];
+					char *field[MAXDATEFIELDS];
+					int ftype[MAXDATEFIELDS];
+					int nf;
+					//int parseError = ParseDateTime(oai->datestamp, workBuffer, sizeof(workBuffer), fieldArray, fieldTypeArray, MAXDATEFIELDS, &fieldCount);
+					int parseError = ParseDateTime(oai->datestamp, lowstr, MAXDATELEN, field, ftype, MAXDATEFIELDS, &nf);
 
 					elog(DEBUG2,"  createOAITuple: column %d option '%s'",i,option_value);
 
 
 					if (parseError == 0) {
 
-						int dateType = 0;
-						struct pg_tm tm;
+						int dtype;
+						struct pg_tm date;
 						fsec_t fsec = 0;
-						int timezone = 0;
+						int tz = 0;
 
-						int decodeError = DecodeDateTime(fieldArray, fieldTypeArray, fieldCount, &dateType, &tm, &fsec, &timezone);
+						int decodeError = DecodeDateTime(field, ftype, nf, &dtype, &date, &fsec, &tz);
 
 						Timestamp tmsp;
-						tm2timestamp(&tm, (int32)fsec, fieldTypeArray, &tmsp);
-
+						tm2timestamp(&date, fsec, tz, &tmsp);
 
 						if (decodeError == 0) {
 
 							elog(DEBUG2,"    createOAITuple: datestamp can be decoded");
 
 							slot->tts_isnull[i] = false;
-							slot->tts_values[i] = DatumGetTimestamp(tmsp);
+							slot->tts_values[i] = TimestampTzGetDatum(tmsp);
 
 							elog(DEBUG2,"  createOAITuple: datestamp (\"%s\") parsed and decoded.",oai->datestamp);
 
@@ -1432,10 +1329,7 @@ void createOAITuple(TupleTableSlot *slot, oai_fdw_state *state, oai_Record *oai 
 					}
 
 
-
 				}
-
-
 
 			}
 
