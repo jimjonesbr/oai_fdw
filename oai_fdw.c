@@ -126,7 +126,7 @@ typedef struct oai_fdw_TableOptions {
 	char *from;
 	char *until;
 	char *url;
-	char * set;
+	char *set;
 	char* identifier;
 	char* requestType;
 
@@ -612,12 +612,17 @@ static char *datumToString(Datum datum, Oid type) {
 
 	ReleaseSysCache(tuple);
 
+	elog(DEBUG1,"datumToString: type > %u",type);
+
 	switch (type) {
 
 	case TEXTOID:
 	case VARCHAROID:
 		str =  DatumGetCString(OidFunctionCall1(typoutput, datum));
 		break;
+//	case TEXTARRAYOID:
+//	case VARCHARARRAYOID:
+//		break;
 	default:
 		return NULL;
 	}
@@ -738,6 +743,50 @@ void* deparseExpr(Expr *expr, oai_fdw_TableOptions *opts){
 
 				Const *constant = (Const*) lsecond(oper->args);
 				opts->until = deparseTimestamp(constant->constvalue);
+
+			}
+
+
+		}
+
+		if (strcmp(opername, "<@") == 0){
+
+			if (strcmp(leftargOption,OAI_ATTRIBUTE_SETSPEC) ==0 && (varleft->vartype == TEXTARRAYOID || varleft->vartype == VARCHARARRAYOID)) {
+
+
+				ListCell   *lc;
+				Const *constant = (Const*) lsecond(oper->args);
+
+				ArrayType *array = (ArrayType*) constant->constvalue;
+
+				int numitems = ArrayGetNItems(ARR_NDIM(array), ARR_DIMS(array));
+
+				if(numitems > 1) {
+
+					elog(WARNING,"The OAI standard requests do not support multiple '%s' attributes. This filter will be applied on the client side.",OAI_ATTRIBUTE_SETSPEC);
+					elog(DEBUG1,"  deparseExpr: clearing '%s' attribute.",OAI_ATTRIBUTE_SETSPEC);
+					opts->set = NULL;
+
+				} else if (numitems == 1) {
+
+
+					bool isnull;
+					Datum value;
+
+					ArrayIterator iterator = array_create_iterator(array,0,NULL);
+
+
+					while (array_iterate(iterator, &value, &isnull)) {
+
+						elog(DEBUG1,"  deparseExpr: setSpec set to '%s'",datumToString(value,TEXTOID));
+						opts->set = datumToString(value,TEXTOID);
+
+					}
+
+					array_free_iterator(iterator);
+
+				}
+
 
 			}
 
