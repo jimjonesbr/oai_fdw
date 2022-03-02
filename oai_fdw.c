@@ -18,7 +18,6 @@
 #include <utils/array.h>
 #include <commands/explain.h>
 #include <curl/curl.h>
-//#include <libxml2/libxml/tree.h> //TODO: CORRECT PATH
 #include <libxml/tree.h>
 #include <catalog/pg_collation.h>
 
@@ -154,15 +153,15 @@ void listRecordsRequest(oai_fdw_state *state);
 void createOAITuple(TupleTableSlot *slot, oai_fdw_state *state, oai_Record *oai );
 oai_Record *fetchNextRecord(TupleTableSlot *slot, oai_fdw_state *state);
 int loadOAIRecords(oai_fdw_state *state);
-void* deparseExpr(Expr *expr, oai_fdw_TableOptions *opts);
+
+static void deparseExpr(Expr *expr, oai_fdw_TableOptions *opts);
 static char *datumToString(Datum datum, Oid type);
 
-char *getColumnOption(Oid foreigntableid, int16 attnum);
-void deparseWhereClause(List *conditions, oai_fdw_TableOptions *opts);
-void deparseSelectColumns(oai_fdw_TableOptions *opts);
-void requestPlanner(oai_fdw_TableOptions *opts, ForeignTable *ft, RelOptInfo *baserel);
-
-char *deparseTimestamp(Datum datum);
+static char *getColumnOption(Oid foreigntableid, int16 attnum);
+static void deparseWhereClause(List *conditions, oai_fdw_TableOptions *opts);
+static void deparseSelectColumns(oai_fdw_TableOptions *opts);
+static void requestPlanner(oai_fdw_TableOptions *opts, ForeignTable *ft, RelOptInfo *baserel);
+static char *deparseTimestamp(Datum datum);
 
 Datum oai_fdw_handler(PG_FUNCTION_ARGS)
 {
@@ -426,23 +425,18 @@ void listRecordsRequest(oai_fdw_state *state) {
 
 }
 
-void requestPlanner(oai_fdw_TableOptions *opts, ForeignTable *ft, RelOptInfo *baserel) {
+static void requestPlanner(oai_fdw_TableOptions *opts, ForeignTable *ft, RelOptInfo *baserel) {
 
 	List *conditions = baserel->baserestrictinfo;
-
-	bool hasContentForeignColumn = false;
 	Relation rel = table_open(ft->relid, NoLock);
+	bool hasContentForeignColumn = false;
 
-	opts->numcols = rel->rd_att->natts;
-
-	opts->foreigntableid = ft->relid;
 	/* The default request type is OAI_REQUEST_LISTRECORDS.
 	 * This can be altered after depending on the columns
 	 * used in the WHERE and SELECT clauses*/
 	opts->requestType = OAI_REQUEST_LISTRECORDS;
-
-
-
+	opts->numcols = rel->rd_att->natts;
+	opts->foreigntableid = ft->relid;
 
 	for (int i = 0; i < rel->rd_att->natts ; i++) {
 
@@ -527,8 +521,6 @@ void requestPlanner(oai_fdw_TableOptions *opts, ForeignTable *ft, RelOptInfo *ba
 
 				}
 
-				//elog(DEBUG1,"requestPlanner: column %d option '%s'",i,option_value);
-
 			}
 
 		}
@@ -558,16 +550,16 @@ void requestPlanner(oai_fdw_TableOptions *opts, ForeignTable *ft, RelOptInfo *ba
 }
 
 
-char *getColumnOption(Oid foreigntableid, int16 attnum) {
+static char *getColumnOption(Oid foreigntableid, int16 attnum) {
 
-	Relation rel = table_open(foreigntableid, NoLock);
 	List *options;
-	char *option_value;
+	Relation rel = table_open(foreigntableid, NoLock);
+	char *optionValue = NULL;
 
 	for (int i = 0; i < rel->rd_att->natts ; i++) {
 
-		options = GetForeignColumnOptions(foreigntableid, i+1);
 		ListCell *lc;
+		options = GetForeignColumnOptions(foreigntableid, i+1);
 
 		if(rel->rd_att->attrs[i].attnum == attnum){
 
@@ -577,7 +569,7 @@ char *getColumnOption(Oid foreigntableid, int16 attnum) {
 
 				if (strcmp(def->defname, OAI_FDW_OPTION)==0) {
 
-					option_value = defGetString(def);
+					optionValue = defGetString(def);
 
 					break;
 
@@ -592,7 +584,7 @@ char *getColumnOption(Oid foreigntableid, int16 attnum) {
 
 	table_close(rel, NoLock);
 
-	return option_value;
+	return optionValue;
 
 }
 
@@ -620,9 +612,6 @@ static char *datumToString(Datum datum, Oid type) {
 	case VARCHAROID:
 		str =  DatumGetCString(OidFunctionCall1(typoutput, datum));
 		break;
-//	case TEXTARRAYOID:
-//	case VARCHARARRAYOID:
-//		break;
 	default:
 		return NULL;
 	}
@@ -632,15 +621,17 @@ static char *datumToString(Datum datum, Oid type) {
 }
 
 
-
-void* deparseExpr(Expr *expr, oai_fdw_TableOptions *opts){
+static void deparseExpr(Expr *expr, oai_fdw_TableOptions *opts){
 
 	OpExpr *oper;
 	Var *varleft;
-	Var *varright;
+	//Var *varright;
 	HeapTuple tuple;
-	char *opername, *left, *right, *arg, oprkind;
-	Oid leftargtype, rightargtype;
+//	char *opername, *left, *right, *arg, oprkind;
+//	Oid leftargtype, rightargtype;
+	char *opername;
+	//Oid leftargtype;
+
 
 	char* leftargOption;
 
@@ -667,9 +658,9 @@ void* deparseExpr(Expr *expr, oai_fdw_TableOptions *opts){
 		if (!HeapTupleIsValid(tuple)) elog(ERROR, "cache lookup failed for operator %u", oper->opno);
 
 		opername = pstrdup(((Form_pg_operator)GETSTRUCT(tuple))->oprname.data);
-		oprkind = ((Form_pg_operator)GETSTRUCT(tuple))->oprkind;
-		leftargtype = ((Form_pg_operator)GETSTRUCT(tuple))->oprleft;
-		rightargtype = ((Form_pg_operator)GETSTRUCT(tuple))->oprright;
+		//oprkind = ((Form_pg_operator)GETSTRUCT(tuple))->oprkind;
+		//leftargtype = ((Form_pg_operator)GETSTRUCT(tuple))->oprleft;
+		//rightargtype = ((Form_pg_operator)GETSTRUCT(tuple))->oprright;
 		//schema = ((Form_pg_operator)GETSTRUCT(tuple))->oprnamespace;
 
 //		return opername;
@@ -717,12 +708,6 @@ void* deparseExpr(Expr *expr, oai_fdw_TableOptions *opts){
 
 			}
 
-			//leftargOption = getColumnOption(opts,varright->varattnosyn);
-
-
-			//elog(DEBUG1,">>>>>>>>>> %u",((Expr *)lsecond(oper->args))->type);
-			//111 = T_Const
-//			deparseExpr(linitial(oper->args),opts);
 
 		}
 
@@ -749,7 +734,7 @@ void* deparseExpr(Expr *expr, oai_fdw_TableOptions *opts){
 
 		}
 
-		if (strcmp(opername, "<@") == 0){
+		if (strcmp(opername, "<@") == 0 || strcmp(opername, "@>") == 0 || strcmp(opername, "&&") == 0 ){
 
 			if (strcmp(leftargOption,OAI_ATTRIBUTE_SETSPEC) ==0 && (varleft->vartype == TEXTARRAYOID || varleft->vartype == VARCHARARRAYOID)) {
 
@@ -763,7 +748,7 @@ void* deparseExpr(Expr *expr, oai_fdw_TableOptions *opts){
 
 				if(numitems > 1) {
 
-					elog(WARNING,"The OAI standard requests do not support multiple '%s' attributes. This filter will be applied on the client side.",OAI_ATTRIBUTE_SETSPEC);
+					elog(WARNING,"The OAI standard requests do not support multiple '%s' attributes. This filter will be applied AFTER the OAI request.",OAI_ATTRIBUTE_SETSPEC);
 					elog(DEBUG1,"  deparseExpr: clearing '%s' attribute.",OAI_ATTRIBUTE_SETSPEC);
 					opts->set = NULL;
 
@@ -787,12 +772,9 @@ void* deparseExpr(Expr *expr, oai_fdw_TableOptions *opts){
 
 				}
 
-
 			}
 
-
 		}
-
 
 		break;
 
@@ -805,7 +787,7 @@ void* deparseExpr(Expr *expr, oai_fdw_TableOptions *opts){
 }
 
 
-void deparseSelectColumns(oai_fdw_TableOptions *opts){
+static void deparseSelectColumns(oai_fdw_TableOptions *opts){
 
 	ListCell *cell;
 	Var *variable;
@@ -846,15 +828,15 @@ void deparseSelectColumns(oai_fdw_TableOptions *opts){
 }
 
 
-char *deparseTimestamp(Datum datum) {
+static char *deparseTimestamp(Datum datum) {
 
 	struct pg_tm datetime_tm;
-	int32 tzoffset;
+	//int32 tzoffset;
 	fsec_t datetime_fsec;
 	StringInfoData s;
 
 	/* get the parts */
-	tzoffset = 0;
+	//tzoffset = 0;
 	(void)timestamp2tm(DatumGetTimestampTz(datum),
 				NULL,
 				&datetime_tm,
@@ -873,13 +855,13 @@ char *deparseTimestamp(Datum datum) {
 }
 
 
-void deparseWhereClause(List *conditions, oai_fdw_TableOptions *opts){
+static void deparseWhereClause(List *conditions, oai_fdw_TableOptions *opts){
 
 	ListCell *cell;
-	char *opername, *left, *right, *arg, oprkind;
-	char* operator;
+	//char *opername, *left, *right, *arg, oprkind;
+	//char* operator;
 
-	Oid leftargtype, rightargtype, schema;
+	//Oid leftargtype, rightargtype, schema;
 
 	int i = 0;
 
@@ -909,12 +891,12 @@ void oai_fdw_GetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid forei
 	ForeignTable *ft = GetForeignTable(foreigntableid);
 	oai_fdw_TableOptions *opts = (oai_fdw_TableOptions *)palloc0(sizeof(oai_fdw_TableOptions));
 	ListCell *cell;
-
+	int start = 0, end = 64; //TODO necessary?
 //	requestPlanner(opts, ft, baserel);
 
 	elog(DEBUG1,"oai_fdw_GetForeignRelSize: requestType > %s", opts->requestType);
 
-	int start = 0, end = 64; //TODO necessary?
+
 
 	foreach(cell, ft->options) {
 
@@ -1043,14 +1025,12 @@ oai_Record *fetchNextRecord(TupleTableSlot *slot, oai_fdw_state *state) {
 	xmlNodePtr rec;
 	xmlNodePtr metadata;
 	oai_Record *oai = (oai_Record*) palloc0(sizeof(oai_Record));
+	bool getNext = false;
+    bool eof = false;
 
 	oai->metadataPrefix = state->metadataPrefix;
 
 	elog(DEBUG1,"fetchNextRecord for '%s'",state->requestType);
-
-
-	bool getNext = false;
-    bool eof = false;
 
 	xmlInitParser(); //????????????????
 
@@ -1339,7 +1319,7 @@ void createOAITuple(TupleTableSlot *slot, oai_fdw_state *state, oai_Record *oai 
 						int decodeError = DecodeDateTime(field, ftype, nf, &dtype, &date, &fsec, &tz);
 
 						Timestamp tmsp;
-						tm2timestamp(&date, fsec, tz, &tmsp);
+						tm2timestamp(&date, fsec, &tz, &tmsp);
 
 						if (decodeError == 0) {
 
@@ -1388,7 +1368,7 @@ void createOAITuple(TupleTableSlot *slot, oai_fdw_state *state, oai_Record *oai 
 
 TupleTableSlot *oai_fdw_IterateForeignScan(ForeignScanState *node) {
 
-	int hasnext;
+	//int hasnext;
 	TupleTableSlot *slot = node->ss.ss_ScanTupleSlot;
 	oai_fdw_state *state = node->fdw_state;
 	oai_Record *oai = (oai_Record *)palloc0(sizeof(oai_Record));
