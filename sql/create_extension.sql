@@ -1,0 +1,2 @@
+CREATE EXTENSION oai_fdw;
+CREATE SERVER oai_server FOREIGN DATA WRAPPER oai_fdw;
