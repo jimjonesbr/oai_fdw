@@ -1,7 +1,9 @@
 DROP EXTENSION IF EXISTS oai_fdw;
 CREATE EXTENSION oai_fdw;
 
-CREATE SERVER oai_server FOREIGN DATA WRAPPER oai_fdw;
+CREATE SERVER oai_server FOREIGN DATA WRAPPER oai_fdw 
+OPTIONS (url 'https://services.dnb.de/oai/repository',
+         metadataPrefix 'oai_dc');
 
 
 CREATE FOREIGN TABLE ulb_ulbmsuo_oai_dc (
@@ -10,9 +12,7 @@ CREATE FOREIGN TABLE ulb_ulbmsuo_oai_dc (
   sets text[]            OPTIONS (oai_attribute 'setspec'),
   updatedate timestamp   OPTIONS (oai_attribute 'datestamp'),
   format text            OPTIONS (oai_attribute 'metadataPrefix')
- ) SERVER oai_server OPTIONS (url 'https://sammlungen.ulb.uni-muenster.de/oai',
-                                  metadataPrefix 'oai_dc',
-                                  set 'ulbmsuo');
+ ) SERVER oai_server OPTIONS (set 'ulbmsuo');
 
 DROP TABLE IF EXISTS tb_ulb_ulbmsuo_oai_dc;
 CREATE TABLE tb_ulb_ulbmsuo_oai_dc
@@ -30,8 +30,7 @@ CREATE FOREIGN TABLE dnb_zdb_oai_dc (
   datestamp timestamp OPTIONS (oai_attribute 'datestamp'),
   meta text OPTIONS (oai_attribute 'metadataPrefix')
  )
-SERVER oai_server OPTIONS (url 'https://services.dnb.de/oai/repository',
-                           metadataPrefix 'oai_dc');
+SERVER oai_server;
 
 
 DROP TABLE IF EXISTS tb_dnb_zdb_oai_dc;
@@ -52,9 +51,7 @@ CREATE FOREIGN TABLE dnb_maps_marc21 (
   datestamp timestamp OPTIONS (oai_attribute 'datestamp'),
   meta text OPTIONS (oai_attribute 'metadataPrefix')
  )
-SERVER oai_server OPTIONS (url 'https://services.dnb.de/oai/repository',
-                           metadataPrefix 'MARC21-xml',
-                           set 'dnb:reiheC');
+SERVER oai_server OPTIONS (set 'dnb:reiheC');
 
 
 DROP TABLE IF EXISTS tb_dnb_maps_marc21;

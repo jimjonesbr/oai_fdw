@@ -889,6 +889,8 @@ static void deparseWhereClause(List *conditions, oai_fdw_TableOptions *opts){
 void oai_fdw_GetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid) {
 
 	ForeignTable *ft = GetForeignTable(foreigntableid);
+	ForeignServer *server = GetForeignServer(ft->serverid);
+
 	oai_fdw_TableOptions *opts = (oai_fdw_TableOptions *)palloc0(sizeof(oai_fdw_TableOptions));
 	ListCell *cell;
 	int start = 0, end = 64; //TODO necessary?
@@ -897,8 +899,7 @@ void oai_fdw_GetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid forei
 	elog(DEBUG1,"oai_fdw_GetForeignRelSize: requestType > %s", opts->requestType);
 
 
-
-	foreach(cell, ft->options) {
+	foreach(cell, server->options) {
 
 		DefElem *def = lfirst_node(DefElem, cell);
 
@@ -907,6 +908,23 @@ void oai_fdw_GetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid forei
 			opts->url = defGetString(def);
 
 		} else if (strcmp("metadataprefix", def->defname) == 0) {
+
+			opts->metadataPrefix = defGetString(def);
+
+		} else {
+
+			elog(WARNING,"Invalid SERVER OPTION > '%s'",def->defname);
+		}
+
+	}
+
+	//elog(ERROR,"FOUND");
+
+	foreach(cell, ft->options) {
+
+		DefElem *def = lfirst_node(DefElem, cell);
+
+		if (strcmp("metadataprefix", def->defname) == 0) {
 
 			opts->metadataPrefix = defGetString(def);
 
