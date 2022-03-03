@@ -347,7 +347,7 @@ int executeOAIRequest(oai_fdw_state **state, struct string *xmlResponse) {
 
 			ereport(ERROR,
 					errcode(ERRCODE_FDW_UNABLE_TO_ESTABLISH_CONNECTION),
-					errmsg("Connection error code %d: could not resolve \"%s\"",res,(*state)->url));
+					errmsg("OAI %s request failed. Connection error code %d",(*state)->requestType,res));
 
 		}
 
@@ -1280,18 +1280,13 @@ void createOAITuple(TupleTableSlot *slot, oai_fdw_state *state, oai_Record *oai 
 				} else if (strcmp(option_value,OAI_ATTRIBUTE_CONTENT)==0 && oai->content){
 
 					elog(DEBUG2,"  createOAITuple: column %d option '%s'",i,option_value);
-					//elog(DEBUG1,"  createOAITuple: StringInfo data > '%s'",oai_record->xmlContent->data);
-					//elog(DEBUG1,"    createOAITuple: content size > '%d'",strlen(oai_record->content));
+
 					slot->tts_isnull[i] = false;
 					slot->tts_values[i] = CStringGetTextDatum((char*)oai->content);
-					//slot->tts_values[i] = CStringGetTextDatum(pstrdup(oai_record->xmlContent.data));
-					//elog(DEBUG1,"    createOAITuple: content added to tuple > '%s'",oai_record->xmlContent.data);
-					//elog(DEBUG1,"    createOAITuple: content added to tuple > '%d'",strlen(oai_record->xmlContent.data));
 
 				} else if (strcmp(option_value,OAI_ATTRIBUTE_SETSPEC)==0 && oai->setsArray){
 
 					elog(DEBUG2,"  createOAITuple: column %d option '%s'",i,option_value);
-					//elog(DEBUG1,"  createOAITuple: array ndim %d",oai_record->setsArray->ndim);
 
 					slot->tts_isnull[i] = false;
 					slot->tts_values[i] = DatumGetArrayTypeP(oai->setsArray);
@@ -1303,7 +1298,6 @@ void createOAITuple(TupleTableSlot *slot, oai_fdw_state *state, oai_Record *oai 
 					char *field[MAXDATEFIELDS];
 					int ftype[MAXDATEFIELDS];
 					int nf;
-					//int parseError = ParseDateTime(oai->datestamp, workBuffer, sizeof(workBuffer), fieldArray, fieldTypeArray, MAXDATEFIELDS, &fieldCount);
 					int parseError = ParseDateTime(oai->datestamp, lowstr, MAXDATELEN, field, ftype, MAXDATEFIELDS, &nf);
 
 					elog(DEBUG2,"  createOAITuple: column %d option '%s'",i,option_value);
@@ -1368,7 +1362,6 @@ void createOAITuple(TupleTableSlot *slot, oai_fdw_state *state, oai_Record *oai 
 
 TupleTableSlot *oai_fdw_IterateForeignScan(ForeignScanState *node) {
 
-	//int hasnext;
 	TupleTableSlot *slot = node->ss.ss_ScanTupleSlot;
 	oai_fdw_state *state = node->fdw_state;
 	oai_Record *oai = (oai_Record *)palloc0(sizeof(oai_Record));
@@ -1472,7 +1465,6 @@ void appendTextArray(ArrayType **array, char* text_element) {
 		arr_elems[arr_nelems++] = CStringGetTextDatum(text_element);
 
 	}
-
 
 	elog(DEBUG2,"  => construct_array called: arr_nelems > %ld arr_elems_size %ld",arr_nelems,arr_elems_size);
 

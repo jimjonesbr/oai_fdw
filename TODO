@@ -1,0 +1,23 @@
+
+1- Create url OPTION for SERVER instead of (in addition to?) CREATE TABLE.
+  * https://stackoverflow.com/a/60072802/2275388
+2- Create CI/CD (github actions) and test with PostgreSQL 11+
+  * https://www.highgo.ca/2020/01/10/how-to-create-test-and-debug-an-extension-written-in-c-for-postgresql/
+  3- Create Query Plan and Rescan
+  * https://www.dolthub.com/blog/2022-01-26-creating-a-postgres-foreign-data-wrapper/
+4- Create functions for OAI Requests
+  * ListSets
+  * Identify
+  * ListMetadataFormats
+5- Update README
+6- Code cleaning (remove warnings)
+7- CREATE FOREIGN DATA WRAPPER .. VALIDATOR?
+8- Change executeOAIRequest signature (**state -> *state)
+9- cURL error description for connection failure (currenttly: error code 22)
+ * https://www.youtube.com/watch?v=daA-KBKfJ_o
+10- IMPORT FOREIGN SCHEMA?
+11- Fix crasher in "SELECT count(*)"
+12- Parse deleted records in the header if available
+13- Return NULL instead of an exception for OAI noRecordsMatch error code
+
+pigz for backups    

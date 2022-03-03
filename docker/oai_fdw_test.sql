@@ -1,8 +1,6 @@
 DROP EXTENSION IF EXISTS oai_fdw;
 CREATE EXTENSION oai_fdw;
 
---SET client_min_messages to 'debug1';
-
 CREATE SERVER oai_server FOREIGN DATA WRAPPER oai_fdw;
 
 
@@ -46,9 +44,6 @@ WHERE
 
 
 ---
-
-
-SET client_min_messages to 'debug1';
 
 CREATE FOREIGN TABLE dnb_maps_marc21 (
   id text OPTIONS (oai_attribute 'identifier'),
