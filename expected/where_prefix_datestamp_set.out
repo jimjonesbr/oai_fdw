@@ -5,9 +5,7 @@ CREATE FOREIGN TABLE dnb_zdb_oai_dc (
   datestamp timestamp OPTIONS (oai_attribute 'datestamp'),
   meta text OPTIONS (oai_attribute 'metadataPrefix')
  )
-SERVER oai_server OPTIONS (url 'https://services.dnb.de/oai/repository',
-                           metadataPrefix 'oai_dc',
-                           set 'zdb');
+SERVER oai_server_dnb OPTIONS (set 'zdb');
 --override 'set' option
 --modify 'metadataPrefix'
 CREATE TABLE tb_dnb_zdb_oai_dc AS

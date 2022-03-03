@@ -4,9 +4,7 @@ CREATE FOREIGN TABLE ulb_ulbmsuo_oai_dc (
   sets text[]            OPTIONS (oai_attribute 'setspec'),
   updatedate timestamp   OPTIONS (oai_attribute 'datestamp'),
   format text            OPTIONS (oai_attribute 'metadataPrefix')
- ) SERVER oai_server OPTIONS (url 'https://sammlungen.ulb.uni-muenster.de/oai',
-                              metadataPrefix 'oai_dc',
-                              set 'ulbmsuo');
+ ) SERVER oai_server_ulb OPTIONS (set 'ulbmsuo');
 CREATE TABLE tb_ulb_ulbmsuo_oai_dc AS SELECT * FROM ulb_ulbmsuo_oai_dc;
 SELECT
   count(*) = count(distinct id) records_are_distinct,
