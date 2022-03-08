@@ -3,11 +3,10 @@ CREATE FOREIGN TABLE dnb_zdb_oai_dc (
   content text OPTIONS (oai_attribute 'content'),
   setspec text[] OPTIONS (oai_attribute 'setspec'),
   datestamp timestamp OPTIONS (oai_attribute 'datestamp'),
-  meta text OPTIONS (oai_attribute 'metadataPrefix')
+  meta text OPTIONS (oai_attribute 'metadataprefix')
  )
-SERVER oai_server_dnb OPTIONS (set 'zdb');
-
---override 'set' option
+SERVER oai_server_dnb OPTIONS (setspec 'zdb');
+--override 'setspec' option
 --modify 'metadataPrefix'
 CREATE TABLE tb_dnb_zdb_oai_dc AS
 SELECT * FROM dnb_zdb_oai_dc
@@ -15,12 +14,14 @@ WHERE
   meta = 'MARC21-xml' AND
   datestamp BETWEEN '2022-02-01' AND '2022-02-02' AND
   setspec <@ ARRAY['dnb:reiheC'];
-
 SELECT
   count(*) = count(distinct id) records_are_distinct,
   count(*) > 0 AS not_empty
 FROM tb_dnb_zdb_oai_dc;
-
+ records_are_distinct | not_empty 
+----------------------+-----------
+ t                    | t
+(1 row)
 
 --override 'set' option
 --maps January,2021
@@ -29,9 +30,12 @@ SELECT * FROM dnb_zdb_oai_dc
 WHERE
   datestamp BETWEEN '2021-01-01' AND '2021-01-31' AND
   setspec <@ ARRAY['dnb:reiheC'];
-
-
 SELECT
   count(*) = count(distinct id) records_are_distinct,
   count(*) > 0 AS not_empty
 FROM tb_dnb_maps_marc21;
+ records_are_distinct | not_empty 
+----------------------+-----------
+ t                    | t
+(1 row)
+

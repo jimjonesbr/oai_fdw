@@ -43,7 +43,11 @@
 #include "catalog/pg_operator.h"
 #include "utils/syscache.h"
 #include "catalog/pg_foreign_table.h"
+#include "catalog/pg_foreign_server.h"
+#include "catalog/pg_user_mapping.h"
 #include "catalog/pg_type.h"
+#include "access/reloptions.h"
+
 //#include "catalog/pg_aggregate.h"
 //#include "catalog/pg_collation.h"
 #include "catalog/pg_namespace.h"
@@ -65,7 +69,10 @@
 #define OAI_ATTRIBUTE_CONTENT "content"
 #define OAI_ATTRIBUTE_DATESTAMP "datestamp"
 #define OAI_ATTRIBUTE_SETSPEC "setspec"
-#define OAI_ATTRIBUTE_METADATAPREFIX "metadataPrefix"
+#define OAI_ATTRIBUTE_METADATAPREFIX "metadataprefix"
+#define OAI_ATTRIBUTE_URL "url"
+#define OAI_ATTRIBUTE_FROM "from"
+#define OAI_ATTRIBUTE_UNTIL "until"
 
 #define OAI_SUCCESS 0
 #define OAI_FAIL 1
@@ -76,13 +83,9 @@
 
 PG_MODULE_MAGIC;
 
-Datum oai_fdw_handler(PG_FUNCTION_ARGS);
-PG_FUNCTION_INFO_V1(oai_fdw_handler);
-
 typedef struct oai_fdw_state {
 
 	int end;
-
 
 	int current_row;
 	int numcols;
@@ -136,6 +139,51 @@ struct string {
 	size_t len;
 };
 
+struct OAIFdwOption
+{
+	const char* optname;
+	Oid optcontext;     /* Oid of catalog in which option may appear */
+	bool optrequired;   /* Flag mandatory options */
+	bool optfound;      /* Flag whether options was specified by user */
+};
+
+/*
+ * Valid options for ogr_fdw.
+ * ForeignDataWrapperRelationId (no options)
+ * ForeignServerRelationId (CREATE SERVER options)
+ * UserMappingRelationId (CREATE USER MAPPING options)
+ * ForeignTableRelationId (CREATE FOREIGN TABLE options)
+ *
+ * {optname, optcontext, optrequired, optfound}
+ */
+static struct OAIFdwOption valid_options[] =
+{
+
+	{OAI_ATTRIBUTE_URL, ForeignServerRelationId, true, false},
+	{OAI_ATTRIBUTE_METADATAPREFIX, ForeignServerRelationId, true, false},
+
+	{OAI_ATTRIBUTE_IDENTIFIER, ForeignTableRelationId, false, false},
+	{OAI_ATTRIBUTE_METADATAPREFIX, ForeignTableRelationId, false, false},
+	{OAI_ATTRIBUTE_SETSPEC, ForeignTableRelationId, false, false},
+	{OAI_ATTRIBUTE_FROM, ForeignTableRelationId, false, false},
+	{OAI_ATTRIBUTE_UNTIL, ForeignTableRelationId, false, false},
+
+	{OAI_FDW_OPTION, AttributeRelationId, true, false},
+
+	/* EOList marker */
+	{NULL, InvalidOid, false, false}
+};
+
+#define option_count (sizeof(valid_options)/sizeof(struct OAIFdwOption))
+
+
+extern Datum oai_fdw_handler(PG_FUNCTION_ARGS);
+PG_FUNCTION_INFO_V1(oai_fdw_handler);
+extern Datum oai_fdw_validator(PG_FUNCTION_ARGS);
+PG_FUNCTION_INFO_V1(oai_fdw_validator);
+void _PG_init(void);
+//extern PGDLLEXPORT void _PG_init(void);
+
 
 void oai_fdw_GetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid);
 void oai_fdw_GetForeignPaths(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid);
@@ -163,8 +211,12 @@ static void deparseSelectColumns(oai_fdw_TableOptions *opts);
 static void requestPlanner(oai_fdw_TableOptions *opts, ForeignTable *ft, RelOptInfo *baserel);
 static char *deparseTimestamp(Datum datum);
 
-Datum oai_fdw_handler(PG_FUNCTION_ARGS)
-{
+void _PG_init(void) {
+
+}
+
+Datum oai_fdw_handler(PG_FUNCTION_ARGS) {
+
 	FdwRoutine *fdwroutine = makeNode(FdwRoutine);
 	fdwroutine->GetForeignRelSize = oai_fdw_GetForeignRelSize;
 	fdwroutine->GetForeignPaths = oai_fdw_GetForeignPaths;
@@ -174,6 +226,91 @@ Datum oai_fdw_handler(PG_FUNCTION_ARGS)
 	fdwroutine->ReScanForeignScan = oai_fdw_ReScanForeignScan;
 	fdwroutine->EndForeignScan = oai_fdw_EndForeignScan;
 	PG_RETURN_POINTER(fdwroutine);
+}
+
+
+Datum oai_fdw_validator(PG_FUNCTION_ARGS) {
+
+	List	   *options_list = untransformRelOptions(PG_GETARG_DATUM(0));
+	Oid			catalog = PG_GETARG_OID(1);
+	ListCell   *cell;
+
+	struct OAIFdwOption* opt;
+	const char* source = NULL, *driver = NULL;
+	const char* config_options = NULL, *open_options = NULL;
+
+	/* Initialize found state to not found */
+	for (opt = valid_options; opt->optname; opt++) {
+
+		opt->optfound = false;
+
+	}
+
+	foreach (cell, options_list) {
+
+		DefElem* def = (DefElem*) lfirst(cell);
+		bool optfound = false;
+
+		//elog(WARNING,"DEF foreach > %s",defGetString(def));
+
+		for (opt = valid_options; opt->optname; opt++) {
+
+			//elog(WARNING,"opt->optname = %s def->defname = %s",opt->optname,def->defname);
+			//elog(WARNING,"opt->optcontext = %u catalog = %u",opt->optcontext,catalog);
+
+			if (catalog == opt->optcontext && strcmp(opt->optname, def->defname)==0) {
+				/* Mark that this user option was found */
+				opt->optfound = optfound = true;
+				//elog(WARNING,"IF opt->optname = %s | catalog = %u",opt->optname,catalog);
+
+				/* Store some options for testing later */
+				if (strcmp(opt->optname, OAI_FDW_OPTION) == 0) {
+
+					if(strcmp(defGetString(def),OAI_ATTRIBUTE_IDENTIFIER) !=0 &&
+					   strcmp(defGetString(def),OAI_ATTRIBUTE_METADATAPREFIX) !=0 &&
+					   strcmp(defGetString(def),OAI_ATTRIBUTE_SETSPEC) !=0 &&
+					   strcmp(defGetString(def),OAI_ATTRIBUTE_DATESTAMP) !=0 &&
+					   strcmp(defGetString(def),OAI_ATTRIBUTE_CONTENT) !=0) {
+
+						ereport(ERROR,
+							(errcode(ERRCODE_FDW_INVALID_OPTION_NAME),
+							 errmsg("invalid option \"%s\"", defGetString(def)),
+							 errhint("Valid table options for oai_fdw are \"%s\",\"%s\",\"%s\",\"%s\" and \"%s\"",
+								OAI_ATTRIBUTE_URL, OAI_ATTRIBUTE_METADATAPREFIX, OAI_ATTRIBUTE_SETSPEC, OAI_ATTRIBUTE_FROM, OAI_ATTRIBUTE_UNTIL)));
+
+					}
+
+				}
+
+				break;
+			}
+
+		}
+
+		if (!optfound) {
+
+			ereport(ERROR,
+				(errcode(ERRCODE_FDW_INVALID_OPTION_NAME),
+				 errmsg("invalid option \"%s\"", def->defname),
+				 errhint("Valid table options for oai_fdw are 'url','metadataprefix','set','from' and 'until'")));
+
+		}
+	}
+
+
+	for (opt = valid_options; opt->optname; opt++)
+	{
+		/* Required option for this catalog type is missing? */
+		if (catalog == opt->optcontext && opt->optrequired && ! opt->optfound)
+		{
+			ereport(ERROR, (
+			    errcode(ERRCODE_FDW_DYNAMIC_PARAMETER_VALUE_NEEDED),
+			    errmsg("required option '%s' is missing", opt->optname)));
+		}
+	}
+
+	PG_RETURN_VOID();
+
 }
 
 /*cURL code*/
@@ -739,7 +876,7 @@ static void deparseExpr(Expr *expr, oai_fdw_TableOptions *opts){
 			if (strcmp(leftargOption,OAI_ATTRIBUTE_SETSPEC) ==0 && (varleft->vartype == TEXTARRAYOID || varleft->vartype == VARCHARARRAYOID)) {
 
 
-				ListCell   *lc;
+				//ListCell   *lc;
 				Const *constant = (Const*) lsecond(oper->args);
 
 				ArrayType *array = (ArrayType*) constant->constvalue;
@@ -894,7 +1031,6 @@ void oai_fdw_GetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid forei
 	oai_fdw_TableOptions *opts = (oai_fdw_TableOptions *)palloc0(sizeof(oai_fdw_TableOptions));
 	ListCell *cell;
 	int start = 0, end = 64; //TODO necessary?
-//	requestPlanner(opts, ft, baserel);
 
 	elog(DEBUG1,"oai_fdw_GetForeignRelSize: requestType > %s", opts->requestType);
 
@@ -918,36 +1054,39 @@ void oai_fdw_GetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid forei
 
 	}
 
-	//elog(ERROR,"FOUND");
+
 
 	foreach(cell, ft->options) {
 
 		DefElem *def = lfirst_node(DefElem, cell);
 
-		if (strcmp("metadataprefix", def->defname) == 0) {
+		if (strcmp(OAI_ATTRIBUTE_METADATAPREFIX, def->defname) == 0) {
 
 			opts->metadataPrefix = defGetString(def);
 
-		} else if (strcmp("set", def->defname) == 0) {
+		} else if (strcmp(OAI_ATTRIBUTE_SETSPEC, def->defname) == 0) {
 
 			opts->set = defGetString(def);
 
-		} else if (strcmp("from", def->defname) == 0) {
+		} else if (strcmp(OAI_ATTRIBUTE_FROM, def->defname) == 0) {
 
 			opts->from= defGetString(def);
 
-		} else if (strcmp("until", def->defname) == 0) {
+		} else if (strcmp(OAI_ATTRIBUTE_UNTIL, def->defname) == 0) {
 
 			opts->until= defGetString(def);
 
-		} else {
-
-			ereport(ERROR,
-					(errcode(ERRCODE_FDW_INVALID_OPTION_NAME),
-					 errmsg("invalid option \"%s\"", def->defname),
-					 errhint("Valid table options for oai_fdw are \"url\",\"metadataPrefix\",\"set\",\"from\" and \"until\"")));
 		}
+//		else {
+//
+//			ereport(ERROR,
+//					(errcode(ERRCODE_FDW_INVALID_OPTION_NAME),
+//					 errmsg("invalid option \"%s\"", def->defname),
+//					 errhint("Valid table options for oai_fdw are \"url\",\"metadataPrefix\",\"set\",\"from\" and \"until\"")));
+//		}
 	}
+
+
 
 
 	if(!opts->url){
@@ -958,6 +1097,8 @@ void oai_fdw_GetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid forei
 				 errhint("'url' is a required option. Check the CREATE FOREIGN TABLE options.")));
 
 	}
+
+
 
 	if(!opts->metadataPrefix){
 
@@ -1104,7 +1245,6 @@ oai_Record *fetchNextRecord(TupleTableSlot *slot, oai_fdw_state *state) {
 
 				}
 
-
 				if(!state->current_identifier) {
 
 					state->current_identifier = oai->identifier;
@@ -1135,10 +1275,7 @@ oai_Record *fetchNextRecord(TupleTableSlot *slot, oai_fdw_state *state) {
 				}
 
 
-
-
 			}
-
 
 		}
 
@@ -1265,6 +1402,8 @@ void createOAITuple(TupleTableSlot *slot, oai_fdw_state *state, oai_Record *oai 
 			"- identifier > %s\n "
 			"- datestamp: %s\n "
 			"- content: %s\n",state->numcols,oai->identifier,oai->datestamp,oai->content);
+
+	//if(!state->set) elog(ERROR,"EMPTY SET");
 
 	for (int i = 0; i < state->numcols; i++) {
 

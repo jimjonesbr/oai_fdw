@@ -3,7 +3,7 @@ OBJS = oai_fdw.o
 
 EXTENSION = oai_fdw
 DATA = oai_fdw--1.0.sql
-REGRESS = create_extension server_set_prefix where_prefix_datestamp_set
+REGRESS = create_server create_foreign_table create_foreign_table_where-filters exceptions
 
 
 CURL_CONFIG = curl-config

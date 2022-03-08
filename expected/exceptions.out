@@ -1,22 +1,19 @@
-CREATE EXTENSION oai_fdw;
--- No metadataPrefix
+-- No metadataprefix
 CREATE SERVER oai_server_err1 FOREIGN DATA WRAPPER oai_fdw 
 OPTIONS (url 'https://services.dnb.de/oai/repository');
+ERROR:  required option 'metadataprefix' is missing
 -- No url
 CREATE SERVER oai_server_err2 FOREIGN DATA WRAPPER oai_fdw 
-OPTIONS (metadataPrefix 'oai_dc');
+OPTIONS (metadataprefix 'oai_dc');
+ERROR:  required option 'url' is missing
 -- No options 
 CREATE SERVER oai_server_err3 FOREIGN DATA WRAPPER oai_fdw;
+ERROR:  required option 'url' is missing
 -- Warning: unknown option
 CREATE SERVER oai_server_warn1 FOREIGN DATA WRAPPER oai_fdw 
 OPTIONS (url 'https://services.dnb.de/oai/repository',
-         metadataPrefix 'oai_dc',
+         metadataprefix 'oai_dc',
          foo 'bar');         
+ERROR:  invalid option "foo"
+HINT:  Valid table options for oai_fdw are 'url','metadataprefix','set','from' and 'until'
         
-CREATE SERVER oai_server_dnb FOREIGN DATA WRAPPER oai_fdw 
-OPTIONS (url 'https://services.dnb.de/oai/repository',
-         metadataPrefix 'oai_dc');
-CREATE SERVER oai_server_ulb FOREIGN DATA WRAPPER oai_fdw 
-OPTIONS (url 'https://sammlungen.ulb.uni-muenster.de/oai',
-         metadataPrefix 'oai_dc');         
-         
