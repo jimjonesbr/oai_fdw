@@ -74,12 +74,14 @@
 #define OAI_ATTRIBUTE_FROM "from"
 #define OAI_ATTRIBUTE_UNTIL "until"
 
+#define OAI_COLUMN_OPTION "oai_node"
+
 #define OAI_SUCCESS 0
 #define OAI_FAIL 1
 #define OAI_UNKNOWN_REQUEST 2
 #define ERROR_CODE_MISSING_PREFIX 1
 
-#define OAI_FDW_OPTION "oai_attribute"
+
 
 PG_MODULE_MAGIC;
 
@@ -89,6 +91,7 @@ typedef struct oai_fdw_state {
 
 	int current_row;
 	int numcols;
+	int numfdwcols;
 	int  rowcount;
 	char *identifier;
 	char *document;
@@ -124,6 +127,7 @@ typedef struct oai_fdw_TableOptions {
 	List *columnlist;
 
 	int numcols;
+	int numfdwcols;
 	char *metadataPrefix;
 	char *from;
 	char *until;
@@ -168,7 +172,7 @@ static struct OAIFdwOption valid_options[] =
 	{OAI_ATTRIBUTE_FROM, ForeignTableRelationId, false, false},
 	{OAI_ATTRIBUTE_UNTIL, ForeignTableRelationId, false, false},
 
-	{OAI_FDW_OPTION, AttributeRelationId, true, false},
+	{OAI_COLUMN_OPTION, AttributeRelationId, true, false},
 
 	/* EOList marker */
 	{NULL, InvalidOid, false, false}
@@ -226,6 +230,7 @@ Datum oai_fdw_handler(PG_FUNCTION_ARGS) {
 	fdwroutine->ReScanForeignScan = oai_fdw_ReScanForeignScan;
 	fdwroutine->EndForeignScan = oai_fdw_EndForeignScan;
 	PG_RETURN_POINTER(fdwroutine);
+
 }
 
 
@@ -251,8 +256,6 @@ Datum oai_fdw_validator(PG_FUNCTION_ARGS) {
 		DefElem* def = (DefElem*) lfirst(cell);
 		bool optfound = false;
 
-		//elog(WARNING,"DEF foreach > %s",defGetString(def));
-
 		for (opt = valid_options; opt->optname; opt++) {
 
 			//elog(WARNING,"opt->optname = %s def->defname = %s",opt->optname,def->defname);
@@ -261,26 +264,33 @@ Datum oai_fdw_validator(PG_FUNCTION_ARGS) {
 			if (catalog == opt->optcontext && strcmp(opt->optname, def->defname)==0) {
 				/* Mark that this user option was found */
 				opt->optfound = optfound = true;
-				//elog(WARNING,"IF opt->optname = %s | catalog = %u",opt->optname,catalog);
 
 				/* Store some options for testing later */
-				if (strcmp(opt->optname, OAI_FDW_OPTION) == 0) {
+				if (strcmp(opt->optname, OAI_COLUMN_OPTION) == 0) {
 
-					if(strcmp(defGetString(def),OAI_ATTRIBUTE_IDENTIFIER) !=0 &&
-					   strcmp(defGetString(def),OAI_ATTRIBUTE_METADATAPREFIX) !=0 &&
-					   strcmp(defGetString(def),OAI_ATTRIBUTE_SETSPEC) !=0 &&
-					   strcmp(defGetString(def),OAI_ATTRIBUTE_DATESTAMP) !=0 &&
-					   strcmp(defGetString(def),OAI_ATTRIBUTE_CONTENT) !=0) {
+					if(strcmp(defGetString(def), OAI_ATTRIBUTE_IDENTIFIER) !=0 &&
+					   strcmp(defGetString(def), OAI_ATTRIBUTE_METADATAPREFIX) !=0 &&
+					   strcmp(defGetString(def), OAI_ATTRIBUTE_SETSPEC) !=0 &&
+					   strcmp(defGetString(def), OAI_ATTRIBUTE_DATESTAMP) !=0 &&
+					   strcmp(defGetString(def), OAI_ATTRIBUTE_CONTENT) !=0) {
 
 						ereport(ERROR,
 							(errcode(ERRCODE_FDW_INVALID_OPTION_NAME),
-							 errmsg("invalid option \"%s\"", defGetString(def)),
-							 errhint("Valid table options for oai_fdw are \"%s\",\"%s\",\"%s\",\"%s\" and \"%s\"",
-								OAI_ATTRIBUTE_URL, OAI_ATTRIBUTE_METADATAPREFIX, OAI_ATTRIBUTE_SETSPEC, OAI_ATTRIBUTE_FROM, OAI_ATTRIBUTE_UNTIL)));
+							 errmsg("invalid %s option '%s'",OAI_COLUMN_OPTION, defGetString(def)),
+							 errhint("Valid column options for oai_fdw are '%s', '%s', '%s', '%s' and '%s'",
+								OAI_ATTRIBUTE_URL,
+								OAI_ATTRIBUTE_METADATAPREFIX,
+								OAI_ATTRIBUTE_SETSPEC,
+								OAI_ATTRIBUTE_FROM,
+								OAI_ATTRIBUTE_UNTIL)));
 
 					}
 
 				}
+
+//				opt->optfound = true;
+//				optfound = true;
+
 
 				break;
 			}
@@ -291,26 +301,36 @@ Datum oai_fdw_validator(PG_FUNCTION_ARGS) {
 
 			ereport(ERROR,
 				(errcode(ERRCODE_FDW_INVALID_OPTION_NAME),
-				 errmsg("invalid option \"%s\"", def->defname),
-				 errhint("Valid table options for oai_fdw are 'url','metadataprefix','set','from' and 'until'")));
+				 errmsg("invalid oai_fdw option \"%s\"", def->defname)));
 
 		}
 	}
 
 
-	for (opt = valid_options; opt->optname; opt++)
-	{
+	for (opt = valid_options; opt->optname; opt++) {
+
+		//elog(WARNING,"control: catalog %u > opt->optname = %s | catalog = %u | required = %d | found = %d",catalog,opt->optname, opt->optcontext, opt->optrequired, opt->optfound);
 		/* Required option for this catalog type is missing? */
-		if (catalog == opt->optcontext && opt->optrequired && ! opt->optfound)
-		{
+		if (catalog == opt->optcontext && opt->optrequired && !opt->optfound) {
+
 			ereport(ERROR, (
 			    errcode(ERRCODE_FDW_DYNAMIC_PARAMETER_VALUE_NEEDED),
 			    errmsg("required option '%s' is missing", opt->optname)));
+
 		}
+
+//		if(catalog == AttributeRelationId && strcmp(opt->optname,OAI_COLUMN_OPTION)==0 && !opt->optfound ) {
+//
+//			ereport(ERROR, (
+//				errcode(ERRCODE_FDW_DYNAMIC_PARAMETER_VALUE_NEEDED),
+//				errmsg("required option '%s' is missing", opt->optname)),
+//			    errhint("A OAI Foreign Table must have at least one '%s' option to map the OAI Request results",OAI_COLUMN_OPTION));
+//
+//		}
+
 	}
 
 	PG_RETURN_VOID();
-
 }
 
 /*cURL code*/
@@ -582,9 +602,11 @@ static void requestPlanner(oai_fdw_TableOptions *opts, ForeignTable *ft, RelOptI
 
 		foreach (lc, options) {
 
+			opts->numfdwcols++;
+
 			DefElem *def = (DefElem*) lfirst(lc);
 
-			if (strcmp(def->defname, OAI_FDW_OPTION)==0) {
+			if (strcmp(def->defname, OAI_COLUMN_OPTION)==0) {
 
 				char *option_value = defGetString(def);
 
@@ -679,8 +701,13 @@ static void requestPlanner(oai_fdw_TableOptions *opts, ForeignTable *ft, RelOptI
 
 	deparseWhereClause(conditions,opts);
 
-	opts->columnlist = baserel->reltarget->exprs;
-	deparseSelectColumns(opts);
+	if(opts->numfdwcols!=0) {
+
+		opts->columnlist = baserel->reltarget->exprs;
+		deparseSelectColumns(opts);
+
+	}
+
 
 	table_close(rel, NoLock);
 
@@ -704,12 +731,11 @@ static char *getColumnOption(Oid foreigntableid, int16 attnum) {
 
 				DefElem *def = (DefElem*) lfirst(lc);
 
-				if (strcmp(def->defname, OAI_FDW_OPTION)==0) {
+				if (strcmp(def->defname, OAI_COLUMN_OPTION)==0) {
 
 					optionValue = defGetString(def);
 
 					break;
-
 
 				}
 
@@ -935,8 +961,6 @@ static void deparseSelectColumns(oai_fdw_TableOptions *opts){
 
 	foreach(cell, opts->columnlist) {
 
-		//opts->numcols++;
-
 		Expr * expr = (Expr *) lfirst(cell);
 
 		if(expr->type == T_Var)	{
@@ -1077,15 +1101,8 @@ void oai_fdw_GetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid forei
 			opts->until= defGetString(def);
 
 		}
-//		else {
-//
-//			ereport(ERROR,
-//					(errcode(ERRCODE_FDW_INVALID_OPTION_NAME),
-//					 errmsg("invalid option \"%s\"", def->defname),
-//					 errhint("Valid table options for oai_fdw are \"url\",\"metadataPrefix\",\"set\",\"from\" and \"until\"")));
-//		}
-	}
 
+	}
 
 
 
@@ -1149,6 +1166,7 @@ ForeignScan *oai_fdw_GetForeignPlan(PlannerInfo *root, RelOptInfo *baserel, Oid 
 	state->requestType = opts->requestType;
 	state->identifier = opts->identifier;
 	state->columnlist = opts->columnlist;
+	state->numfdwcols = opts->numfdwcols;
 
 	scan_clauses = extract_actual_clauses(scan_clauses, false);
 
@@ -1403,18 +1421,22 @@ void createOAITuple(TupleTableSlot *slot, oai_fdw_state *state, oai_Record *oai 
 			"- datestamp: %s\n "
 			"- content: %s\n",state->numcols,oai->identifier,oai->datestamp,oai->content);
 
-	//if(!state->set) elog(ERROR,"EMPTY SET");
-
 	for (int i = 0; i < state->numcols; i++) {
 
 		List * options = GetForeignColumnOptions(state->foreigntableid, i+1);
 		ListCell *lc;
 
+		//if(!options) {
+
+			//elog(ERROR,"EMPTY OPTIONS");
+
+		//}
+
 		foreach (lc, options) {
 
 			DefElem *def = (DefElem*) lfirst(lc);
 
-			if (strcmp(def->defname, OAI_FDW_OPTION)==0) {
+			if (strcmp(def->defname, OAI_COLUMN_OPTION)==0) {
 
 				char * option_value = defGetString(def);
 
@@ -1500,9 +1522,7 @@ void createOAITuple(TupleTableSlot *slot, oai_fdw_state *state, oai_Record *oai 
 
 						elog(WARNING,"  createOAITuple: could not parse datestamp: %s", oai->datestamp);
 
-
 					}
-
 
 				}
 
@@ -1527,6 +1547,13 @@ TupleTableSlot *oai_fdw_IterateForeignScan(ForeignScanState *node) {
 	elog(DEBUG1,"oai_fdw_IterateForeignScan called");
 
 	ExecClearTuple(slot);
+
+	/* Returns empty tuple in case there is no mapping for OAI nodes and columns*/
+	if(state->numfdwcols == 0) {
+
+		return slot;
+
+	}
 
 	if(state->rowcount == 0 || state->resumptionToken) {
 
