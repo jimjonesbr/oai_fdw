@@ -1,0 +1,6 @@
+SELECT oai_fdw_version() IS NULL;
+ ?column? 
+----------
+ f
+(1 row)
+

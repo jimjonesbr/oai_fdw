@@ -1,0 +1,1 @@
+SELECT oai_fdw_version() IS NULL;

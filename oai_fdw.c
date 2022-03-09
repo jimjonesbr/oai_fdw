@@ -81,8 +81,6 @@
 #define OAI_UNKNOWN_REQUEST 2
 #define ERROR_CODE_MISSING_PREFIX 1
 
-
-
 PG_MODULE_MAGIC;
 
 typedef struct oai_fdw_state {
@@ -182,9 +180,13 @@ static struct OAIFdwOption valid_options[] =
 
 
 extern Datum oai_fdw_handler(PG_FUNCTION_ARGS);
-PG_FUNCTION_INFO_V1(oai_fdw_handler);
 extern Datum oai_fdw_validator(PG_FUNCTION_ARGS);
+extern Datum oai_fdw_version(PG_FUNCTION_ARGS);
+
+PG_FUNCTION_INFO_V1(oai_fdw_handler);
 PG_FUNCTION_INFO_V1(oai_fdw_validator);
+PG_FUNCTION_INFO_V1(oai_fdw_version);
+
 void _PG_init(void);
 //extern PGDLLEXPORT void _PG_init(void);
 
@@ -217,6 +219,10 @@ static char *deparseTimestamp(Datum datum);
 
 void _PG_init(void) {
 
+}
+
+Datum oai_fdw_version(PG_FUNCTION_ARGS) {
+  PG_RETURN_TEXT_P(cstring_to_text(OAI_FDW_VERSION));
 }
 
 Datum oai_fdw_handler(PG_FUNCTION_ARGS) {
@@ -697,8 +703,6 @@ static void requestPlanner(oai_fdw_TableOptions *opts, ForeignTable *ft, RelOptI
 
 	}
 
-
-
 	deparseWhereClause(conditions,opts);
 
 	if(opts->numfdwcols!=0) {
@@ -1019,11 +1023,6 @@ static char *deparseTimestamp(Datum datum) {
 static void deparseWhereClause(List *conditions, oai_fdw_TableOptions *opts){
 
 	ListCell *cell;
-	//char *opername, *left, *right, *arg, oprkind;
-	//char* operator;
-
-	//Oid leftargtype, rightargtype, schema;
-
 	int i = 0;
 
 	foreach(cell, conditions) {
@@ -1057,7 +1056,6 @@ void oai_fdw_GetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid forei
 	int start = 0, end = 64; //TODO necessary?
 
 	elog(DEBUG1,"oai_fdw_GetForeignRelSize: requestType > %s", opts->requestType);
-
 
 	foreach(cell, server->options) {
 
@@ -1104,27 +1102,23 @@ void oai_fdw_GetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid forei
 
 	}
 
+//	if(!opts->url){
+//
+//		ereport(ERROR,
+//				(errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
+//				 errmsg("'url' not found"),
+//				 errhint("'url' is a required option. Check the CREATE FOREIGN TABLE options.")));
+//
+//	}
 
-
-	if(!opts->url){
-
-		ereport(ERROR,
-				(errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
-				 errmsg("'url' not found"),
-				 errhint("'url' is a required option. Check the CREATE FOREIGN TABLE options.")));
-
-	}
-
-
-
-	if(!opts->metadataPrefix){
-
-		ereport(ERROR,
-				(errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
-				 errmsg("'metadataPrefix' not found"),
-				 errhint("metadataPrefix is a required argument (unless the exclusive argument resumptionToken is used). Check the CREATE FOREIGN TABLE options.")));
-
-	}
+//	if(!opts->metadataPrefix){
+//
+//		ereport(ERROR,
+//				(errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
+//				 errmsg("'metadataPrefix' not found"),
+//				 errhint("metadataPrefix is a required argument (unless the exclusive argument resumptionToken is used). Check the CREATE FOREIGN TABLE options.")));
+//
+//	}
 
 
 	requestPlanner(opts, ft, baserel);
@@ -1400,7 +1394,7 @@ oai_Record *fetchNextRecord(TupleTableSlot *slot, oai_fdw_state *state) {
 				}
 
 
-				if(!rec->next && !state->resumptionToken) 	return NULL;
+				if(!rec->next && !state->resumptionToken) return NULL;
 
 			}
 
@@ -1425,12 +1419,6 @@ void createOAITuple(TupleTableSlot *slot, oai_fdw_state *state, oai_Record *oai 
 
 		List * options = GetForeignColumnOptions(state->foreigntableid, i+1);
 		ListCell *lc;
-
-		//if(!options) {
-
-			//elog(ERROR,"EMPTY OPTIONS");
-
-		//}
 
 		foreach (lc, options) {
 
@@ -1666,6 +1654,3 @@ void oai_fdw_ReScanForeignScan(ForeignScanState *node) {
 void oai_fdw_EndForeignScan(ForeignScanState *node) {
 
 }
-
-
-
