@@ -37,15 +37,21 @@ CREATE FOREIGN TABLE oai_table_err1 (
  ) SERVER oai_server_ulb OPTIONS (setspec 'ulbmsuo');
  
 -- Empty COLUMN OPTION value
-CREATE FOREIGN TABLE oai_table_err1 (
+CREATE FOREIGN TABLE oai_table_err2 (
   id text                OPTIONS (oai_node ''),
   xmldoc xml             OPTIONS (oai_node 'content')
  ) SERVER oai_server_ulb OPTIONS (setspec 'ulbmsuo');
  
 -- Empty SERVER OPTION value
-CREATE FOREIGN TABLE oai_table_err1 (
+CREATE FOREIGN TABLE oai_table_err3 (
   id text                OPTIONS (oai_node 'identifier'),
   xmldoc xml             OPTIONS (oai_node 'content')
  ) SERVER oai_server_ulb OPTIONS (setspec '');
+ 
+ -- Empty SERVER OPTION value
+CREATE FOREIGN TABLE oai_table_err4 (
+  id text                OPTIONS (oai_node 'identifier'),
+  xmldoc xml             OPTIONS (foo 'content')
+ ) SERVER oai_server_ulb OPTIONS (setspec 'ulbmsuo');
 
         

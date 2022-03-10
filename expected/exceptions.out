@@ -15,11 +15,48 @@ OPTIONS (url 'https://services.dnb.de/oai/repository',
          metadataprefix 'oai_dc',
          foo 'bar');  
 ERROR:  invalid oai_fdw option "foo"
+-- Wrong URL
+CREATE SERVER oai_server_err5 FOREIGN DATA WRAPPER oai_fdw 
+OPTIONS (url 'a_very_wrong_url',
+         metadataprefix 'oai_dc'); 
+ERROR:  invalid url: 'a_very_wrong_url'
+-- Empty metadataprefix
+CREATE SERVER oai_server_err6 FOREIGN DATA WRAPPER oai_fdw 
+OPTIONS (url 'https://services.dnb.de/oai/repository',
+         metadataprefix '');  
+ERROR:  empty value for option 'metadataprefix'
+         
+-- Empty URL
+CREATE SERVER oai_server_err7 FOREIGN DATA WRAPPER oai_fdw 
+OPTIONS (url '',
+         metadataprefix 'oai_dc');  
+ERROR:  empty value for option 'url'
 -- Unknown COLUMN OPTION value
 CREATE FOREIGN TABLE oai_table_err1 (
   id text                OPTIONS (oai_node 'foo'),
   xmldoc xml             OPTIONS (oai_node 'content')
- ) SERVER oai_server_ulb OPTIONS (setspec 'ulbmsuo');       
+ ) SERVER oai_server_ulb OPTIONS (setspec 'ulbmsuo');
 ERROR:  invalid oai_node option 'foo'
 HINT:  Valid column options for oai_fdw are 'url', 'metadataprefix', 'setspec', 'from' and 'until'
+ 
+-- Empty COLUMN OPTION value
+CREATE FOREIGN TABLE oai_table_err2 (
+  id text                OPTIONS (oai_node ''),
+  xmldoc xml             OPTIONS (oai_node 'content')
+ ) SERVER oai_server_ulb OPTIONS (setspec 'ulbmsuo');
+ERROR:  empty value for option 'oai_node'
+ 
+-- Empty SERVER OPTION value
+CREATE FOREIGN TABLE oai_table_err3 (
+  id text                OPTIONS (oai_node 'identifier'),
+  xmldoc xml             OPTIONS (oai_node 'content')
+ ) SERVER oai_server_ulb OPTIONS (setspec '');
+ERROR:  empty value for option 'setspec'
+ 
+ -- Empty SERVER OPTION value
+CREATE FOREIGN TABLE oai_table_err4 (
+  id text                OPTIONS (oai_node 'identifier'),
+  xmldoc xml             OPTIONS (foo 'content')
+ ) SERVER oai_server_ulb OPTIONS (setspec 'ulbmsuo');
+ERROR:  invalid oai_fdw option "foo"
         
