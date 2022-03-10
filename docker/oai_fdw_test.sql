@@ -1,4 +1,4 @@
---SET client_min_messages = 'debug1';
+SET client_min_messages = 'debug2';
 
 DROP EXTENSION IF EXISTS oai_fdw;
 CREATE EXTENSION oai_fdw;
@@ -7,6 +7,13 @@ CREATE SERVER oai_server FOREIGN DATA WRAPPER oai_fdw
 OPTIONS (url 'https://sammlungen.ulb.uni-muenster.de/oai',
          metadataPrefix 'oai_dc');
 
+CREATE FOREIGN TABLE ulb_ulbmsuo_oai_dc (id text) 
+SERVER oai_server OPTIONS (setspec 'ulbmsuo');
+
+SELECT id FROM ulb_ulbmsuo_oai_dc;
+
+SELECT oai_fdw_version();
+/**
 
 CREATE FOREIGN TABLE ulb_ulbmsuo_oai_dc (
   id text                OPTIONS (oai_attribute 'identifier'),
@@ -62,3 +69,5 @@ SELECT * FROM dnb_maps_marc21
 WHERE datestamp BETWEEN '2021-01-01' AND '2021-01-31';
 
 SELECT count(*),count(distinct id) FROM tb_dnb_maps_marc21;
+
+*/

@@ -222,7 +222,15 @@ void _PG_init(void) {
 }
 
 Datum oai_fdw_version(PG_FUNCTION_ARGS) {
-  PG_RETURN_TEXT_P(cstring_to_text(OAI_FDW_VERSION));
+
+	StringInfoData url_bufffer;
+	initStringInfo(&url_bufffer);
+
+	appendStringInfo(&url_bufffer,"oai fdw = %s,",OAI_FDW_VERSION);
+	appendStringInfo(&url_bufffer," libxml = %s",LIBXML_DOTTED_VERSION);
+	appendStringInfo(&url_bufffer," libcurl = %s,",curl_version());
+
+    PG_RETURN_TEXT_P(cstring_to_text(url_bufffer.data));
 }
 
 Datum oai_fdw_handler(PG_FUNCTION_ARGS) {
@@ -270,6 +278,26 @@ Datum oai_fdw_validator(PG_FUNCTION_ARGS) {
 			if (catalog == opt->optcontext && strcmp(opt->optname, def->defname)==0) {
 				/* Mark that this user option was found */
 				opt->optfound = optfound = true;
+
+				if(strlen(defGetString(def))==0) {
+
+					ereport(ERROR,
+						(errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
+						 errmsg("empty value for option '%s'",opt->optname)));
+
+				}
+
+				if(strcmp(opt->optname, OAI_ATTRIBUTE_URL)==0){
+
+					if(!check_url(defGetString(def))) {
+
+						ereport(ERROR,
+							(errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
+							 errmsg("invalid %s: '%s'",OAI_ATTRIBUTE_URL, defGetString(def))));
+
+					}
+
+				}
 
 				/* Store some options for testing later */
 				if (strcmp(opt->optname, OAI_COLUMN_OPTION) == 0) {
@@ -325,14 +353,7 @@ Datum oai_fdw_validator(PG_FUNCTION_ARGS) {
 
 		}
 
-//		if(catalog == AttributeRelationId && strcmp(opt->optname,OAI_COLUMN_OPTION)==0 && !opt->optfound ) {
-//
-//			ereport(ERROR, (
-//				errcode(ERRCODE_FDW_DYNAMIC_PARAMETER_VALUE_NEEDED),
-//				errmsg("required option '%s' is missing", opt->optname)),
-//			    errhint("A OAI Foreign Table must have at least one '%s' option to map the OAI Request results",OAI_COLUMN_OPTION));
-//
-//		}
+
 
 	}
 
@@ -365,6 +386,29 @@ size_t writefunc(void *ptr, size_t size, size_t nmemb, struct string *s) {
 
 	return size*nmemb;
 
+}
+
+int check_url(char *url)
+{
+    CURL *curl;
+    CURLcode response;
+
+    curl = curl_easy_init();
+
+    if(curl) {
+        curl_easy_setopt(curl, CURLOPT_URL, url);
+
+        /* don't write output to stdout */
+        curl_easy_setopt(curl, CURLOPT_NOBODY, 1);
+
+        /* Perform the request */
+        response = curl_easy_perform(curl);
+
+        /* always cleanup */
+        curl_easy_cleanup(curl);
+    }
+
+    return (response == CURLE_OK) ? 1 : 0;
 }
 
 int executeOAIRequest(oai_fdw_state **state, struct string *xmlResponse) {
