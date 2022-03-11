@@ -37,7 +37,9 @@ CREATE FOREIGN TABLE oai_table_err1 (
   xmldoc xml             OPTIONS (oai_node 'content')
  ) SERVER oai_server_ulb OPTIONS (setspec 'ulbmsuo');
 ERROR:  invalid oai_node option 'foo'
-HINT:  Valid column options for oai_fdw are 'url', 'metadataprefix', 'setspec', 'from' and 'until'
+HINT:  Valid column options for oai_fdw are:
+CREATE SERVER: 'url', 'metadataprefix'
+CREATE TABLE: 'metadataprefix','setspec', 'from', 'until' and 'status'
  
 -- Empty COLUMN OPTION value
 CREATE FOREIGN TABLE oai_table_err2 (

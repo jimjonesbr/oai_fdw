@@ -3,7 +3,8 @@ CREATE FOREIGN TABLE ulb_ulbmsuo_oai_dc (
   xmldoc xml             OPTIONS (oai_node 'content'),
   sets text[]            OPTIONS (oai_node 'setspec'),
   updatedate timestamp   OPTIONS (oai_node 'datestamp'),
-  format text            OPTIONS (oai_node 'metadataprefix')
+  format text            OPTIONS (oai_node 'metadataprefix'),
+  status boolean         OPTIONS (oai_node 'status')
  ) SERVER oai_server_ulb OPTIONS (setspec 'ulbmsuo');
 
 CREATE TABLE tb_ulb_ulbmsuo_oai_dc AS SELECT * FROM ulb_ulbmsuo_oai_dc;

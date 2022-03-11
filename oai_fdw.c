@@ -73,6 +73,7 @@
 #define OAI_ATTRIBUTE_URL "url"
 #define OAI_ATTRIBUTE_FROM "from"
 #define OAI_ATTRIBUTE_UNTIL "until"
+#define OAI_ATTRIBUTE_STATUS "status"
 #define OAI_COLUMN_OPTION "oai_node"
 
 #define OAI_ERROR_ID_DOES_NOT_EXIST "idDoesNotExist"
@@ -117,6 +118,7 @@ typedef struct oai_Record {
 	char *content;
 	char *datestamp;
 	char *metadataPrefix;
+	bool isDeleted;
 	ArrayType *setsArray;
 } oai_Record;
 
@@ -274,10 +276,8 @@ Datum oai_fdw_validator(PG_FUNCTION_ARGS) {
 
 		for (opt = valid_options; opt->optname; opt++) {
 
-			//elog(WARNING,"opt->optname = %s def->defname = %s",opt->optname,def->defname);
-			//elog(WARNING,"opt->optcontext = %u catalog = %u",opt->optcontext,catalog);
-
 			if (catalog == opt->optcontext && strcmp(opt->optname, def->defname)==0) {
+
 				/* Mark that this user option was found */
 				opt->optfound = optfound = true;
 
@@ -294,7 +294,7 @@ Datum oai_fdw_validator(PG_FUNCTION_ARGS) {
 					if(!check_url(defGetString(def))) {
 
 						ereport(ERROR,
-							(errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
+								(errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
 							 errmsg("invalid %s: '%s'",OAI_ATTRIBUTE_URL, defGetString(def))));
 
 					}
@@ -308,17 +308,20 @@ Datum oai_fdw_validator(PG_FUNCTION_ARGS) {
 					   strcmp(defGetString(def), OAI_ATTRIBUTE_METADATAPREFIX) !=0 &&
 					   strcmp(defGetString(def), OAI_ATTRIBUTE_SETSPEC) !=0 &&
 					   strcmp(defGetString(def), OAI_ATTRIBUTE_DATESTAMP) !=0 &&
-					   strcmp(defGetString(def), OAI_ATTRIBUTE_CONTENT) !=0) {
+					   strcmp(defGetString(def), OAI_ATTRIBUTE_CONTENT) !=0 &&
+					   strcmp(defGetString(def), OAI_ATTRIBUTE_STATUS) !=0) {
 
 						ereport(ERROR,
 							(errcode(ERRCODE_FDW_INVALID_OPTION_NAME),
 							 errmsg("invalid %s option '%s'",OAI_COLUMN_OPTION, defGetString(def)),
-							 errhint("Valid column options for oai_fdw are '%s', '%s', '%s', '%s' and '%s'",
+							 errhint("Valid column options for oai_fdw are:\nCREATE SERVER: '%s', '%s'\nCREATE TABLE: '%s','%s', '%s', '%s' and '%s'",
 								OAI_ATTRIBUTE_URL,
+								OAI_ATTRIBUTE_METADATAPREFIX,
 								OAI_ATTRIBUTE_METADATAPREFIX,
 								OAI_ATTRIBUTE_SETSPEC,
 								OAI_ATTRIBUTE_FROM,
-								OAI_ATTRIBUTE_UNTIL)));
+								OAI_ATTRIBUTE_UNTIL,
+								OAI_ATTRIBUTE_STATUS)));
 
 					}
 
@@ -674,7 +677,21 @@ static void requestPlanner(oai_fdw_TableOptions *opts, ForeignTable *ft, RelOptI
 
 				char *option_value = defGetString(def);
 
-				if (strcmp(option_value,OAI_ATTRIBUTE_IDENTIFIER)==0){
+				if (strcmp(option_value,OAI_ATTRIBUTE_STATUS)==0){
+
+					if (rel->rd_att->attrs[i].atttypid != BOOLOID) {
+
+						ereport(ERROR,
+							errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
+							errmsg("invalid data type for '%s.%s': %d",
+									NameStr(rel->rd_rel->relname),
+									NameStr(rel->rd_att->attrs[i].attname),
+									rel->rd_att->attrs[i].atttypid),
+							errhint("OAI %s must be of type 'boolean'.",
+									OAI_ATTRIBUTE_STATUS));
+					}
+
+				} else if (strcmp(option_value,OAI_ATTRIBUTE_IDENTIFIER)==0){
 
 					if (rel->rd_att->attrs[i].atttypid != TEXTOID &&
 						rel->rd_att->attrs[i].atttypid != VARCHAROID) {
@@ -685,7 +702,7 @@ static void requestPlanner(oai_fdw_TableOptions *opts, ForeignTable *ft, RelOptI
 										NameStr(rel->rd_rel->relname),
 										NameStr(rel->rd_att->attrs[i].attname),
 										rel->rd_att->attrs[i].atttypid),
-								errhint("OAI %s must be of type `text` or `varchar`.",
+								errhint("OAI %s must be of type 'text' or 'varchar'.",
 										OAI_ATTRIBUTE_IDENTIFIER));
 
 					}
@@ -1260,6 +1277,7 @@ oai_Record *fetchNextRecord(TupleTableSlot *slot, oai_fdw_state *state) {
     if(!state->xmlroot) return NULL;
 
 	oai->metadataPrefix = state->metadataPrefix;
+	oai->isDeleted = false;
 
 	elog(DEBUG1,"fetchNextRecord for '%s'",state->requestType);
 
@@ -1300,6 +1318,11 @@ oai_Record *fetchNextRecord(TupleTableSlot *slot, oai_fdw_state *state) {
 
 
 				if (xmlStrcmp(header->name, (xmlChar*) "header") != 0) continue;
+
+				if(xmlGetProp(header, (xmlChar*) OAI_ATTRIBUTE_STATUS)){
+					char *status = (char*) xmlGetProp(header, (xmlChar*) OAI_ATTRIBUTE_STATUS);
+					if (strcmp(status,"deleted")) oai->isDeleted = true;
+				}
 
 				for (headerList = header->children; headerList!= NULL; headerList = headerList->next) {
 
@@ -1404,10 +1427,13 @@ oai_Record *fetchNextRecord(TupleTableSlot *slot, oai_fdw_state *state) {
 
 						for (header = rec->children; header != NULL; header = header->next) {
 
-
 							if (header->type != XML_ELEMENT_NODE) continue;
 							if (xmlStrcmp(header->name, (xmlChar*) "header") != 0) continue;
 
+							if( xmlGetProp(header, (xmlChar*) OAI_ATTRIBUTE_STATUS)){
+								char *status = (char*) xmlGetProp(header, (xmlChar*) OAI_ATTRIBUTE_STATUS);
+								if (strcmp(status,"deleted")) oai->isDeleted = true;
+							}
 
 							for (headerList = header->children; headerList!= NULL; headerList = headerList->next) {
 
@@ -1461,9 +1487,6 @@ oai_Record *fetchNextRecord(TupleTableSlot *slot, oai_fdw_state *state) {
 		}
 	}
 
-
-
-
 	//return oai;
 
 }
@@ -1488,7 +1511,15 @@ void createOAITuple(TupleTableSlot *slot, oai_fdw_state *state, oai_Record *oai 
 
 				char * option_value = defGetString(def);
 
-				if (strcmp(option_value,OAI_ATTRIBUTE_IDENTIFIER)==0 && oai->identifier){
+				if (strcmp(option_value,OAI_ATTRIBUTE_STATUS)==0){
+
+					elog(DEBUG2,"  createOAITuple: column %d option '%d'",i,option_value);
+
+					slot->tts_isnull[i] = false;
+					slot->tts_values[i] = oai->isDeleted;
+
+
+				} else if (strcmp(option_value,OAI_ATTRIBUTE_IDENTIFIER)==0 && oai->identifier){
 
 					elog(DEBUG2,"  createOAITuple: column %d option '%s'",i,option_value);
 
