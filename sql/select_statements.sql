@@ -35,3 +35,7 @@ SELECT
   count(*) = count(distinct id) records_are_distinct,
   count(*) > 0 AS not_empty
 FROM tb_dnb_maps_marc21;
+
+-- GetRecord request
+SELECT * FROM dnb_zdb_oai_dc
+WHERE id = 'oai:dnb.de/zdb/1250800153';

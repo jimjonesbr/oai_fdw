@@ -59,4 +59,35 @@ CREATE FOREIGN TABLE oai_table_err4 (
   xmldoc xml             OPTIONS (foo 'content')
  ) SERVER oai_server_ulb OPTIONS (setspec 'ulbmsuo');
 ERROR:  invalid oai_fdw option "foo"
-        
+-- No record found: noRecordsMatch: The value of argument 'until' lies before argument 'from'
+SELECT * FROM dnb_zdb_oai_dc
+WHERE datestamp BETWEEN '2022-02-01' AND '2021-02-02';
+WARNING:  OAI noRecordsMatch: The value of argument until '2021-02-02T00:00:00Z' lies before argument from '2022-02-01T00:00:00Z'
+ id | content | setspec | datestamp | meta 
+----+---------+---------+-----------+------
+(0 rows)
+
+-- cannotDisseminateFormat: foo
+SELECT * FROM dnb_zdb_oai_dc
+WHERE meta = 'foo';
+ERROR:  OAI cannotDisseminateFormat: foo
+-- badArgument: Unsupported set 'foo' !
+SELECT * FROM dnb_zdb_oai_dc
+WHERE setspec <@ ARRAY['foo'];
+ERROR:  OAI badArgument: Unsupported set 'foo' !
+-- GetRecord: wrong identifier format
+SELECT * FROM dnb_zdb_oai_dc
+WHERE id = 'foo';
+WARNING:  OAI idDoesNotExist: String index out of range: -12
+ id | content | setspec | datestamp | meta 
+----+---------+---------+-----------+------
+(0 rows)
+
+-- GetRecord: identifier does not exist
+SELECT * FROM dnb_zdb_oai_dc
+WHERE id = 'oai:dnb.de/zdb/0000000000';
+WARNING:  OAI idDoesNotExist: 
+ id | content | setspec | datestamp | meta 
+----+---------+---------+-----------+------
+(0 rows)
+

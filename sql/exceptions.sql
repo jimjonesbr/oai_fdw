@@ -54,4 +54,22 @@ CREATE FOREIGN TABLE oai_table_err4 (
   xmldoc xml             OPTIONS (foo 'content')
  ) SERVER oai_server_ulb OPTIONS (setspec 'ulbmsuo');
 
-        
+-- No record found: noRecordsMatch: The value of argument 'until' lies before argument 'from'
+SELECT * FROM dnb_zdb_oai_dc
+WHERE datestamp BETWEEN '2022-02-01' AND '2021-02-02';
+
+-- cannotDisseminateFormat: foo
+SELECT * FROM dnb_zdb_oai_dc
+WHERE meta = 'foo';
+
+-- badArgument: Unsupported set 'foo' !
+SELECT * FROM dnb_zdb_oai_dc
+WHERE setspec <@ ARRAY['foo'];
+
+-- GetRecord: wrong identifier format
+SELECT * FROM dnb_zdb_oai_dc
+WHERE id = 'foo';
+
+-- GetRecord: identifier does not exist
+SELECT * FROM dnb_zdb_oai_dc
+WHERE id = 'oai:dnb.de/zdb/0000000000';

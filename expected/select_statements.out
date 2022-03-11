@@ -39,3 +39,20 @@ FROM tb_dnb_maps_marc21;
  t                    | t
 (1 row)
 
+-- GetRecord request
+SELECT * FROM dnb_zdb_oai_dc
+WHERE id = 'oai:dnb.de/zdb/1250800153';
+            id             |                                                                      content                                                                       | setspec |        datestamp         |  meta  
+---------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------+---------+--------------------------+--------
+ oai:dnb.de/zdb/1250800153 | <dc xmlns:dnb="http://d-nb.de/standards/dnbterms" xmlns="http://www.openarchives.org/OAI/2.0/oai_dc/" xmlns:dc="http://purl.org/dc/elements/1.1/">+| {zdb}   | Tue Feb 01 15:39:05 2022 | oai_dc
+                           |   <dc:title>Jahrbuch Deutsch als Fremdsprache</dc:title>                                                                                          +|         |                          | 
+                           |   <dc:publisher>München : Iudicium Verlag</dc:publisher>                                                                                          +|         |                          | 
+                           |   <dc:date>2022</dc:date>                                                                                                                         +|         |                          | 
+                           |   <dc:language>ger</dc:language>                                                                                                                  +|         |                          | 
+                           |   <dc:identifier xsi:type="dnb:IDN">1250800153</dc:identifier>                                                                                    +|         |                          | 
+                           |   <dc:identifier xsi:type="dnb:ZDBID">3108310-9</dc:identifier>                                                                                   +|         |                          | 
+                           |   <dc:type>Online-Ressource</dc:type>                                                                                                             +|         |                          | 
+                           |   <dc:relation>http://d-nb.info/011071060</dc:relation>                                                                                           +|         |                          | 
+                           | </dc>                                                                                                                                              |         |                          | 
+(1 row)
+

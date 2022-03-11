@@ -73,8 +73,10 @@
 #define OAI_ATTRIBUTE_URL "url"
 #define OAI_ATTRIBUTE_FROM "from"
 #define OAI_ATTRIBUTE_UNTIL "until"
-
 #define OAI_COLUMN_OPTION "oai_node"
+
+#define OAI_ERROR_ID_DOES_NOT_EXIST "idDoesNotExist"
+#define OAI_ERROR_NO_RECORD_MATCH "noRecordsMatch"
 
 #define OAI_SUCCESS 0
 #define OAI_FAIL 1
@@ -546,8 +548,6 @@ int executeOAIRequest(oai_fdw_state **state, struct string *xmlResponse) {
 
 		res = curl_easy_perform(curl);
 
-//		elog(ERROR,"res = %d",res);
-
 		if (res != CURLE_OK) {
 
 			curl_easy_cleanup(curl);
@@ -599,7 +599,7 @@ void listRecordsRequest(oai_fdw_state *state) {
 			xmlFreeDoc(xmldoc);
 			xmlCleanupParser();
 
-			ereport(ERROR, errcode(ERRCODE_FDW_UNABLE_TO_CREATE_EXECUTION),	errmsg("Invalid XML response for URL \"%s\"",state->url));
+			ereport(ERROR, errcode(ERRCODE_FDW_UNABLE_TO_CREATE_EXECUTION),	errmsg("Invalid XML response for URL '%s'",state->url));
 
 		}
 
@@ -620,9 +620,23 @@ void listRecordsRequest(oai_fdw_state *state) {
 
 				char *errorMessage = (char*)xmlNodeGetContent(recordsList);
 				char *errorCode = (char*) xmlGetProp(recordsList, (xmlChar*) "code");
-				ereport(ERROR,
-						errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
-						errmsg("OAI %s: %s",errorCode,errorMessage));
+
+				if(strcmp(errorCode,OAI_ERROR_ID_DOES_NOT_EXIST)==0 ||
+				   strcmp(errorCode,OAI_ERROR_NO_RECORD_MATCH)==0) {
+
+					state->xmlroot = NULL;
+					ereport(WARNING,
+							errcode(ERRCODE_NO_DATA_FOUND),
+							errmsg("OAI %s: %s",errorCode,errorMessage));
+
+				} else {
+
+					ereport(ERROR,
+							errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
+							errmsg("OAI %s: %s",errorCode,errorMessage));
+
+				}
+
 
 			}
 
@@ -1242,6 +1256,8 @@ oai_Record *fetchNextRecord(TupleTableSlot *slot, oai_fdw_state *state) {
 	oai_Record *oai = (oai_Record*) palloc0(sizeof(oai_Record));
 	bool getNext = false;
     bool eof = false;
+
+    if(!state->xmlroot) return NULL;
 
 	oai->metadataPrefix = state->metadataPrefix;
 
