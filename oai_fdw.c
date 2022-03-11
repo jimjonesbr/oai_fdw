@@ -330,7 +330,6 @@ Datum oai_fdw_validator(PG_FUNCTION_ARGS) {
 //				opt->optfound = true;
 //				optfound = true;
 
-
 				break;
 			}
 
@@ -691,7 +690,7 @@ static void requestPlanner(oai_fdw_TableOptions *opts, ForeignTable *ft, RelOptI
 									OAI_ATTRIBUTE_STATUS));
 					}
 
-				} else if (strcmp(option_value,OAI_ATTRIBUTE_IDENTIFIER)==0){
+				} else if (strcmp(option_value,OAI_ATTRIBUTE_IDENTIFIER)==0 || strcmp(option_value,OAI_ATTRIBUTE_METADATAPREFIX)==0){
 
 					if (rel->rd_att->attrs[i].atttypid != TEXTOID &&
 						rel->rd_att->attrs[i].atttypid != VARCHAROID) {
@@ -703,7 +702,7 @@ static void requestPlanner(oai_fdw_TableOptions *opts, ForeignTable *ft, RelOptI
 										NameStr(rel->rd_att->attrs[i].attname),
 										rel->rd_att->attrs[i].atttypid),
 								errhint("OAI %s must be of type 'text' or 'varchar'.",
-										OAI_ATTRIBUTE_IDENTIFIER));
+										option_value));
 
 					}
 

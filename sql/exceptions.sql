@@ -73,3 +73,41 @@ WHERE id = 'foo';
 -- GetRecord: identifier does not exist
 SELECT * FROM dnb_zdb_oai_dc
 WHERE id = 'oai:dnb.de/zdb/0000000000';
+
+-- Wrong data types
+CREATE FOREIGN TABLE oai_table_err5 (
+  id int                 OPTIONS (oai_node 'identifier')
+ ) SERVER oai_server_ulb;
+
+SELECT * FROM oai_table_err5 LIMIT 1;
+ 
+CREATE FOREIGN TABLE oai_table_err6 (
+ doc int                 OPTIONS (oai_node 'content')
+) SERVER oai_server_ulb;
+
+SELECT * FROM oai_table_err6 LIMIT 1;
+
+CREATE FOREIGN TABLE oai_table_err7 (
+ sets varchar            OPTIONS (oai_node 'setspec')
+) SERVER oai_server_ulb;
+
+SELECT * FROM oai_table_err7 LIMIT 1;
+
+CREATE FOREIGN TABLE oai_table_err8 (
+ updatedate text   OPTIONS (oai_node 'datestamp')
+) SERVER oai_server_ulb;
+
+SELECT * FROM oai_table_err8 LIMIT 1;
+
+CREATE FOREIGN TABLE oai_table_err9 (
+   format xml            OPTIONS (oai_node 'metadataprefix')
+) SERVER oai_server_ulb;
+
+SELECT * FROM oai_table_err9 LIMIT 1;
+
+CREATE FOREIGN TABLE oai_table_err10 (
+  status text         OPTIONS (oai_node 'status')
+) SERVER oai_server_ulb;
+
+SELECT * FROM oai_table_err10 LIMIT 1;
+

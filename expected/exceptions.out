@@ -93,3 +93,41 @@ WARNING:  OAI idDoesNotExist:
 ----+---------+---------+-----------+------
 (0 rows)
 
+-- Wrong data types
+CREATE FOREIGN TABLE oai_table_err5 (
+  id int                 OPTIONS (oai_node 'identifier')
+ ) SERVER oai_server_ulb;
+SELECT * FROM oai_table_err5 LIMIT 1;
+ERROR:  invalid data type for 'oai_table_err5.id': 23
+HINT:  OAI identifier must be of type 'text' or 'varchar'.
+ 
+CREATE FOREIGN TABLE oai_table_err6 (
+ doc int                 OPTIONS (oai_node 'content')
+) SERVER oai_server_ulb;
+SELECT * FROM oai_table_err6 LIMIT 1;
+ERROR:  invalid data type for 'oai_table_err6.doc': 23
+HINT:  OAI content expects one of the following types: 'xml', 'text' or 'varchar'.
+CREATE FOREIGN TABLE oai_table_err7 (
+ sets varchar            OPTIONS (oai_node 'setspec')
+) SERVER oai_server_ulb;
+SELECT * FROM oai_table_err7 LIMIT 1;
+ERROR:  invalid data type for 'oai_table_err7.sets': 1043
+HINT:  OAI setspec expects one of the following types: 'text[]', 'varchar[]'.
+CREATE FOREIGN TABLE oai_table_err8 (
+ updatedate text   OPTIONS (oai_node 'datestamp')
+) SERVER oai_server_ulb;
+SELECT * FROM oai_table_err8 LIMIT 1;
+ERROR:  invalid data type for 'oai_table_err8.updatedate': 25
+HINT:  OAI datestamp expects a 'timestamp'.
+CREATE FOREIGN TABLE oai_table_err9 (
+   format xml            OPTIONS (oai_node 'metadataprefix')
+) SERVER oai_server_ulb;
+SELECT * FROM oai_table_err9 LIMIT 1;
+ERROR:  invalid data type for 'oai_table_err9.format': 142
+HINT:  OAI metadataprefix must be of type 'text' or 'varchar'.
+CREATE FOREIGN TABLE oai_table_err10 (
+  status text         OPTIONS (oai_node 'status')
+) SERVER oai_server_ulb;
+SELECT * FROM oai_table_err10 LIMIT 1;
+ERROR:  invalid data type for 'oai_table_err10.status': 25
+HINT:  OAI status must be of type 'boolean'.
