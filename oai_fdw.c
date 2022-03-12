@@ -186,10 +186,13 @@ static struct OAIFdwOption valid_options[] =
 extern Datum oai_fdw_handler(PG_FUNCTION_ARGS);
 extern Datum oai_fdw_validator(PG_FUNCTION_ARGS);
 extern Datum oai_fdw_version(PG_FUNCTION_ARGS);
+extern Datum oai_fdw_listMetadataFormats(PG_FUNCTION_ARGS);
 
 PG_FUNCTION_INFO_V1(oai_fdw_handler);
 PG_FUNCTION_INFO_V1(oai_fdw_validator);
 PG_FUNCTION_INFO_V1(oai_fdw_version);
+PG_FUNCTION_INFO_V1(oai_fdw_listMetadataFormats);
+
 
 void _PG_init(void);
 //extern PGDLLEXPORT void _PG_init(void);
@@ -237,6 +240,52 @@ Datum oai_fdw_version(PG_FUNCTION_ARGS) {
     PG_RETURN_TEXT_P(cstring_to_text(url_bufffer.data));
 }
 
+Datum oai_fdw_listMetadataFormats(PG_FUNCTION_ARGS) {
+
+	text *srvname_text = PG_GETARG_TEXT_P(0);
+	const char * srvname = text_to_cstring(srvname_text);
+	const char *url;
+
+	ForeignServer *server = GetForeignServerByName(srvname, true);
+
+	//TupleTableSlot *slot = node->ss.ss_ScanTupleSlot;
+
+	//https://www.postgresql.org/docs/current/xfunc-c.html
+	PG_RETURN_NULL();
+
+
+	if(server){
+
+		ListCell *cell;
+
+		foreach(cell, server->options) {
+
+			DefElem *def = lfirst_node(DefElem, cell);
+
+			PG_RETURN_POINTER(cstring_to_text(defGetString(def)));
+
+			elog(WARNING,"SRV > %s",defGetString(def));
+
+			if (strcmp("url", def->defname) == 0) {
+
+				//opts->url = defGetString(def);
+				url = defGetString(def);
+
+			} else if (strcmp("metadataprefix", def->defname) == 0) {
+
+				//opts->metadataPrefix = defGetString(def);
+
+			} else {
+
+				elog(WARNING,"Invalid SERVER OPTION > '%s'",def->defname);
+			}
+
+		}
+	}
+
+    PG_RETURN_TEXT_P(cstring_to_text(url));
+}
+
 Datum oai_fdw_handler(PG_FUNCTION_ARGS) {
 
 	FdwRoutine *fdwroutine = makeNode(FdwRoutine);
@@ -257,6 +306,10 @@ Datum oai_fdw_validator(PG_FUNCTION_ARGS) {
 	List	   *options_list = untransformRelOptions(PG_GETARG_DATUM(0));
 	Oid			catalog = PG_GETARG_OID(1);
 	ListCell   *cell;
+
+//	Relation rel = table_open(PG_GETARG_DATUM(0), NoLock);
+//
+//	table_close(rel, NoLock);
 
 	struct OAIFdwOption* opt;
 	const char* source = NULL, *driver = NULL;
