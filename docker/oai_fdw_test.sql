@@ -6,6 +6,16 @@ CREATE EXTENSION oai_fdw;
 CREATE SERVER oai_server FOREIGN DATA WRAPPER oai_fdw 
 OPTIONS (url 'https://sammlungen.ulb.uni-muenster.de/oai',
          metadataPrefix 'oai_dc');
+         
+CREATE SERVER oai_server_dnb FOREIGN DATA WRAPPER oai_fdw 
+OPTIONS (url 'https://services.dnb.de/oai/repository',
+         metadataPrefix 'oai_dc');
+
+CREATE SERVER oai_server_ulb FOREIGN DATA WRAPPER oai_fdw 
+OPTIONS (url 'https://sammlungen.ulb.uni-muenster.de/oai',
+         metadataPrefix 'oai_dc'); 
+         
+         
 
 CREATE FOREIGN TABLE ulb_ulbmsuo_oai_dc (id text) 
 SERVER oai_server OPTIONS (setspec 'ulbmsuo');
@@ -13,6 +23,15 @@ SERVER oai_server OPTIONS (setspec 'ulbmsuo');
 SELECT id FROM ulb_ulbmsuo_oai_dc;
 
 SELECT oai_fdw_version();
+
+SELECT * FROM oai_fdw_listMetadataFormats('oai_server');
+
+ 
+         
+SELECT * FROM oai_fdw_listMetadataFormats('oai_server_dnb');
+-- SELECT * FROM oai_fdw_listMetadataFormats('oai_server_ulb');
+
+         
 /**
 
 CREATE FOREIGN TABLE ulb_ulbmsuo_oai_dc (

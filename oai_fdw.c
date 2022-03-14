@@ -32,6 +32,8 @@
 //#include <utils/fmgrprotos.h>
 
 //#include <time.h>
+#include <funcapi.h>
+
 #include "lib/stringinfo.h"
 
 #include "nodes/nodes.h"
@@ -63,6 +65,7 @@
 #define OAI_REQUEST_IDENTIFY "Identify"
 #define OAI_REQUEST_LISTSETS "ListSets"
 #define OAI_REQUEST_GETRECORD "GetRecord"
+#define OAI_REQUEST_LISTMETADATAFORMATS "ListMetadataFormats"
 
 #define OAI_XML_ROOT_ELEMENT "OAI-PMH"
 #define OAI_ATTRIBUTE_IDENTIFIER "identifier"
@@ -139,6 +142,15 @@ typedef struct oai_fdw_TableOptions {
 	char* requestType;
 
 } oai_fdw_TableOptions;
+
+typedef struct MetadataFormat {
+
+	int rowid;
+	char *metadataPrefix;
+	char *schema;
+	char *metadataNamespace;
+
+} MetadataFormat;
 
 struct string {
 	char *ptr;
@@ -223,6 +235,7 @@ static void deparseWhereClause(List *conditions, oai_fdw_TableOptions *opts);
 static void deparseSelectColumns(oai_fdw_TableOptions *opts);
 static void requestPlanner(oai_fdw_TableOptions *opts, ForeignTable *ft, RelOptInfo *baserel);
 static char *deparseTimestamp(Datum datum);
+List *getMetadataFormats(char *url);
 
 void _PG_init(void) {
 
@@ -240,51 +253,87 @@ Datum oai_fdw_version(PG_FUNCTION_ARGS) {
     PG_RETURN_TEXT_P(cstring_to_text(url_bufffer.data));
 }
 
-Datum oai_fdw_listMetadataFormats(PG_FUNCTION_ARGS) {
+List *getMetadataFormats(char *url) {
 
-	text *srvname_text = PG_GETARG_TEXT_P(0);
-	const char * srvname = text_to_cstring(srvname_text);
-	const char *url;
+	struct string xmlStream;
+	int oaiExecuteResponse;
+	oai_fdw_state *state = (oai_fdw_state *) palloc0(sizeof(oai_fdw_state));
+	List *result = NIL;
 
-	ForeignServer *server = GetForeignServerByName(srvname, true);
+	state->url = url;
+	state->requestType = OAI_REQUEST_LISTMETADATAFORMATS;
 
-	//TupleTableSlot *slot = node->ss.ss_ScanTupleSlot;
+	oaiExecuteResponse = executeOAIRequest(&state,&xmlStream);
 
-	//https://www.postgresql.org/docs/current/xfunc-c.html
-	PG_RETURN_NULL();
+	if(oaiExecuteResponse == OAI_SUCCESS) {
+
+		xmlNodePtr xmlroot = NULL;
+		xmlDocPtr xmldoc;
+		xmldoc = xmlReadMemory(xmlStream.ptr, strlen(xmlStream.ptr), NULL, NULL, XML_PARSE_SAX1);
+
+		xmlNodePtr oai_root;
+		xmlNodePtr ListMetadataFormats;
+
+		xmlNodePtr MetadataElement;
 
 
-	if(server){
+		if (!xmldoc || (xmlroot = xmlDocGetRootElement(xmldoc)) == NULL) {
+			xmlFreeDoc(xmldoc);
+			xmlCleanupParser();
+			elog(WARNING,"invalid MARC21/XML document.");
+		}
 
-		ListCell *cell;
+		//elog(WARNING,"DOC %s",xmlStream.ptr);
 
-		foreach(cell, server->options) {
+		for (oai_root = xmlroot->children; oai_root != NULL; oai_root = oai_root->next) {
 
-			DefElem *def = lfirst_node(DefElem, cell);
+			if (oai_root->type != XML_ELEMENT_NODE) continue;
 
-			PG_RETURN_POINTER(cstring_to_text(defGetString(def)));
+			elog(WARNING,"OAI_ROOT");
+			if (xmlStrcmp(oai_root->name, (xmlChar*) "ListMetadataFormats") != 0) continue;
 
-			elog(WARNING,"SRV > %s",defGetString(def));
+			for (ListMetadataFormats = oai_root->children; ListMetadataFormats != NULL; ListMetadataFormats = ListMetadataFormats->next) {
 
-			if (strcmp("url", def->defname) == 0) {
+				elog(WARNING,"  LISTMETADATAFORMATS > %s",ListMetadataFormats->name);
 
-				//opts->url = defGetString(def);
-				url = defGetString(def);
+				if (ListMetadataFormats->type != XML_ELEMENT_NODE)	continue;
+				if (xmlStrcmp(ListMetadataFormats->name, (xmlChar*) "metadataFormat") != 0) continue;
 
-			} else if (strcmp("metadataprefix", def->defname) == 0) {
+				MetadataFormat *format = (MetadataFormat *)palloc0(sizeof(MetadataFormat));
 
-				//opts->metadataPrefix = defGetString(def);
+				for (MetadataElement = ListMetadataFormats->children; MetadataElement != NULL; MetadataElement = MetadataElement->next) {
 
-			} else {
+					if (MetadataElement->type != XML_ELEMENT_NODE)	continue;
 
-				elog(WARNING,"Invalid SERVER OPTION > '%s'",def->defname);
+					if (xmlStrcmp(MetadataElement->name, (xmlChar*) "metadataPrefix") == 0) {
+
+						format->metadataPrefix = xmlNodeGetContent(MetadataElement);
+
+					} else if (xmlStrcmp(MetadataElement->name, (xmlChar*) "schema") == 0) {
+
+						format->schema = xmlNodeGetContent(MetadataElement);
+
+					} else if (xmlStrcmp(MetadataElement->name, (xmlChar*) "metadataNamespace") == 0) {
+
+						format->metadataNamespace = palloc(sizeof(char)*strlen(xmlNodeGetContent(MetadataElement)));
+						format->metadataNamespace = xmlNodeGetContent(MetadataElement);
+
+					}
+
+				}
+
+				result = lappend(result, format);
+
 			}
 
 		}
+
 	}
 
-    PG_RETURN_TEXT_P(cstring_to_text(url));
+	return result;
 }
+
+
 
 Datum oai_fdw_handler(PG_FUNCTION_ARGS) {
 
@@ -468,6 +517,207 @@ int check_url(char *url)
     return (response == CURLE_OK) ? 1 : 0;
 }
 
+Datum oai_fdw_listMetadataFormats(PG_FUNCTION_ARGS) {
+
+
+	text *srvname_text = PG_GETARG_TEXT_P(0);
+	const char * srvname = text_to_cstring(srvname_text);
+	ForeignServer *server;
+	const char *url;
+
+
+
+
+	FuncCallContext     *funcctx;
+	int                  call_cntr;
+	int                  max_calls;
+	TupleDesc            tupdesc;
+	AttInMetadata       *attinmeta;
+
+	/* stuff done only on the first call of the function */
+	if (SRF_IS_FIRSTCALL())
+	{
+
+		server = GetForeignServerByName(srvname, true);
+
+		if(server) {
+
+			ListCell   *cell;
+
+			foreach(cell, server->options) {
+
+				DefElem *def = lfirst_node(DefElem, cell);
+
+				if(strcmp(def->defname,"url")==0) {
+					url = defGetString(def);
+				}
+
+			}
+
+		}
+
+
+
+		MemoryContext   oldcontext;
+
+
+
+		/* create a function context for cross-call persistence */
+		funcctx = SRF_FIRSTCALL_INIT();
+
+		List *formats = getMetadataFormats(url);
+
+
+
+		funcctx->user_fctx = formats; //getMetadataFormats("https://sammlungen.ulb.uni-muenster.de/oai");
+
+		/* switch to memory context appropriate for multiple function calls */
+		oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
+
+		/* total number of tuples to be returned */
+		//funcctx->max_calls = PG_GETARG_UINT32(0);
+		if(formats)	funcctx->max_calls = formats->length;
+
+		/* Build a tuple descriptor for our result type */
+		if (get_call_result_type(fcinfo, NULL, &tupdesc) != TYPEFUNC_COMPOSITE)
+			ereport(ERROR,(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					       errmsg("function returning record called in context that cannot accept type record")));
+
+		/*
+		 * generate attribute metadata needed later to produce tuples from raw
+		 * C strings
+		 */
+		attinmeta = TupleDescGetAttInMetadata(tupdesc);
+		funcctx->attinmeta = attinmeta;
+
+		MemoryContextSwitchTo(oldcontext);
+
+		elog(WARNING,"GOT HERE - END FIRST LOOP");
+
+	}
+
+
+	/* stuff done on every call of the function */
+	funcctx = SRF_PERCALL_SETUP();
+
+	call_cntr = funcctx->call_cntr;
+	max_calls = funcctx->max_calls;
+	attinmeta = funcctx->attinmeta;
+
+	//int i = 1;
+
+	if (call_cntr < max_calls)    /* do when there is more left to send */
+	    {
+	        char       **values;
+	        HeapTuple    tuple;
+	        Datum        result;
+
+	       // ListCell   *cell;
+	       // foreach(cell, formats) {
+
+	        //	MetadataFormat *format = (MetadataFormat *) lfirst_node(DefElem, cell);
+	        	//elog(WARNING,"metadataPrefix ## > %s",format->metadataPrefix);
+
+	        //}
+
+	        MetadataFormat *format = (MetadataFormat *) list_nth((List*)funcctx->user_fctx, call_cntr);
+
+
+
+	        /*
+	         * Prepare a values array for building the returned tuple.
+	         * This should be an array of C strings which will
+	         * be processed later by the type input functions.
+	         */
+
+	        elog(WARNING,"ANTES DO PALLOC >>> \n'%s' \n'%s' \n'%s'", format->metadataPrefix, format->schema, format->metadataNamespace);
+
+	        values = (char **) palloc(3 * sizeof(char *));
+
+	        values[0] = (char *) palloc(strlen((format->metadataPrefix)+1) * sizeof(char));
+	        values[1] = (char *) palloc(strlen((format->schema)+1) * sizeof(char));
+	        values[2] = (char *) palloc(strlen((format->metadataNamespace)+1) * sizeof(char));
+
+	       // elog(WARNING,"%d %d %d",strlen(format->metadataPrefix), strlen(format->schema), strlen(format->metadataNamespace));
+
+	        snprintf(values[0], strlen(format->metadataPrefix)+1, "%s", format->metadataPrefix);
+	        snprintf(values[1], strlen(format->schema)+1, "%s", format->schema);
+	        snprintf(values[2], strlen(format->metadataNamespace)-10, "%s", format->metadataNamespace);
+
+	        //strncpy(values[0],format->metadataPrefix,strlen(format->metadataPrefix));
+	        //strncpy(values[1],format->schema,strlen(format->schema));
+	        //strncpy(values[2],format->metadataNamespace,strlen(format->metadataNamespace));
+
+	       // elog(WARNING,"GOT HERE BuildTupleFromCStrings");
+
+	        /* build a tuple */
+	        tuple = BuildTupleFromCStrings(attinmeta, values);
+
+	        //elog(WARNING,"GOT HERE HeapTupleGetDatum");
+
+	        /* make the tuple into a datum */
+	        result = HeapTupleGetDatum(tuple);
+
+	        /* clean up (this is not really necessary) */
+	        pfree(values[0]);
+	        pfree(values[1]);
+	        pfree(values[2]);
+	        pfree(values);
+
+	        //elog(WARNING,"GOT HERE SRF_RETURN_NEXT");
+
+	        SRF_RETURN_NEXT(funcctx, result);
+	    }
+	    else    /* do when there is no more left */
+	    {
+	        SRF_RETURN_DONE(funcctx);
+	    }
+
+
+	/*
+
+	ForeignServer *server = GetForeignServerByName(srvname, true);
+
+	//TupleTableSlot *slot = node->ss.ss_ScanTupleSlot;
+
+	//https://www.postgresql.org/docs/current/xfunc-c.html
+	PG_RETURN_NULL();
+
+
+	if(server){
+
+		ListCell *cell;
+
+		foreach(cell, server->options) {
+
+			DefElem *def = lfirst_node(DefElem, cell);
+
+			PG_RETURN_POINTER(cstring_to_text(defGetString(def)));
+
+			elog(WARNING,"SRV > %s",defGetString(def));
+
+			if (strcmp("url", def->defname) == 0) {
+
+				//opts->url = defGetString(def);
+				url = defGetString(def);
+
+			} else if (strcmp("metadataprefix", def->defname) == 0) {
+
+				//opts->metadataPrefix = defGetString(def);
+
+			} else {
+
+				elog(WARNING,"Invalid SERVER OPTION > '%s'",def->defname);
+			}
+
+		}
+	}
+
+    PG_RETURN_TEXT_P(cstring_to_text(url));
+
+    **/
+}
+
 int executeOAIRequest(oai_fdw_state **state, struct string *xmlResponse) {
 
 	CURL *curl;
@@ -578,6 +828,10 @@ int executeOAIRequest(oai_fdw_state **state, struct string *xmlResponse) {
 			(*state)->resumptionToken = NULL;
 
 		}
+
+	} else if(strcmp((*state)->requestType,OAI_REQUEST_LISTMETADATAFORMATS)==0) {
+
+
 
 	} else {
 

@@ -17,12 +17,18 @@ CREATE TYPE oai_node AS (
 	description text
 );
 
+CREATE TYPE OAI_MetadataFormat AS (
+	metadataPrefix text,
+	schema text,
+	metadataNamespace text
+);
+
 CREATE OR REPLACE FUNCTION oai_fdw_version()
   RETURNS text AS 'MODULE_PATHNAME', 'oai_fdw_version'
   LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
 
 CREATE OR REPLACE FUNCTION oai_fdw_ListMetadataFormats(text)
-  RETURNS SETOF oai_node AS 'MODULE_PATHNAME', 'oai_fdw_listMetadataFormats'
+  RETURNS SETOF OAI_MetadataFormat AS 'MODULE_PATHNAME', 'oai_fdw_listMetadataFormats'
   LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
   
 CREATE FUNCTION oai_fdw_validator(text[], oid)
