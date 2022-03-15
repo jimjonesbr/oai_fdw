@@ -4,3 +4,34 @@ SELECT oai_fdw_version() IS NULL;
  f
 (1 row)
 
+SELECT * FROM oai_fdw_listMetadataFormats('oai_server_ulb');
+ metadataprefix |                               schema                               |              metadatanamespace              
+----------------+--------------------------------------------------------------------+---------------------------------------------
+ oai_dc         | http://www.openarchives.org/OAI/2.0/oai_dc.xsd                     | http://www.openarchives.org/OAI/2.0/oai_dc/
+ mets           | http://www.loc.gov/standards/mets/mets.xsd                         | http://www.loc.gov/METS/
+ mods           | http://www.loc.gov/standards/mods/v3/mods-3-0.xsd                  | http://www.loc.gov/mods/v3
+ rawmods        | http://www.loc.gov/standards/mods/v3/mods-3-0.xsd                  | http://www.loc.gov/mods/v3
+ epicur         | http://www.persistent-identifier.de/xepicur/version1.0/xepicur.xsd | urn:nbn:de:1111-2004033116
+(5 rows)
+
+SELECT * FROM oai_fdw_listMetadataFormats('oai_server_dnb');
+  metadataprefix  |                                   schema                                    |                            metadatanamespace                            
+------------------+-----------------------------------------------------------------------------+-------------------------------------------------------------------------
+ MARC21plus-1-xml | http://www.loc.gov/standards/marcxml/schema/MARC21slim.xsd                  | http://www.loc.gov/MARC21/slim
+ baseDc-xml       | http://oai.base-search.net/base_dc/base_dc.xsd                              | http://oai.base-search.net/base_dc
+ BibframeRDFxml   | http://www.w3.org/2000/07/rdf.xsd                                           | http://www.w3.org/1999/02/22-rdf-syntax-ns
+ RDFprov-xml      | http://www.w3.org/2000/07/rdf.xsd                                           | http://www.w3.org/1999/02/22-rdf-syntax-ns
+ crossref-xml     | https://www.crossref.org/schema/crossref4.4.0.xsd                           | http://www.crossref.org/schema/4.4.0
+ RDFprovPlus-xml  | http://www.w3.org/2000/07/rdf.xsd                                           | http://www.w3.org/1999/02/22-rdf-syntax-ns
+ JATS-xml         | http://jats.nlm.nih.gov/publishing/1.0/xsd/JATS-journalpublishing.xsd       | http://jats.nlm.nih.gov/publishing/1.0
+ MARC21plus-xml   | http://www.loc.gov/standards/marcxml/schema/MARC21slim.xsd                  | http://www.ddb.de/professionell/MARC21/plus
+ PicaPlus-xml     | http://www.oclcpica.org/xmlns/ppxml-1.0.xsd                                 | http://www.oclcpica.org/xmlns/ppxml-1.0
+ RDFxml           | http://www.w3.org/2000/07/rdf.xsd                                           | http://www.w3.org/1999/02/22-rdf-syntax-ns
+ xMetaDiss        | http://www.d-nb.de/standards/xmetadiss/xmetadiss.xsd                        | http://www.d-nb.de/standards/xMetaDiss/
+ oai_dc           | http://www.openarchives.org/OAI/2.0/oai_dc.xsd                              | http://www.openarchives.org/OAI/2.0/oai_dc
+ mods-xml         | http://www.loc.gov/standards/mods/v3/mods-3-6.xsd                           | http://www.loc.gov/mods/v3
+ MARC21-xml       | http://www.loc.gov/standards/marcxml/schema/MARC21slim.xsd                  | http://www.loc.gov/MARC21/slim
+ ONIX-xml         | http://www.editeur.org/onix/2.1/short/ONIX_BookProduct_Release2.1_short.xsd | http://www.editeur.org/onix/2.1/short/ONIX_BookProduct_Release2.1_short
+ sync-repo-xml    | http://files.dnb.de/standards/formate/syncrepo.xsd                          | http://www.d-nb.de/schemas/syncrepo
+(16 rows)
+
