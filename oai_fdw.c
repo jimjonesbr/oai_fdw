@@ -145,7 +145,6 @@ typedef struct oai_fdw_TableOptions {
 
 typedef struct MetadataFormat {
 
-	int rowid;
 	char *metadataPrefix;
 	char *schema;
 	char *metadataNamespace;
@@ -289,12 +288,12 @@ List *getMetadataFormats(char *url) {
 
 			if (oai_root->type != XML_ELEMENT_NODE) continue;
 
-			elog(WARNING,"OAI_ROOT");
+			//elog(WARNING,"OAI_ROOT");
 			if (xmlStrcmp(oai_root->name, (xmlChar*) "ListMetadataFormats") != 0) continue;
 
 			for (ListMetadataFormats = oai_root->children; ListMetadataFormats != NULL; ListMetadataFormats = ListMetadataFormats->next) {
 
-				elog(WARNING,"  LISTMETADATAFORMATS > %s",ListMetadataFormats->name);
+				//elog(WARNING,"  LISTMETADATAFORMATS > %s",ListMetadataFormats->name);
 
 				if (ListMetadataFormats->type != XML_ELEMENT_NODE)	continue;
 				if (xmlStrcmp(ListMetadataFormats->name, (xmlChar*) "metadataFormat") != 0) continue;
@@ -307,15 +306,17 @@ List *getMetadataFormats(char *url) {
 
 					if (xmlStrcmp(MetadataElement->name, (xmlChar*) "metadataPrefix") == 0) {
 
+						format->metadataPrefix = palloc(sizeof(char)*strlen(xmlNodeGetContent(MetadataElement))+1);
 						format->metadataPrefix = xmlNodeGetContent(MetadataElement);
 
 					} else if (xmlStrcmp(MetadataElement->name, (xmlChar*) "schema") == 0) {
 
+						format->schema = palloc(sizeof(char)*strlen(xmlNodeGetContent(MetadataElement))+1);
 						format->schema = xmlNodeGetContent(MetadataElement);
 
 					} else if (xmlStrcmp(MetadataElement->name, (xmlChar*) "metadataNamespace") == 0) {
 
-						format->metadataNamespace = palloc(sizeof(char)*strlen(xmlNodeGetContent(MetadataElement)));
+						format->metadataNamespace = palloc(sizeof(char)*strlen(xmlNodeGetContent(MetadataElement))+1);
 						format->metadataNamespace = xmlNodeGetContent(MetadataElement);
 
 					}
@@ -519,13 +520,9 @@ int check_url(char *url)
 
 Datum oai_fdw_listMetadataFormats(PG_FUNCTION_ARGS) {
 
-
+	ForeignServer *server;
 	text *srvname_text = PG_GETARG_TEXT_P(0);
 	const char * srvname = text_to_cstring(srvname_text);
-	ForeignServer *server;
-	const char *url;
-
-
 
 
 	FuncCallContext     *funcctx;
@@ -537,6 +534,8 @@ Datum oai_fdw_listMetadataFormats(PG_FUNCTION_ARGS) {
 	/* stuff done only on the first call of the function */
 	if (SRF_IS_FIRSTCALL())
 	{
+
+		const char *url;
 
 		server = GetForeignServerByName(srvname, true);
 
@@ -557,17 +556,12 @@ Datum oai_fdw_listMetadataFormats(PG_FUNCTION_ARGS) {
 		}
 
 
-
 		MemoryContext   oldcontext;
-
-
 
 		/* create a function context for cross-call persistence */
 		funcctx = SRF_FIRSTCALL_INIT();
 
 		List *formats = getMetadataFormats(url);
-
-
 
 		funcctx->user_fctx = formats; //getMetadataFormats("https://sammlungen.ulb.uni-muenster.de/oai");
 
@@ -592,7 +586,7 @@ Datum oai_fdw_listMetadataFormats(PG_FUNCTION_ARGS) {
 
 		MemoryContextSwitchTo(oldcontext);
 
-		elog(WARNING,"GOT HERE - END FIRST LOOP");
+		//elog(WARNING,"GOT HERE - END FIRST LOOP");
 
 	}
 
@@ -620,37 +614,71 @@ Datum oai_fdw_listMetadataFormats(PG_FUNCTION_ARGS) {
 
 	        //}
 
-	        MetadataFormat *format = (MetadataFormat *) list_nth((List*)funcctx->user_fctx, call_cntr);
+	        size_t max_prefix = 0;
+	        size_t max_schema = 0;
+	        size_t max_nspace = 0;
+
+	        ListCell *cell;
+
+	        foreach(cell, funcctx->user_fctx) {
+
+				//DefElem *def = lfirst_node(DefElem, cell);
+	        	MetadataFormat *format = (MetadataFormat *) lfirst_node(DefElem, cell);
+
+	        	if(strlen(format->metadataPrefix)>max_prefix) max_prefix = strlen(format->metadataPrefix);
+	        	if(strlen(format->schema)>max_schema) max_schema = strlen(format->schema);
+	        	if(strlen(format->metadataNamespace)>max_nspace) max_nspace = strlen(format->metadataNamespace);
+				//elog(WARNING,">>>>>  %s",(format->metadataPrefix));
+	        	//elog(WARNING,"%s (%d), %s (%d), %s (%d)",format->metadataPrefix,strlen(format->metadataPrefix), format->schema, strlen(format->schema), format->metadataNamespace, strlen(format->metadataNamespace));
+
+	        }
 
 
-
+	        MetadataFormat *format = (MetadataFormat *) list_nth((List*) funcctx->user_fctx, call_cntr);
+	        //format->metadataPrefix[strlen(format->metadataPrefix)] = '\0';
+	        //format->schema[strlen(format->schema)] = '\0';
+	        //format->metadataNamespace[strlen(format->metadataNamespace)] = '\0';
 	        /*
 	         * Prepare a values array for building the returned tuple.
 	         * This should be an array of C strings which will
 	         * be processed later by the type input functions.
 	         */
 
-	        elog(WARNING,"ANTES DO PALLOC >>> \n'%s' \n'%s' \n'%s'", format->metadataPrefix, format->schema, format->metadataNamespace);
+	        //elog(WARNING,"ANTES DO PALLOC >>> \n\n'%s' \n'%s' \n'%s'\n", format->metadataPrefix, format->schema, format->metadataNamespace);
 
+	        const size_t MAX_SIZE = 500;
 	        values = (char **) palloc(3 * sizeof(char *));
+	        values[0] = (char *) palloc(MAX_SIZE * sizeof(char));
+	        values[1] = (char *) palloc(MAX_SIZE * sizeof(char));
+	        values[2] = (char *) palloc(MAX_SIZE * sizeof(char));
 
-	        values[0] = (char *) palloc(strlen((format->metadataPrefix)+1) * sizeof(char));
-	        values[1] = (char *) palloc(strlen((format->schema)+1) * sizeof(char));
-	        values[2] = (char *) palloc(strlen((format->metadataNamespace)+1) * sizeof(char));
+	       // values[0] = (char *) palloc(strlen(format->metadataPrefix)+1 * sizeof(char));
+	       // values[1] = (char *) palloc(strlen(format->schema)+1 * sizeof(char));
+	       // values[2] = (char *) palloc((strlen(format->metadataNamespace)+1) * sizeof(char));
 
 	       // elog(WARNING,"%d %d %d",strlen(format->metadataPrefix), strlen(format->schema), strlen(format->metadataNamespace));
 
-	        snprintf(values[0], strlen(format->metadataPrefix)+1, "%s", format->metadataPrefix);
-	        snprintf(values[1], strlen(format->schema)+1, "%s", format->schema);
-	        snprintf(values[2], strlen(format->metadataNamespace)-10, "%s", format->metadataNamespace);
+	       // snprintf(values[0], strlen(format->metadataPrefix)+1, "%s", format->metadataPrefix);
+	       // snprintf(values[1], strlen(format->schema)+1, "%s", format->schema);
+	       // snprintf(values[2], strlen(format->metadataNamespace)+1, "%s", format->metadataNamespace);
+
+	        snprintf(values[0], MAX_SIZE, "%s", format->metadataPrefix);
+	        snprintf(values[1], MAX_SIZE, "%s", format->schema);
+	        snprintf(values[2], MAX_SIZE, "%s", format->metadataNamespace);
+
+//	        snprintf(values[0], strlen(format->metadataPrefix)+1, "%s", format->metadataPrefix);
+//	        snprintf(values[1], strlen(format->schema)+1, "%s", format->schema);
+//	        snprintf(values[2], strlen(format->metadataNamespace)+1, "%s", format->metadataNamespace);
 
 	        //strncpy(values[0],format->metadataPrefix,strlen(format->metadataPrefix));
 	        //strncpy(values[1],format->schema,strlen(format->schema));
 	        //strncpy(values[2],format->metadataNamespace,strlen(format->metadataNamespace));
 
-	       // elog(WARNING,"GOT HERE BuildTupleFromCStrings");
+	       // elog(WARNING,"GOT HERE BuildTupleFromCStrings max_prefix = %d, max_schema = %d, max_ns = %d",max_prefix,max_schema,max_nspace);
 
 	        /* build a tuple */
+
+
 	        tuple = BuildTupleFromCStrings(attinmeta, values);
 
 	        //elog(WARNING,"GOT HERE HeapTupleGetDatum");
