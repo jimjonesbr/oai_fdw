@@ -66,6 +66,8 @@
 #define OAI_REQUEST_LISTSETS "ListSets"
 #define OAI_REQUEST_GETRECORD "GetRecord"
 #define OAI_REQUEST_LISTMETADATAFORMATS "ListMetadataFormats"
+#define OAI_REQUEST_LISTSETS "ListSets"
+
 
 #define OAI_XML_ROOT_ELEMENT "OAI-PMH"
 #define OAI_ATTRIBUTE_IDENTIFIER "identifier"
@@ -143,13 +145,20 @@ typedef struct oai_fdw_TableOptions {
 
 } oai_fdw_TableOptions;
 
-typedef struct MetadataFormat {
+typedef struct OAIMetadataFormat {
 
 	char *metadataPrefix;
 	char *schema;
 	char *metadataNamespace;
 
-} MetadataFormat;
+} OAIMetadataFormat;
+
+typedef struct OAISet {
+
+	char *setSpec;
+	char *setName;
+
+} OAISet;
 
 struct string {
 	char *ptr;
@@ -177,10 +186,10 @@ static struct OAIFdwOption valid_options[] =
 {
 
 	{OAI_ATTRIBUTE_URL, ForeignServerRelationId, true, false},
-	{OAI_ATTRIBUTE_METADATAPREFIX, ForeignServerRelationId, true, false},
+	{OAI_ATTRIBUTE_METADATAPREFIX, ForeignServerRelationId, false, false},
 
 	{OAI_ATTRIBUTE_IDENTIFIER, ForeignTableRelationId, false, false},
-	{OAI_ATTRIBUTE_METADATAPREFIX, ForeignTableRelationId, false, false},
+	{OAI_ATTRIBUTE_METADATAPREFIX, ForeignTableRelationId, true, false},
 	{OAI_ATTRIBUTE_SETSPEC, ForeignTableRelationId, false, false},
 	{OAI_ATTRIBUTE_FROM, ForeignTableRelationId, false, false},
 	{OAI_ATTRIBUTE_UNTIL, ForeignTableRelationId, false, false},
@@ -198,11 +207,13 @@ extern Datum oai_fdw_handler(PG_FUNCTION_ARGS);
 extern Datum oai_fdw_validator(PG_FUNCTION_ARGS);
 extern Datum oai_fdw_version(PG_FUNCTION_ARGS);
 extern Datum oai_fdw_listMetadataFormats(PG_FUNCTION_ARGS);
+extern Datum oai_fdw_listSets(PG_FUNCTION_ARGS);
 
 PG_FUNCTION_INFO_V1(oai_fdw_handler);
 PG_FUNCTION_INFO_V1(oai_fdw_validator);
 PG_FUNCTION_INFO_V1(oai_fdw_version);
 PG_FUNCTION_INFO_V1(oai_fdw_listMetadataFormats);
+PG_FUNCTION_INFO_V1(oai_fdw_listSets);
 
 
 void _PG_init(void);
@@ -252,6 +263,79 @@ Datum oai_fdw_version(PG_FUNCTION_ARGS) {
     PG_RETURN_TEXT_P(cstring_to_text(version_bufffer.data));
 }
 
+List *getSets(char *url) {
+
+	struct string xmlStream;
+	int oaiExecuteResponse;
+	oai_fdw_state *state = (oai_fdw_state *) palloc0(sizeof(oai_fdw_state));
+	List *result = NIL;
+
+	state->url = url;
+	state->requestType = OAI_REQUEST_LISTSETS;
+
+	oaiExecuteResponse = executeOAIRequest(&state,&xmlStream);
+
+	if(oaiExecuteResponse == OAI_SUCCESS) {
+
+		xmlNodePtr xmlroot = NULL;
+		xmlDocPtr xmldoc;
+		xmldoc = xmlReadMemory(xmlStream.ptr, strlen(xmlStream.ptr), NULL, NULL, XML_PARSE_SAX1);
+
+		xmlNodePtr oai_root;
+		xmlNodePtr ListSets;
+
+		xmlNodePtr SetElement;
+
+
+		if (!xmldoc || (xmlroot = xmlDocGetRootElement(xmldoc)) == NULL) {
+			xmlFreeDoc(xmldoc);
+			xmlCleanupParser();
+			elog(WARNING,"invalid MARC21/XML document.");
+		}
+
+		for (oai_root = xmlroot->children; oai_root != NULL; oai_root = oai_root->next) {
+
+			if (oai_root->type != XML_ELEMENT_NODE) continue;
+
+			if (xmlStrcmp(oai_root->name, (xmlChar*) "ListSets") != 0) continue;
+
+			for (ListSets = oai_root->children; ListSets != NULL; ListSets = ListSets->next) {
+
+				if (ListSets->type != XML_ELEMENT_NODE)	continue;
+				if (xmlStrcmp(ListSets->name, (xmlChar*) "set") != 0) continue;
+
+				OAISet *set = (OAISet *)palloc0(sizeof(OAISet));
+
+				for (SetElement = ListSets->children; SetElement != NULL; SetElement = SetElement->next) {
+
+					if (SetElement->type != XML_ELEMENT_NODE)	continue;
+
+					if (xmlStrcmp(SetElement->name, (xmlChar*) "setSpec") == 0) {
+
+						set->setSpec = palloc(sizeof(char)*strlen(xmlNodeGetContent(SetElement))+1);
+						set->setSpec = xmlNodeGetContent(SetElement);
+
+					} else if (xmlStrcmp(SetElement->name, (xmlChar*) "setName") == 0) {
+
+						set->setName = palloc(sizeof(char)*strlen(xmlNodeGetContent(SetElement))+1);
+						set->setName = xmlNodeGetContent(SetElement);
+
+					}
+
+				}
+
+				result = lappend(result, set);
+
+			}
+
+		}
+
+	}
+
+	return result;
+}
+
+
 List *getMetadataFormats(char *url) {
 
 	struct string xmlStream;
@@ -293,7 +377,7 @@ List *getMetadataFormats(char *url) {
 				if (ListMetadataFormats->type != XML_ELEMENT_NODE)	continue;
 				if (xmlStrcmp(ListMetadataFormats->name, (xmlChar*) "metadataFormat") != 0) continue;
 
-				MetadataFormat *format = (MetadataFormat *)palloc0(sizeof(MetadataFormat));
+				OAIMetadataFormat *format = (OAIMetadataFormat *)palloc0(sizeof(OAIMetadataFormat));
 
 				for (MetadataElement = ListMetadataFormats->children; MetadataElement != NULL; MetadataElement = MetadataElement->next) {
 
@@ -513,6 +597,125 @@ int check_url(char *url)
     return (response == CURLE_OK) ? 1 : 0;
 }
 
+Datum oai_fdw_listSets(PG_FUNCTION_ARGS) {
+
+	ForeignServer *server;
+	text *srvname_text = PG_GETARG_TEXT_P(0);
+	const char * srvname = text_to_cstring(srvname_text);
+
+
+	FuncCallContext     *funcctx;
+	int                  call_cntr;
+	int                  max_calls;
+	TupleDesc            tupdesc;
+	AttInMetadata       *attinmeta;
+
+	if (SRF_IS_FIRSTCALL())	{
+
+		const char *url;
+		server = GetForeignServerByName(srvname, true);
+
+		if(server) {
+
+			ListCell   *cell;
+
+			foreach(cell, server->options) {
+
+				DefElem *def = lfirst_node(DefElem, cell);
+
+				if(strcmp(def->defname,"url")==0) {
+					url = defGetString(def);
+				}
+
+			}
+
+		} else {
+
+			ereport(ERROR,(errcode(ERRCODE_CONNECTION_DOES_NOT_EXIST),
+					       errmsg("FOREIGN SERVER does not exist: '%s'",srvname)));
+
+		}
+
+
+		MemoryContext   oldcontext;
+
+		/* create a function context for cross-call persistence */
+		funcctx = SRF_FIRSTCALL_INIT();
+
+		List *sets = getSets(url);
+
+		funcctx->user_fctx = sets;
+
+		/* switch to memory context appropriate for multiple function calls */
+		oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
+
+		/* total number of tuples to be returned */
+		if(sets)	funcctx->max_calls = sets->length;
+
+		/* Build a tuple descriptor for our result type */
+		if (get_call_result_type(fcinfo, NULL, &tupdesc) != TYPEFUNC_COMPOSITE)
+			ereport(ERROR,(
+					errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					errmsg("function returning record called in context that cannot accept type record")));
+
+		/*
+		 * generate attribute metadata needed later to produce tuples from raw
+		 * C strings
+		 */
+		attinmeta = TupleDescGetAttInMetadata(tupdesc);
+		funcctx->attinmeta = attinmeta;
+
+		MemoryContextSwitchTo(oldcontext);
+
+	}
+
+	/* stuff done on every call of the function */
+	funcctx = SRF_PERCALL_SETUP();
+
+	call_cntr = funcctx->call_cntr;
+	max_calls = funcctx->max_calls;
+	attinmeta = funcctx->attinmeta;
+
+	if (call_cntr < max_calls)    /* do when there is more left to send */
+	{
+		char       *values[2];
+		HeapTuple   tuple;
+		Datum       result;
+
+		OAISet *set = (OAISet *) list_nth((List*) funcctx->user_fctx, call_cntr);
+
+		//const size_t MAX_SIZE = 512;
+		//values = (char **) palloc(2 * sizeof(char *));
+		//values[0] = (char *) palloc(MAX_SIZE * sizeof(char));
+		//values[1] = (char *) palloc(MAX_SIZE * sizeof(char));
+
+		//snprintf(values[0], MAX_SIZE, "%s", set->setSpec);
+		//snprintf(values[1], MAX_SIZE, "%s", set->setName);
+
+		set->setSpec[strlen(set->setSpec)] = '\0';
+		set->setName[strlen(set->setName)] = '\0';
+
+		values[0] = set->setSpec;
+		values[1] = set->setName;
+
+		/* build a tuple */
+		tuple = BuildTupleFromCStrings(attinmeta, values);
+
+		/* make the tuple into a datum */
+		result = HeapTupleGetDatum(tuple);
+
+		/* clean up (this is not really necessary) */
+		elog(DEBUG1,"#############\n\nSetName > '%s' \nSetName > '%s'\n",set->setSpec,set->setName);
+
+		SRF_RETURN_NEXT(funcctx, result);
+
+	} else {
+		SRF_RETURN_DONE(funcctx);
+	}
+
+
+}
+
 Datum oai_fdw_listMetadataFormats(PG_FUNCTION_ARGS) {
 
 	ForeignServer *server;
@@ -624,7 +827,7 @@ Datum oai_fdw_listMetadataFormats(PG_FUNCTION_ARGS) {
 	        foreach(cell, funcctx->user_fctx) {
 
 				//DefElem *def = lfirst_node(DefElem, cell);
-	        	MetadataFormat *format = (MetadataFormat *) lfirst_node(DefElem, cell);
+	        	OAIMetadataFormat *format = (OAIMetadataFormat *) lfirst_node(DefElem, cell);
 
 	        	if(strlen(format->metadataPrefix)>max_prefix) max_prefix = strlen(format->metadataPrefix);
 	        	if(strlen(format->schema)>max_schema) max_schema = strlen(format->schema);
@@ -635,7 +838,7 @@ Datum oai_fdw_listMetadataFormats(PG_FUNCTION_ARGS) {
 	        }
 
 
-	        MetadataFormat *format = (MetadataFormat *) list_nth((List*) funcctx->user_fctx, call_cntr);
+	        OAIMetadataFormat *format = (OAIMetadataFormat *) list_nth((List*) funcctx->user_fctx, call_cntr);
 	        //format->metadataPrefix[strlen(format->metadataPrefix)] = '\0';
 	        //format->schema[strlen(format->schema)] = '\0';
 	        //format->metadataNamespace[strlen(format->metadataNamespace)] = '\0';
@@ -864,7 +1067,14 @@ int executeOAIRequest(oai_fdw_state **state, struct string *xmlResponse) {
 
 	} else {
 
-		return OAI_UNKNOWN_REQUEST;
+		if(strcmp((*state)->requestType,OAI_REQUEST_LISTMETADATAFORMATS)!=0 &&
+		   strcmp((*state)->requestType,OAI_REQUEST_LISTSETS)!=0) {
+
+			return OAI_UNKNOWN_REQUEST;
+
+		}
+
+
 
 	}
 

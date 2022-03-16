@@ -35,3 +35,23 @@ SELECT * FROM OAI_ListMetadataFormats('oai_server_dnb');
  sync-repo-xml    | http://files.dnb.de/standards/formate/syncrepo.xsd                          | http://www.d-nb.de/schemas/syncrepo
 (16 rows)
 
+SELECT * FROM OAI_ListMetadataFormats('oai_server_bioj');
+ metadataprefix |                             schema                              |                       metadatanamespace                        
+----------------+-----------------------------------------------------------------+----------------------------------------------------------------
+ nlm            | http://dtd.nlm.nih.gov/publishing/2.3/xsd/journalpublishing.xsd | http://td.nlm.nih.gov/publishing/2.3
+ oai_marc       | http://www.openarchives.org/OAI/1.1/oai_marc.xsd                | http://www.openarchives.org/OAI/1.1/oai_marc
+ rfc1807        | http://www.openarchives.org/OAI/1.1/rfc1807.xsd                 | http://info.internet.isi.edu:80/in-notes/rfc/files/rfc1807.txt
+ marcxml        | http://www.loc.gov/standards/marcxml/schema/MARC21slim.xsd      | http://www.loc.gov/MARC21/slim
+ oai_dc         | http://www.openarchives.org/OAI/2.0/oai_dc.xsd                  | http://www.openarchives.org/OAI/2.0/oai_dc/
+(5 rows)
+
+SELECT * FROM OAI_ListMetadataFormats('oai_server_bjihs');
+ metadataprefix |                                 schema                                  |                       metadatanamespace                        
+----------------+-------------------------------------------------------------------------+----------------------------------------------------------------
+ oai_dc         | http://www.openarchives.org/OAI/2.0/oai_dc.xsd                          | http://www.openarchives.org/OAI/2.0/oai_dc/
+ rfc1807        | http://www.openarchives.org/OAI/1.1/rfc1807.xsd                         | http://info.internet.isi.edu:80/in-notes/rfc/files/rfc1807.txt
+ oai_marc       | http://www.openarchives.org/OAI/1.1/oai_marc.xsd                        | http://www.openarchives.org/OAI/1.1/oai_marc
+ marcxml        | http://www.loc.gov/standards/marcxml/schema/MARC21slim.xsd              | http://www.loc.gov/MARC21/slim
+ jats           | https://jats.nlm.nih.gov/publishing/0.4/xsd/JATS-journalpublishing0.xsd | http://jats.nlm.nih.gov
+(5 rows)
+

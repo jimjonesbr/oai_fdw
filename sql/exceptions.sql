@@ -107,7 +107,7 @@ SELECT * FROM oai_table_err9 LIMIT 1;
 
 CREATE FOREIGN TABLE oai_table_err10 (
   status text         OPTIONS (oai_node 'status')
-) SERVER oai_server_ulb;
+) SERVER oai_server_ulb OPTIONS (metadataPrefix 'oai_dc');
 
 SELECT * FROM oai_table_err10 LIMIT 1;
 

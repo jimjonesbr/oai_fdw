@@ -1,7 +1,6 @@
 -- No metadataprefix SERVER OPTION
 CREATE SERVER oai_server_err1 FOREIGN DATA WRAPPER oai_fdw 
 OPTIONS (url 'https://services.dnb.de/oai/repository');
-ERROR:  required option 'metadataprefix' is missing
 -- No url SERVER OPTION
 CREATE SERVER oai_server_err2 FOREIGN DATA WRAPPER oai_fdw 
 OPTIONS (metadataprefix 'oai_dc');
@@ -127,7 +126,7 @@ ERROR:  invalid data type for 'oai_table_err9.format': 142
 HINT:  OAI metadataprefix must be of type 'text' or 'varchar'.
 CREATE FOREIGN TABLE oai_table_err10 (
   status text         OPTIONS (oai_node 'status')
-) SERVER oai_server_ulb;
+) SERVER oai_server_ulb OPTIONS (metadataPrefix 'oai_dc');
 SELECT * FROM oai_table_err10 LIMIT 1;
 ERROR:  invalid data type for 'oai_table_err10.status': 25
 HINT:  OAI status must be of type 'boolean'.
