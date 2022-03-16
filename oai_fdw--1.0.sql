@@ -23,11 +23,11 @@ CREATE TYPE OAI_MetadataFormat AS (
 	metadataNamespace text
 );
 
-CREATE OR REPLACE FUNCTION oai_fdw_version()
+CREATE OR REPLACE FUNCTION OAI_Version()
   RETURNS text AS 'MODULE_PATHNAME', 'oai_fdw_version'
   LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION oai_fdw_ListMetadataFormats(text)
+CREATE OR REPLACE FUNCTION OAI_ListMetadataFormats(text)
   RETURNS SETOF OAI_MetadataFormat AS 'MODULE_PATHNAME', 'oai_fdw_listMetadataFormats'
   LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
   

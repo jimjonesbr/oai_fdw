@@ -1,10 +1,10 @@
-SELECT oai_fdw_version() IS NULL;
+SELECT OAI_Version() IS NULL;
  ?column? 
 ----------
  f
 (1 row)
 
-SELECT * FROM oai_fdw_listMetadataFormats('oai_server_ulb');
+SELECT * FROM OAI_ListMetadataFormats('oai_server_ulb');
  metadataprefix |                               schema                               |              metadatanamespace              
 ----------------+--------------------------------------------------------------------+---------------------------------------------
  oai_dc         | http://www.openarchives.org/OAI/2.0/oai_dc.xsd                     | http://www.openarchives.org/OAI/2.0/oai_dc/
@@ -14,7 +14,7 @@ SELECT * FROM oai_fdw_listMetadataFormats('oai_server_ulb');
  epicur         | http://www.persistent-identifier.de/xepicur/version1.0/xepicur.xsd | urn:nbn:de:1111-2004033116
 (5 rows)
 
-SELECT * FROM oai_fdw_listMetadataFormats('oai_server_dnb');
+SELECT * FROM OAI_ListMetadataFormats('oai_server_dnb');
   metadataprefix  |                                   schema                                    |                            metadatanamespace                            
 ------------------+-----------------------------------------------------------------------------+-------------------------------------------------------------------------
  MARC21plus-1-xml | http://www.loc.gov/standards/marcxml/schema/MARC21slim.xsd                  | http://www.loc.gov/MARC21/slim
