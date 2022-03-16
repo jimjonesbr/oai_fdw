@@ -131,3 +131,12 @@ CREATE FOREIGN TABLE oai_table_err10 (
 SELECT * FROM oai_table_err10 LIMIT 1;
 ERROR:  invalid data type for 'oai_table_err10.status': 25
 HINT:  OAI status must be of type 'boolean'.
+-- Wrong FOREIGN SERVER
+SELECT * FROM oai_fdw_listMetadataFormats('foo');
+ERROR:  FOREIGN SERVER does not exist: 'foo'
+-- NULL FOREIGN SERVER
+SELECT * FROM oai_fdw_listMetadataFormats(NULL);
+ metadataprefix | schema | metadatanamespace 
+----------------+--------+-------------------
+(0 rows)
+

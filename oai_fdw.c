@@ -242,14 +242,14 @@ void _PG_init(void) {
 
 Datum oai_fdw_version(PG_FUNCTION_ARGS) {
 
-	StringInfoData url_bufffer;
-	initStringInfo(&url_bufffer);
+	StringInfoData version_bufffer;
+	initStringInfo(&version_bufffer);
 
-	appendStringInfo(&url_bufffer,"oai fdw = %s,",OAI_FDW_VERSION);
-	appendStringInfo(&url_bufffer," libxml = %s",LIBXML_DOTTED_VERSION);
-	appendStringInfo(&url_bufffer," libcurl = %s,",curl_version());
+	appendStringInfo(&version_bufffer,"oai fdw = %s,",OAI_FDW_VERSION);
+	appendStringInfo(&version_bufffer," libxml = %s,",LIBXML_DOTTED_VERSION);
+	appendStringInfo(&version_bufffer," libcurl = %s",curl_version());
 
-    PG_RETURN_TEXT_P(cstring_to_text(url_bufffer.data));
+    PG_RETURN_TEXT_P(cstring_to_text(version_bufffer.data));
 }
 
 List *getMetadataFormats(char *url) {
@@ -282,18 +282,13 @@ List *getMetadataFormats(char *url) {
 			elog(WARNING,"invalid MARC21/XML document.");
 		}
 
-		//elog(WARNING,"DOC %s",xmlStream.ptr);
-
 		for (oai_root = xmlroot->children; oai_root != NULL; oai_root = oai_root->next) {
 
 			if (oai_root->type != XML_ELEMENT_NODE) continue;
 
-			//elog(WARNING,"OAI_ROOT");
 			if (xmlStrcmp(oai_root->name, (xmlChar*) "ListMetadataFormats") != 0) continue;
 
 			for (ListMetadataFormats = oai_root->children; ListMetadataFormats != NULL; ListMetadataFormats = ListMetadataFormats->next) {
-
-				//elog(WARNING,"  LISTMETADATAFORMATS > %s",ListMetadataFormats->name);
 
 				if (ListMetadataFormats->type != XML_ELEMENT_NODE)	continue;
 				if (xmlStrcmp(ListMetadataFormats->name, (xmlChar*) "metadataFormat") != 0) continue;
@@ -553,6 +548,12 @@ Datum oai_fdw_listMetadataFormats(PG_FUNCTION_ARGS) {
 
 			}
 
+		} else {
+
+			ereport(ERROR,
+					(errcode(ERRCODE_CONNECTION_DOES_NOT_EXIST),
+					 errmsg("FOREIGN SERVER does not exist: '%s'",srvname)));
+
 		}
 
 
@@ -646,7 +647,7 @@ Datum oai_fdw_listMetadataFormats(PG_FUNCTION_ARGS) {
 
 	        //elog(WARNING,"ANTES DO PALLOC >>> \n\n'%s' \n'%s' \n'%s'\n", format->metadataPrefix, format->schema, format->metadataNamespace);
 
-	        const size_t MAX_SIZE = 500;
+	        const size_t MAX_SIZE = 512;
 	        values = (char **) palloc(3 * sizeof(char *));
 	        values[0] = (char *) palloc(MAX_SIZE * sizeof(char));
 	        values[1] = (char *) palloc(MAX_SIZE * sizeof(char));
@@ -687,10 +688,10 @@ Datum oai_fdw_listMetadataFormats(PG_FUNCTION_ARGS) {
 	        result = HeapTupleGetDatum(tuple);
 
 	        /* clean up (this is not really necessary) */
-	        pfree(values[0]);
-	        pfree(values[1]);
-	        pfree(values[2]);
-	        pfree(values);
+	        //pfree(values[0]);
+	        //pfree(values[1]);
+	       // pfree(values[2]);
+	        //pfree(values);
 
 	        //elog(WARNING,"GOT HERE SRF_RETURN_NEXT");
 

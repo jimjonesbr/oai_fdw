@@ -111,3 +111,8 @@ CREATE FOREIGN TABLE oai_table_err10 (
 
 SELECT * FROM oai_table_err10 LIMIT 1;
 
+-- Wrong FOREIGN SERVER
+SELECT * FROM oai_fdw_listMetadataFormats('foo');
+
+-- NULL FOREIGN SERVER
+SELECT * FROM oai_fdw_listMetadataFormats(NULL);
