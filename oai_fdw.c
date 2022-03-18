@@ -215,10 +215,7 @@ PG_FUNCTION_INFO_V1(oai_fdw_version);
 PG_FUNCTION_INFO_V1(oai_fdw_listMetadataFormats);
 PG_FUNCTION_INFO_V1(oai_fdw_listSets);
 
-
 void _PG_init(void);
-//extern PGDLLEXPORT void _PG_init(void);
-
 
 void oai_fdw_GetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid);
 void oai_fdw_GetForeignPaths(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid);
@@ -312,13 +309,32 @@ List *getSets(char *url) {
 
 					if (xmlStrcmp(SetElement->name, (xmlChar*) "setSpec") == 0) {
 
-						set->setSpec = palloc(sizeof(char)*strlen(xmlNodeGetContent(SetElement))+1);
-						set->setSpec = xmlNodeGetContent(SetElement);
+						char *spec = xmlNodeGetContent(SetElement);
+						set->setSpec = spec;
+						//set->setSpec = palloc(sizeof(char)*strlen(spec)+1);
+						//set->setSpec = palloc(VARHDRSZ + strlen(spec));
+						//memset (set->setSpec, 0, 256);
+
+						//set->setSpec = spec;
+						//SET_VARSIZE(set->setSpec, VARHDRSZ + strlen(spec));
+						//set->setSpec[strlen(spec)] = '\0';
+						//memcpy(set->setSpec, spec, strlen(spec));
+						//set->setSpec[strlen(spec)] = '\0';
+
 
 					} else if (xmlStrcmp(SetElement->name, (xmlChar*) "setName") == 0) {
 
-						set->setName = palloc(sizeof(char)*strlen(xmlNodeGetContent(SetElement))+1);
-						set->setName = xmlNodeGetContent(SetElement);
+						char *name = xmlNodeGetContent(SetElement);
+						set->setName = name;
+						//set->setName = palloc(sizeof(char)*strlen(name)+1);
+						//set->setName = xmlNodeGetContent(SetElement);
+						//set->setName[strlen(name)] = '\0';
+
+						//set->setName = palloc(VARHDRSZ + strlen(name));
+						//memset (set->setName, 0, 256);
+						//SET_VARSIZE(set->setName, VARHDRSZ + strlen(name));
+						//memcpy(set->setName, name, strlen(name));
+						//set->setName[strlen(name)] = '\0';
 
 					}
 
@@ -603,14 +619,16 @@ Datum oai_fdw_listSets(PG_FUNCTION_ARGS) {
 	text *srvname_text = PG_GETARG_TEXT_P(0);
 	const char * srvname = text_to_cstring(srvname_text);
 
-
 	FuncCallContext     *funcctx;
+	AttInMetadata       *attinmeta;
+	TupleDesc            tupdesc;
 	int                  call_cntr;
 	int                  max_calls;
-	TupleDesc            tupdesc;
-	AttInMetadata       *attinmeta;
 
 	if (SRF_IS_FIRSTCALL())	{
+
+		funcctx = SRF_FIRSTCALL_INIT();
+		MemoryContext   oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
 
 		const char *url;
 		server = GetForeignServerByName(srvname, true);
@@ -622,10 +640,7 @@ Datum oai_fdw_listSets(PG_FUNCTION_ARGS) {
 			foreach(cell, server->options) {
 
 				DefElem *def = lfirst_node(DefElem, cell);
-
-				if(strcmp(def->defname,"url")==0) {
-					url = defGetString(def);
-				}
+				if(strcmp(def->defname,"url")==0) url = defGetString(def);
 
 			}
 
@@ -636,32 +651,16 @@ Datum oai_fdw_listSets(PG_FUNCTION_ARGS) {
 
 		}
 
-
-		MemoryContext   oldcontext;
-
-		/* create a function context for cross-call persistence */
-		funcctx = SRF_FIRSTCALL_INIT();
-
 		List *sets = getSets(url);
 
 		funcctx->user_fctx = sets;
 
-		/* switch to memory context appropriate for multiple function calls */
-		oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
-
-		/* total number of tuples to be returned */
-		if(sets)	funcctx->max_calls = sets->length;
-
-		/* Build a tuple descriptor for our result type */
+		if(sets) funcctx->max_calls = sets->length;
 		if (get_call_result_type(fcinfo, NULL, &tupdesc) != TYPEFUNC_COMPOSITE)
-			ereport(ERROR,(
-					errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					errmsg("function returning record called in context that cannot accept type record")));
+			ereport(ERROR,(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					       errmsg("function returning record called in context that cannot accept type record")));
 
-		/*
-		 * generate attribute metadata needed later to produce tuples from raw
-		 * C strings
-		 */
+
 		attinmeta = TupleDescGetAttInMetadata(tupdesc);
 		funcctx->attinmeta = attinmeta;
 
@@ -669,48 +668,56 @@ Datum oai_fdw_listSets(PG_FUNCTION_ARGS) {
 
 	}
 
-	/* stuff done on every call of the function */
 	funcctx = SRF_PERCALL_SETUP();
 
 	call_cntr = funcctx->call_cntr;
 	max_calls = funcctx->max_calls;
 	attinmeta = funcctx->attinmeta;
 
-	if (call_cntr < max_calls)    /* do when there is more left to send */
-	{
+	if (call_cntr < max_calls) {
+
 		char       *values[2];
-		HeapTuple   tuple;
-		Datum       result;
+		HeapTuple    tuple;
+		Datum        result;
 
 		OAISet *set = (OAISet *) list_nth((List*) funcctx->user_fctx, call_cntr);
 
-		//const size_t MAX_SIZE = 512;
+		elog(WARNING,"SIZE LIST > %d",call_cntr);
+		//int MAX_SIZE = 256;
 		//values = (char **) palloc(2 * sizeof(char *));
 		//values[0] = (char *) palloc(MAX_SIZE * sizeof(char));
 		//values[1] = (char *) palloc(MAX_SIZE * sizeof(char));
 
-		//snprintf(values[0], MAX_SIZE, "%s", set->setSpec);
-		//snprintf(values[1], MAX_SIZE, "%s", set->setName);
+		//snprintf(values[0], MAX_SIZE, "%s",set->setSpec);
+		//snprintf(values[1], MAX_SIZE, "%s",set->setName);
 
-		set->setSpec[strlen(set->setSpec)] = '\0';
-		set->setName[strlen(set->setName)] = '\0';
+		char name[512];
+		char spec[512];
 
-		values[0] = set->setSpec;
-		values[1] = set->setName;
+		snprintf(name, 512, "%s",set->setName);
+		snprintf(spec, 512, "%s",set->setSpec);
 
-		/* build a tuple */
+		//memcpy(name, set->setName, MAX_SIZE);
+
+		//char spec[MAX_SIZE];
+		//memcpy(spec, set->setSpec, MAX_SIZE);
+
+		//snprintf(values[0], MAX_SIZE, "%s",name);
+		//snprintf(values[1], MAX_SIZE, "%s",spec);
+
+		values[0] = spec;
+		values[1] = name;
+
 		tuple = BuildTupleFromCStrings(attinmeta, values);
-
-		/* make the tuple into a datum */
 		result = HeapTupleGetDatum(tuple);
 
-		/* clean up (this is not really necessary) */
-		elog(DEBUG1,"#############\n\nSetName > '%s' \nSetName > '%s'\n",set->setSpec,set->setName);
-
+		//elog(WARNING,"\n\nSetSpec > '%s' \nSetName > '%s'\n",spec,name);
 		SRF_RETURN_NEXT(funcctx, result);
 
 	} else {
+
 		SRF_RETURN_DONE(funcctx);
+
 	}
 
 
