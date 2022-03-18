@@ -136,3 +136,9 @@ SELECT * FROM OAI_ListSets('foo');
 
 -- OAI_ListSes: NULL FOREIGN SERVER
 SELECT * FROM OAI_ListSets(NULL);
+
+-- OAI_Identify: Wrong FOREIGN SERVER
+SELECT * FROM OAI_Identify('foo');
+
+-- OAI_Identify: NULL FOREIGN SERVER
+SELECT * FROM OAI_Identify(NULL);

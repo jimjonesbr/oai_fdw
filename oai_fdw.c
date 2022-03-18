@@ -160,6 +160,13 @@ typedef struct OAISet {
 
 } OAISet;
 
+typedef struct OAIIdentityNode {
+
+	char *name;
+	char *description;
+
+} OAIIdentityNode;
+
 struct string {
 	char *ptr;
 	size_t len;
@@ -208,12 +215,15 @@ extern Datum oai_fdw_validator(PG_FUNCTION_ARGS);
 extern Datum oai_fdw_version(PG_FUNCTION_ARGS);
 extern Datum oai_fdw_listMetadataFormats(PG_FUNCTION_ARGS);
 extern Datum oai_fdw_listSets(PG_FUNCTION_ARGS);
+extern Datum oai_fdw_identity(PG_FUNCTION_ARGS);
+
 
 PG_FUNCTION_INFO_V1(oai_fdw_handler);
 PG_FUNCTION_INFO_V1(oai_fdw_validator);
 PG_FUNCTION_INFO_V1(oai_fdw_version);
 PG_FUNCTION_INFO_V1(oai_fdw_listMetadataFormats);
 PG_FUNCTION_INFO_V1(oai_fdw_listSets);
+PG_FUNCTION_INFO_V1(oai_fdw_identity);
 
 void _PG_init(void);
 
@@ -243,6 +253,8 @@ static void deparseSelectColumns(oai_fdw_TableOptions *opts);
 static void requestPlanner(oai_fdw_TableOptions *opts, ForeignTable *ft, RelOptInfo *baserel);
 static char *deparseTimestamp(Datum datum);
 List *getMetadataFormats(char *url);
+List *getIdentity(char *url);
+
 
 void _PG_init(void) {
 
@@ -259,6 +271,152 @@ Datum oai_fdw_version(PG_FUNCTION_ARGS) {
 
     PG_RETURN_TEXT_P(cstring_to_text(version_bufffer.data));
 }
+
+Datum oai_fdw_identity(PG_FUNCTION_ARGS) {
+
+	ForeignServer *server;
+	text *srvname_text = PG_GETARG_TEXT_P(0);
+	const char * srvname = text_to_cstring(srvname_text);
+
+	FuncCallContext     *funcctx;
+	AttInMetadata       *attinmeta;
+	TupleDesc            tupdesc;
+	int                  call_cntr;
+	int                  max_calls;
+
+	if (SRF_IS_FIRSTCALL())	{
+
+		funcctx = SRF_FIRSTCALL_INIT();
+		MemoryContext   oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
+
+		const char *url;
+		server = GetForeignServerByName(srvname, true);
+
+		if(server) {
+
+			ListCell   *cell;
+
+			foreach(cell, server->options) {
+
+				DefElem *def = lfirst_node(DefElem, cell);
+				if(strcmp(def->defname,"url")==0) url = defGetString(def);
+
+			}
+
+		} else {
+
+			ereport(ERROR,(errcode(ERRCODE_CONNECTION_DOES_NOT_EXIST),
+					errmsg("FOREIGN SERVER does not exist: '%s'",srvname)));
+
+		}
+
+		List *identity = getIdentity(url);
+
+		funcctx->user_fctx = identity;
+
+		if(identity) funcctx->max_calls = identity->length;
+		if (get_call_result_type(fcinfo, NULL, &tupdesc) != TYPEFUNC_COMPOSITE)
+			ereport(ERROR,(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					errmsg("function returning record called in context that cannot accept type record")));
+
+
+		attinmeta = TupleDescGetAttInMetadata(tupdesc);
+		funcctx->attinmeta = attinmeta;
+
+		MemoryContextSwitchTo(oldcontext);
+
+	}
+
+	funcctx = SRF_PERCALL_SETUP();
+
+	call_cntr = funcctx->call_cntr;
+	max_calls = funcctx->max_calls;
+	attinmeta = funcctx->attinmeta;
+
+	if (call_cntr < max_calls) {
+
+		char       **values;
+		HeapTuple    tuple;
+		Datum        result;
+
+		OAIIdentityNode *set = (OAIIdentityNode *) list_nth((List*) funcctx->user_fctx, call_cntr);
+
+		int MAX_SIZE = 512;
+
+		values = (char **) palloc(2 * sizeof(char *));
+		values[0] = (char *) palloc(MAX_SIZE * sizeof(char));
+		values[1] = (char *) palloc(MAX_SIZE * sizeof(char));
+
+		snprintf(values[0], MAX_SIZE, "%s",set->name);
+		snprintf(values[1], MAX_SIZE, "%s",set->description);
+
+		tuple = BuildTupleFromCStrings(attinmeta, values);
+		result = HeapTupleGetDatum(tuple);
+
+		SRF_RETURN_NEXT(funcctx, result);
+
+	} else {
+
+		SRF_RETURN_DONE(funcctx);
+
+	}
+
+}
+
+List *getIdentity(char *url) {
+
+	struct string xmlStream;
+	int oaiExecuteResponse;
+	oai_fdw_state *state = (oai_fdw_state *) palloc0(sizeof(oai_fdw_state));
+	List *result = NIL;
+
+	state->url = url;
+	state->requestType = OAI_REQUEST_IDENTIFY;
+
+	oaiExecuteResponse = executeOAIRequest(&state,&xmlStream);
+
+	if(oaiExecuteResponse == OAI_SUCCESS) {
+
+		xmlNodePtr xmlroot = NULL;
+		xmlDocPtr xmldoc;
+		xmldoc = xmlReadMemory(xmlStream.ptr, strlen(xmlStream.ptr), NULL, NULL, XML_PARSE_SAX1);
+
+		xmlNodePtr oai_root;
+		xmlNodePtr Identity;
+
+
+		if (!xmldoc || (xmlroot = xmlDocGetRootElement(xmldoc)) == NULL) {
+			xmlFreeDoc(xmldoc);
+			xmlCleanupParser();
+			elog(WARNING,"invalid MARC21/XML document.");
+		}
+
+		for (oai_root = xmlroot->children; oai_root != NULL; oai_root = oai_root->next) {
+
+			if (oai_root->type != XML_ELEMENT_NODE) continue;
+
+			if (xmlStrcmp(oai_root->name, (xmlChar*) "Identify") != 0) continue;
+
+			for (Identity = oai_root->children; Identity != NULL; Identity = Identity->next) {
+
+				if (Identity->type != XML_ELEMENT_NODE)	continue;
+
+				OAIIdentityNode *node = (OAIIdentityNode *)palloc0(sizeof(OAIIdentityNode));
+				node->name = (char*) Identity->name;
+				node->description = (char*) xmlNodeGetContent(Identity);
+
+				result = lappend(result, node);
+
+			}
+
+		}
+
+	}
+
+	return result;
+
+}
+
 
 List *getSets(char *url) {
 
@@ -309,8 +467,8 @@ List *getSets(char *url) {
 
 					if (xmlStrcmp(SetElement->name, (xmlChar*) "setSpec") == 0) {
 
-						char *spec = xmlNodeGetContent(SetElement);
-						set->setSpec = spec;
+						//char *spec = xmlNodeGetContent(SetElement);
+						set->setSpec = xmlNodeGetContent(SetElement);
 						//set->setSpec = palloc(sizeof(char)*strlen(spec)+1);
 						//set->setSpec = palloc(VARHDRSZ + strlen(spec));
 						//memset (set->setSpec, 0, 256);
@@ -324,8 +482,8 @@ List *getSets(char *url) {
 
 					} else if (xmlStrcmp(SetElement->name, (xmlChar*) "setName") == 0) {
 
-						char *name = xmlNodeGetContent(SetElement);
-						set->setName = name;
+						//char *name = xmlNodeGetContent(SetElement);
+						set->setName = xmlNodeGetContent(SetElement);
 						//set->setName = palloc(sizeof(char)*strlen(name)+1);
 						//set->setName = xmlNodeGetContent(SetElement);
 						//set->setName[strlen(name)] = '\0';
@@ -1062,7 +1220,8 @@ int executeOAIRequest(oai_fdw_state **state, struct string *xmlResponse) {
 	} else {
 
 		if(strcmp((*state)->requestType,OAI_REQUEST_LISTMETADATAFORMATS)!=0 &&
-		   strcmp((*state)->requestType,OAI_REQUEST_LISTSETS)!=0) {
+		   strcmp((*state)->requestType,OAI_REQUEST_LISTSETS)!=0 &&
+		   strcmp((*state)->requestType,OAI_REQUEST_IDENTIFY)!=0) {
 
 			return OAI_UNKNOWN_REQUEST;
 

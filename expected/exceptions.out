@@ -112,21 +112,21 @@ HINT:  OAI identifier must be of type 'text' or 'varchar'.
 CREATE FOREIGN TABLE oai_table_err6 (
  doc int                 OPTIONS (oai_node 'content')
 ) 
-SERVER oai_server_ulb OPTIONS (metadataPrefix 'oai_dc');;
+SERVER oai_server_ulb OPTIONS (metadataPrefix 'oai_dc');
 SELECT * FROM oai_table_err6 LIMIT 1;
 ERROR:  invalid data type for 'oai_table_err6.doc': 23
 HINT:  OAI content expects one of the following types: 'xml', 'text' or 'varchar'.
 CREATE FOREIGN TABLE oai_table_err7 (
  sets varchar            OPTIONS (oai_node 'setspec')
 ) 
-SERVER oai_server_ulb OPTIONS (metadataPrefix 'oai_dc');;
+SERVER oai_server_ulb OPTIONS (metadataPrefix 'oai_dc');
 SELECT * FROM oai_table_err7 LIMIT 1;
 ERROR:  invalid data type for 'oai_table_err7.sets': 1043
 HINT:  OAI setspec expects one of the following types: 'text[]', 'varchar[]'.
 CREATE FOREIGN TABLE oai_table_err8 (
  updatedate text   OPTIONS (oai_node 'datestamp')
 ) 
-SERVER oai_server_ulb OPTIONS (metadataPrefix 'oai_dc');;
+SERVER oai_server_ulb OPTIONS (metadataPrefix 'oai_dc');
 SELECT * FROM oai_table_err8 LIMIT 1;
 ERROR:  invalid data type for 'oai_table_err8.updatedate': 25
 HINT:  OAI datestamp expects a 'timestamp'.
@@ -160,5 +160,14 @@ ERROR:  FOREIGN SERVER does not exist: 'foo'
 SELECT * FROM OAI_ListSets(NULL);
  setspec | setname 
 ---------+---------
+(0 rows)
+
+-- OAI_Identify: Wrong FOREIGN SERVER
+SELECT * FROM OAI_Identify('foo');
+ERROR:  FOREIGN SERVER does not exist: 'foo'
+-- OAI_Identify: NULL FOREIGN SERVER
+SELECT * FROM OAI_Identify(NULL);
+ name | description 
+------+-------------
 (0 rows)
 

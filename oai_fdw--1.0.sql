@@ -17,6 +17,11 @@ CREATE TYPE oai_node AS (
 	description text
 );
 
+CREATE TYPE OAI_IdentityNode AS (
+	name text,
+	description text
+);
+
 CREATE TYPE OAI_Set AS (
 	setspec text,
 	setname text
@@ -38,7 +43,11 @@ CREATE OR REPLACE FUNCTION OAI_ListMetadataFormats(text)
 
 CREATE OR REPLACE FUNCTION OAI_ListSets(text)
   RETURNS SETOF OAI_Set AS 'MODULE_PATHNAME', 'oai_fdw_listSets'
-  LANGUAGE C STRICT;
+  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+  
+CREATE OR REPLACE FUNCTION OAI_Identify(text)
+  RETURNS SETOF OAI_IdentityNode AS 'MODULE_PATHNAME', 'oai_fdw_identity'
+  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
   
 CREATE FUNCTION oai_fdw_validator(text[], oid)
   RETURNS void AS 'MODULE_PATHNAME'

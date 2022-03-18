@@ -16,3 +16,6 @@ OPTIONS (url 'https://www.bioj-online.com/jms/index.php/up/oai/');
 CREATE SERVER oai_server_bjihs FOREIGN DATA WRAPPER oai_fdw 
 OPTIONS (url 'https://bjihs.emnuvens.com.br/bjihs/oai');   
 
+-- National Library of the Netherlands
+CREATE SERVER oai_server_kbnl FOREIGN DATA WRAPPER oai_fdw 
+OPTIONS (url 'http://services.kb.nl/mdo/oai');  
