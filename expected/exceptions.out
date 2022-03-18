@@ -34,7 +34,9 @@ ERROR:  empty value for option 'url'
 CREATE FOREIGN TABLE oai_table_err1 (
   id text                OPTIONS (oai_node 'foo'),
   xmldoc xml             OPTIONS (oai_node 'content')
- ) SERVER oai_server_ulb OPTIONS (setspec 'ulbmsuo');
+ ) 
+ SERVER oai_server_ulb OPTIONS (setspec 'ulbmsuo',
+                                metadataPrefix 'oai_dc');
 ERROR:  invalid oai_node option 'foo'
 HINT:  Valid column options for oai_fdw are:
 CREATE SERVER: 'url', 'metadataprefix'
@@ -44,22 +46,28 @@ CREATE TABLE: 'metadataprefix','setspec', 'from', 'until' and 'status'
 CREATE FOREIGN TABLE oai_table_err2 (
   id text                OPTIONS (oai_node ''),
   xmldoc xml             OPTIONS (oai_node 'content')
- ) SERVER oai_server_ulb OPTIONS (setspec 'ulbmsuo');
+ ) 
+ SERVER oai_server_ulb OPTIONS (setspec 'ulbmsuo',
+                                metadataPrefix 'oai_dc');
 ERROR:  empty value for option 'oai_node'
  
 -- Empty SERVER OPTION value
 CREATE FOREIGN TABLE oai_table_err3 (
   id text                OPTIONS (oai_node 'identifier'),
   xmldoc xml             OPTIONS (oai_node 'content')
- ) SERVER oai_server_ulb OPTIONS (setspec '');
+ ) 
+ SERVER oai_server_ulb OPTIONS (setspec '',
+                                metadataPrefix 'oai_dc');
 ERROR:  empty value for option 'setspec'
  
  -- Empty SERVER OPTION value
 CREATE FOREIGN TABLE oai_table_err4 (
   id text                OPTIONS (oai_node 'identifier'),
   xmldoc xml             OPTIONS (foo 'content')
- ) SERVER oai_server_ulb OPTIONS (setspec 'ulbmsuo');
-ERROR:  invalid oai_fdw option "foo"
+ ) 
+ SERVER oai_server_ulb OPTIONS (setspec 'ulbmsuo',
+                                metadataPrefix '');
+ERROR:  empty value for option 'metadataprefix'
 -- No record found: noRecordsMatch: The value of argument 'until' lies before argument 'from'
 SELECT * FROM dnb_zdb_oai_dc
 WHERE datestamp BETWEEN '2022-02-01' AND '2021-02-02';
@@ -95,47 +103,62 @@ WARNING:  OAI idDoesNotExist:
 -- Wrong data types
 CREATE FOREIGN TABLE oai_table_err5 (
   id int                 OPTIONS (oai_node 'identifier')
- ) SERVER oai_server_ulb;
+ ) 
+ SERVER oai_server_ulb OPTIONS (metadataPrefix 'oai_dc');
 SELECT * FROM oai_table_err5 LIMIT 1;
 ERROR:  invalid data type for 'oai_table_err5.id': 23
 HINT:  OAI identifier must be of type 'text' or 'varchar'.
  
 CREATE FOREIGN TABLE oai_table_err6 (
  doc int                 OPTIONS (oai_node 'content')
-) SERVER oai_server_ulb;
+) 
+SERVER oai_server_ulb OPTIONS (metadataPrefix 'oai_dc');;
 SELECT * FROM oai_table_err6 LIMIT 1;
 ERROR:  invalid data type for 'oai_table_err6.doc': 23
 HINT:  OAI content expects one of the following types: 'xml', 'text' or 'varchar'.
 CREATE FOREIGN TABLE oai_table_err7 (
  sets varchar            OPTIONS (oai_node 'setspec')
-) SERVER oai_server_ulb;
+) 
+SERVER oai_server_ulb OPTIONS (metadataPrefix 'oai_dc');;
 SELECT * FROM oai_table_err7 LIMIT 1;
 ERROR:  invalid data type for 'oai_table_err7.sets': 1043
 HINT:  OAI setspec expects one of the following types: 'text[]', 'varchar[]'.
 CREATE FOREIGN TABLE oai_table_err8 (
  updatedate text   OPTIONS (oai_node 'datestamp')
-) SERVER oai_server_ulb;
+) 
+SERVER oai_server_ulb OPTIONS (metadataPrefix 'oai_dc');;
 SELECT * FROM oai_table_err8 LIMIT 1;
 ERROR:  invalid data type for 'oai_table_err8.updatedate': 25
 HINT:  OAI datestamp expects a 'timestamp'.
 CREATE FOREIGN TABLE oai_table_err9 (
    format xml            OPTIONS (oai_node 'metadataprefix')
-) SERVER oai_server_ulb;
+) 
+SERVER oai_server_ulb OPTIONS (metadataPrefix 'oai_dc');
 SELECT * FROM oai_table_err9 LIMIT 1;
 ERROR:  invalid data type for 'oai_table_err9.format': 142
 HINT:  OAI metadataprefix must be of type 'text' or 'varchar'.
 CREATE FOREIGN TABLE oai_table_err10 (
   status text         OPTIONS (oai_node 'status')
-) SERVER oai_server_ulb OPTIONS (metadataPrefix 'oai_dc');
+) 
+SERVER oai_server_ulb OPTIONS (metadataPrefix 'oai_dc');
 SELECT * FROM oai_table_err10 LIMIT 1;
 ERROR:  invalid data type for 'oai_table_err10.status': 25
 HINT:  OAI status must be of type 'boolean'.
--- Wrong FOREIGN SERVER
+-- OAI_ListMetadataFormats: Wrong FOREIGN SERVER
 SELECT * FROM OAI_ListMetadataFormats('foo');
 ERROR:  FOREIGN SERVER does not exist: 'foo'
--- NULL FOREIGN SERVER
+-- OAI_ListMetadataFormats: NULL FOREIGN SERVER
 SELECT * FROM OAI_ListMetadataFormats(NULL);
  metadataprefix | schema | metadatanamespace 
 ----------------+--------+-------------------
+(0 rows)
+
+-- OAI_ListSets: Wrong FOREIGN SERVER
+SELECT * FROM OAI_ListSets('foo');
+ERROR:  FOREIGN SERVER does not exist: 'foo'
+-- OAI_ListSes: NULL FOREIGN SERVER
+SELECT * FROM OAI_ListSets(NULL);
+ setspec | setname 
+---------+---------
 (0 rows)
 

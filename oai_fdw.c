@@ -676,42 +676,24 @@ Datum oai_fdw_listSets(PG_FUNCTION_ARGS) {
 
 	if (call_cntr < max_calls) {
 
-		char       *values[2];
+		char       **values;
 		HeapTuple    tuple;
 		Datum        result;
 
 		OAISet *set = (OAISet *) list_nth((List*) funcctx->user_fctx, call_cntr);
 
-		elog(WARNING,"SIZE LIST > %d",call_cntr);
-		//int MAX_SIZE = 256;
-		//values = (char **) palloc(2 * sizeof(char *));
-		//values[0] = (char *) palloc(MAX_SIZE * sizeof(char));
-		//values[1] = (char *) palloc(MAX_SIZE * sizeof(char));
+		int MAX_SIZE = 512;
 
-		//snprintf(values[0], MAX_SIZE, "%s",set->setSpec);
-		//snprintf(values[1], MAX_SIZE, "%s",set->setName);
+		values = (char **) palloc(2 * sizeof(char *));
+		values[0] = (char *) palloc(MAX_SIZE * sizeof(char));
+		values[1] = (char *) palloc(MAX_SIZE * sizeof(char));
 
-		char name[512];
-		char spec[512];
-
-		snprintf(name, 512, "%s",set->setName);
-		snprintf(spec, 512, "%s",set->setSpec);
-
-		//memcpy(name, set->setName, MAX_SIZE);
-
-		//char spec[MAX_SIZE];
-		//memcpy(spec, set->setSpec, MAX_SIZE);
-
-		//snprintf(values[0], MAX_SIZE, "%s",name);
-		//snprintf(values[1], MAX_SIZE, "%s",spec);
-
-		values[0] = spec;
-		values[1] = name;
+		snprintf(values[0], MAX_SIZE, "%s",set->setSpec);
+		snprintf(values[1], MAX_SIZE, "%s",set->setName);
 
 		tuple = BuildTupleFromCStrings(attinmeta, values);
 		result = HeapTupleGetDatum(tuple);
 
-		//elog(WARNING,"\n\nSetSpec > '%s' \nSetName > '%s'\n",spec,name);
 		SRF_RETURN_NEXT(funcctx, result);
 
 	} else {
@@ -740,6 +722,9 @@ Datum oai_fdw_listMetadataFormats(PG_FUNCTION_ARGS) {
 	if (SRF_IS_FIRSTCALL())
 	{
 
+		funcctx = SRF_FIRSTCALL_INIT();
+		MemoryContext   oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
+
 		const char *url;
 
 		server = GetForeignServerByName(srvname, true);
@@ -767,17 +752,17 @@ Datum oai_fdw_listMetadataFormats(PG_FUNCTION_ARGS) {
 		}
 
 
-		MemoryContext   oldcontext;
+		//MemoryContext   oldcontext;
 
 		/* create a function context for cross-call persistence */
-		funcctx = SRF_FIRSTCALL_INIT();
+		//funcctx = SRF_FIRSTCALL_INIT();
 
 		List *formats = getMetadataFormats(url);
 
 		funcctx->user_fctx = formats; //getMetadataFormats("https://sammlungen.ulb.uni-muenster.de/oai");
 
 		/* switch to memory context appropriate for multiple function calls */
-		oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
+		//oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
 
 		/* total number of tuples to be returned */
 		//funcctx->max_calls = PG_GETARG_UINT32(0);
@@ -825,27 +810,27 @@ Datum oai_fdw_listMetadataFormats(PG_FUNCTION_ARGS) {
 
 	        //}
 
-	        size_t max_prefix = 0;
-	        size_t max_schema = 0;
-	        size_t max_nspace = 0;
+	        //size_t max_prefix = 0;
+	        //size_t max_schema = 0;
+	        //size_t max_nspace = 0;
 
-	        ListCell *cell;
+	        //ListCell *cell;
 
-	        foreach(cell, funcctx->user_fctx) {
+	        //foreach(cell, funcctx->user_fctx) {
 
 				//DefElem *def = lfirst_node(DefElem, cell);
-	        	OAIMetadataFormat *format = (OAIMetadataFormat *) lfirst_node(DefElem, cell);
+	        //	OAIMetadataFormat *format = (OAIMetadataFormat *) lfirst_node(DefElem, cell);
 
-	        	if(strlen(format->metadataPrefix)>max_prefix) max_prefix = strlen(format->metadataPrefix);
-	        	if(strlen(format->schema)>max_schema) max_schema = strlen(format->schema);
-	        	if(strlen(format->metadataNamespace)>max_nspace) max_nspace = strlen(format->metadataNamespace);
+	        //	if(strlen(format->metadataPrefix)>max_prefix) max_prefix = strlen(format->metadataPrefix);
+	        //	if(strlen(format->schema)>max_schema) max_schema = strlen(format->schema);
+	        // 	if(strlen(format->metadataNamespace)>max_nspace) max_nspace = strlen(format->metadataNamespace);
 				//elog(WARNING,">>>>>  %s",(format->metadataPrefix));
 	        	//elog(WARNING,"%s (%d), %s (%d), %s (%d)",format->metadataPrefix,strlen(format->metadataPrefix), format->schema, strlen(format->schema), format->metadataNamespace, strlen(format->metadataNamespace));
 
-	        }
+	        //}
 
 
-	        OAIMetadataFormat *format = (OAIMetadataFormat *) list_nth((List*) funcctx->user_fctx, call_cntr);
+
 	        //format->metadataPrefix[strlen(format->metadataPrefix)] = '\0';
 	        //format->schema[strlen(format->schema)] = '\0';
 	        //format->metadataNamespace[strlen(format->metadataNamespace)] = '\0';
@@ -856,6 +841,8 @@ Datum oai_fdw_listMetadataFormats(PG_FUNCTION_ARGS) {
 	         */
 
 	        //elog(WARNING,"ANTES DO PALLOC >>> \n\n'%s' \n'%s' \n'%s'\n", format->metadataPrefix, format->schema, format->metadataNamespace);
+
+	        OAIMetadataFormat *format = (OAIMetadataFormat *) list_nth((List*) funcctx->user_fctx, call_cntr);
 
 	        const size_t MAX_SIZE = 512;
 	        values = (char **) palloc(3 * sizeof(char *));

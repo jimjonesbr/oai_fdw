@@ -34,25 +34,33 @@ OPTIONS (url '',
 CREATE FOREIGN TABLE oai_table_err1 (
   id text                OPTIONS (oai_node 'foo'),
   xmldoc xml             OPTIONS (oai_node 'content')
- ) SERVER oai_server_ulb OPTIONS (setspec 'ulbmsuo');
+ ) 
+ SERVER oai_server_ulb OPTIONS (setspec 'ulbmsuo',
+                                metadataPrefix 'oai_dc');
  
 -- Empty COLUMN OPTION value
 CREATE FOREIGN TABLE oai_table_err2 (
   id text                OPTIONS (oai_node ''),
   xmldoc xml             OPTIONS (oai_node 'content')
- ) SERVER oai_server_ulb OPTIONS (setspec 'ulbmsuo');
+ ) 
+ SERVER oai_server_ulb OPTIONS (setspec 'ulbmsuo',
+                                metadataPrefix 'oai_dc');
  
 -- Empty SERVER OPTION value
 CREATE FOREIGN TABLE oai_table_err3 (
   id text                OPTIONS (oai_node 'identifier'),
   xmldoc xml             OPTIONS (oai_node 'content')
- ) SERVER oai_server_ulb OPTIONS (setspec '');
+ ) 
+ SERVER oai_server_ulb OPTIONS (setspec '',
+                                metadataPrefix 'oai_dc');
  
  -- Empty SERVER OPTION value
 CREATE FOREIGN TABLE oai_table_err4 (
   id text                OPTIONS (oai_node 'identifier'),
   xmldoc xml             OPTIONS (foo 'content')
- ) SERVER oai_server_ulb OPTIONS (setspec 'ulbmsuo');
+ ) 
+ SERVER oai_server_ulb OPTIONS (setspec 'ulbmsuo',
+                                metadataPrefix '');
 
 -- No record found: noRecordsMatch: The value of argument 'until' lies before argument 'from'
 SELECT * FROM dnb_zdb_oai_dc
@@ -77,42 +85,54 @@ WHERE id = 'oai:dnb.de/zdb/0000000000';
 -- Wrong data types
 CREATE FOREIGN TABLE oai_table_err5 (
   id int                 OPTIONS (oai_node 'identifier')
- ) SERVER oai_server_ulb;
+ ) 
+ SERVER oai_server_ulb OPTIONS (metadataPrefix 'oai_dc');
 
 SELECT * FROM oai_table_err5 LIMIT 1;
  
 CREATE FOREIGN TABLE oai_table_err6 (
  doc int                 OPTIONS (oai_node 'content')
-) SERVER oai_server_ulb;
+) 
+SERVER oai_server_ulb OPTIONS (metadataPrefix 'oai_dc');
 
 SELECT * FROM oai_table_err6 LIMIT 1;
 
 CREATE FOREIGN TABLE oai_table_err7 (
  sets varchar            OPTIONS (oai_node 'setspec')
-) SERVER oai_server_ulb;
+) 
+SERVER oai_server_ulb OPTIONS (metadataPrefix 'oai_dc');
 
 SELECT * FROM oai_table_err7 LIMIT 1;
 
 CREATE FOREIGN TABLE oai_table_err8 (
  updatedate text   OPTIONS (oai_node 'datestamp')
-) SERVER oai_server_ulb;
+) 
+SERVER oai_server_ulb OPTIONS (metadataPrefix 'oai_dc');
 
 SELECT * FROM oai_table_err8 LIMIT 1;
 
 CREATE FOREIGN TABLE oai_table_err9 (
    format xml            OPTIONS (oai_node 'metadataprefix')
-) SERVER oai_server_ulb;
+) 
+SERVER oai_server_ulb OPTIONS (metadataPrefix 'oai_dc');
 
 SELECT * FROM oai_table_err9 LIMIT 1;
 
 CREATE FOREIGN TABLE oai_table_err10 (
   status text         OPTIONS (oai_node 'status')
-) SERVER oai_server_ulb OPTIONS (metadataPrefix 'oai_dc');
+) 
+SERVER oai_server_ulb OPTIONS (metadataPrefix 'oai_dc');
 
 SELECT * FROM oai_table_err10 LIMIT 1;
 
--- Wrong FOREIGN SERVER
+-- OAI_ListMetadataFormats: Wrong FOREIGN SERVER
 SELECT * FROM OAI_ListMetadataFormats('foo');
 
--- NULL FOREIGN SERVER
+-- OAI_ListMetadataFormats: NULL FOREIGN SERVER
 SELECT * FROM OAI_ListMetadataFormats(NULL);
+
+-- OAI_ListSets: Wrong FOREIGN SERVER
+SELECT * FROM OAI_ListSets('foo');
+
+-- OAI_ListSes: NULL FOREIGN SERVER
+SELECT * FROM OAI_ListSets(NULL);
