@@ -79,7 +79,7 @@
 #define OAI_ATTRIBUTE_FROM "from"
 #define OAI_ATTRIBUTE_UNTIL "until"
 #define OAI_ATTRIBUTE_STATUS "status"
-#define OAI_COLUMN_OPTION "oai_node"
+#define OAI_NODE_OPTION "oai_node"
 
 #define OAI_ERROR_ID_DOES_NOT_EXIST "idDoesNotExist"
 #define OAI_ERROR_NO_RECORD_MATCH "noRecordsMatch"
@@ -201,7 +201,7 @@ static struct OAIFdwOption valid_options[] =
 	{OAI_ATTRIBUTE_FROM, ForeignTableRelationId, false, false},
 	{OAI_ATTRIBUTE_UNTIL, ForeignTableRelationId, false, false},
 
-	{OAI_COLUMN_OPTION, AttributeRelationId, true, false},
+	{OAI_NODE_OPTION, AttributeRelationId, true, false},
 
 	/* EOList marker */
 	{NULL, InvalidOid, false, false}
@@ -254,6 +254,8 @@ static void requestPlanner(oai_fdw_TableOptions *opts, ForeignTable *ft, RelOptI
 static char *deparseTimestamp(Datum datum);
 List *getMetadataFormats(char *url);
 List *getIdentity(char *url);
+List *getSets(char *url);
+int check_url(char *url);
 
 
 void _PG_init(void) {
@@ -283,13 +285,14 @@ Datum oai_fdw_identity(PG_FUNCTION_ARGS) {
 	TupleDesc            tupdesc;
 	int                  call_cntr;
 	int                  max_calls;
+	MemoryContext        oldcontext;
+	List                *identity;
 
 	if (SRF_IS_FIRSTCALL())	{
 
+		char *url;
 		funcctx = SRF_FIRSTCALL_INIT();
-		MemoryContext   oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
-
-		const char *url;
+		oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
 		server = GetForeignServerByName(srvname, true);
 
 		if(server) {
@@ -310,8 +313,7 @@ Datum oai_fdw_identity(PG_FUNCTION_ARGS) {
 
 		}
 
-		List *identity = getIdentity(url);
-
+		identity = getIdentity(url);
 		funcctx->user_fctx = identity;
 
 		if(identity) funcctx->max_calls = identity->length;
@@ -338,10 +340,9 @@ Datum oai_fdw_identity(PG_FUNCTION_ARGS) {
 		char       **values;
 		HeapTuple    tuple;
 		Datum        result;
+		int MAX_SIZE = 512;
 
 		OAIIdentityNode *set = (OAIIdentityNode *) list_nth((List*) funcctx->user_fctx, call_cntr);
-
-		int MAX_SIZE = 512;
 
 		values = (char **) palloc(2 * sizeof(char *));
 		values[0] = (char *) palloc(MAX_SIZE * sizeof(char));
@@ -379,11 +380,10 @@ List *getIdentity(char *url) {
 
 		xmlNodePtr xmlroot = NULL;
 		xmlDocPtr xmldoc;
-		xmldoc = xmlReadMemory(xmlStream.ptr, strlen(xmlStream.ptr), NULL, NULL, XML_PARSE_SAX1);
-
 		xmlNodePtr oai_root;
 		xmlNodePtr Identity;
 
+		xmldoc = xmlReadMemory(xmlStream.ptr, strlen(xmlStream.ptr), NULL, NULL, XML_PARSE_SAX1);
 
 		if (!xmldoc || (xmlroot = xmlDocGetRootElement(xmldoc)) == NULL) {
 			xmlFreeDoc(xmldoc);
@@ -399,9 +399,10 @@ List *getIdentity(char *url) {
 
 			for (Identity = oai_root->children; Identity != NULL; Identity = Identity->next) {
 
+				OAIIdentityNode *node = (OAIIdentityNode *)palloc0(sizeof(OAIIdentityNode));
+
 				if (Identity->type != XML_ELEMENT_NODE)	continue;
 
-				OAIIdentityNode *node = (OAIIdentityNode *)palloc0(sizeof(OAIIdentityNode));
 				node->name = (char*) Identity->name;
 				node->description = (char*) xmlNodeGetContent(Identity);
 
@@ -434,12 +435,11 @@ List *getSets(char *url) {
 
 		xmlNodePtr xmlroot = NULL;
 		xmlDocPtr xmldoc;
-		xmldoc = xmlReadMemory(xmlStream.ptr, strlen(xmlStream.ptr), NULL, NULL, XML_PARSE_SAX1);
-
 		xmlNodePtr oai_root;
 		xmlNodePtr ListSets;
-
 		xmlNodePtr SetElement;
+
+		xmldoc = xmlReadMemory(xmlStream.ptr, strlen(xmlStream.ptr), NULL, NULL, XML_PARSE_SAX1);
 
 
 		if (!xmldoc || (xmlroot = xmlDocGetRootElement(xmldoc)) == NULL) {
@@ -456,10 +456,10 @@ List *getSets(char *url) {
 
 			for (ListSets = oai_root->children; ListSets != NULL; ListSets = ListSets->next) {
 
+				OAISet *set = (OAISet *)palloc0(sizeof(OAISet));
+
 				if (ListSets->type != XML_ELEMENT_NODE)	continue;
 				if (xmlStrcmp(ListSets->name, (xmlChar*) "set") != 0) continue;
-
-				OAISet *set = (OAISet *)palloc0(sizeof(OAISet));
 
 				for (SetElement = ListSets->children; SetElement != NULL; SetElement = SetElement->next) {
 
@@ -467,32 +467,12 @@ List *getSets(char *url) {
 
 					if (xmlStrcmp(SetElement->name, (xmlChar*) "setSpec") == 0) {
 
-						//char *spec = xmlNodeGetContent(SetElement);
-						set->setSpec = xmlNodeGetContent(SetElement);
-						//set->setSpec = palloc(sizeof(char)*strlen(spec)+1);
-						//set->setSpec = palloc(VARHDRSZ + strlen(spec));
-						//memset (set->setSpec, 0, 256);
-
-						//set->setSpec = spec;
-						//SET_VARSIZE(set->setSpec, VARHDRSZ + strlen(spec));
-						//set->setSpec[strlen(spec)] = '\0';
-						//memcpy(set->setSpec, spec, strlen(spec));
-						//set->setSpec[strlen(spec)] = '\0';
+						set->setSpec = (char*) xmlNodeGetContent(SetElement);
 
 
 					} else if (xmlStrcmp(SetElement->name, (xmlChar*) "setName") == 0) {
 
-						//char *name = xmlNodeGetContent(SetElement);
-						set->setName = xmlNodeGetContent(SetElement);
-						//set->setName = palloc(sizeof(char)*strlen(name)+1);
-						//set->setName = xmlNodeGetContent(SetElement);
-						//set->setName[strlen(name)] = '\0';
-
-						//set->setName = palloc(VARHDRSZ + strlen(name));
-						//memset (set->setName, 0, 256);
-						//SET_VARSIZE(set->setName, VARHDRSZ + strlen(name));
-						//memcpy(set->setName, name, strlen(name));
-						//set->setName[strlen(name)] = '\0';
+						set->setName = (char*) xmlNodeGetContent(SetElement);
 
 					}
 
@@ -509,6 +489,30 @@ List *getSets(char *url) {
 	return result;
 }
 
+/**
+bool isMetadataFormatValid(char* url, char* metadataFormat){
+
+	elog(ERROR,">>>>>>> url = %s, metadata = %s",url,metadataFormat);
+	List *formats = getMetadataFormats(url);
+
+
+	ListCell *lc;
+	foreach (lc, formats) {
+
+		DefElem *def = (DefElem*) lfirst(lc);
+
+		if (strcmp(def->defname, OAI_ATTRIBUTE_METADATAPREFIX)==0 &&
+			strcmp(defGetString(def),metadataFormat)==0) {
+
+			return true;
+
+		}
+
+	}
+
+	return false;
+}
+*/
 
 List *getMetadataFormats(char *url) {
 
@@ -526,13 +530,11 @@ List *getMetadataFormats(char *url) {
 
 		xmlNodePtr xmlroot = NULL;
 		xmlDocPtr xmldoc;
-		xmldoc = xmlReadMemory(xmlStream.ptr, strlen(xmlStream.ptr), NULL, NULL, XML_PARSE_SAX1);
-
 		xmlNodePtr oai_root;
 		xmlNodePtr ListMetadataFormats;
-
 		xmlNodePtr MetadataElement;
 
+		xmldoc = xmlReadMemory(xmlStream.ptr, strlen(xmlStream.ptr), NULL, NULL, XML_PARSE_SAX1);
 
 		if (!xmldoc || (xmlroot = xmlDocGetRootElement(xmldoc)) == NULL) {
 			xmlFreeDoc(xmldoc);
@@ -548,10 +550,10 @@ List *getMetadataFormats(char *url) {
 
 			for (ListMetadataFormats = oai_root->children; ListMetadataFormats != NULL; ListMetadataFormats = ListMetadataFormats->next) {
 
+				OAIMetadataFormat *format = (OAIMetadataFormat *)palloc0(sizeof(OAIMetadataFormat));
+
 				if (ListMetadataFormats->type != XML_ELEMENT_NODE)	continue;
 				if (xmlStrcmp(ListMetadataFormats->name, (xmlChar*) "metadataFormat") != 0) continue;
-
-				OAIMetadataFormat *format = (OAIMetadataFormat *)palloc0(sizeof(OAIMetadataFormat));
 
 				for (MetadataElement = ListMetadataFormats->children; MetadataElement != NULL; MetadataElement = MetadataElement->next) {
 
@@ -559,18 +561,18 @@ List *getMetadataFormats(char *url) {
 
 					if (xmlStrcmp(MetadataElement->name, (xmlChar*) "metadataPrefix") == 0) {
 
-						format->metadataPrefix = palloc(sizeof(char)*strlen(xmlNodeGetContent(MetadataElement))+1);
-						format->metadataPrefix = xmlNodeGetContent(MetadataElement);
+						//format->metadataPrefix = palloc(sizeof(char)*strlen(xmlNodeGetContent(MetadataElement))+1);
+						format->metadataPrefix = (char*) xmlNodeGetContent(MetadataElement);
 
 					} else if (xmlStrcmp(MetadataElement->name, (xmlChar*) "schema") == 0) {
 
-						format->schema = palloc(sizeof(char)*strlen(xmlNodeGetContent(MetadataElement))+1);
-						format->schema = xmlNodeGetContent(MetadataElement);
+						//format->schema = palloc(sizeof(char)*strlen(xmlNodeGetContent(MetadataElement))+1);
+						format->schema = (char*) xmlNodeGetContent(MetadataElement);
 
 					} else if (xmlStrcmp(MetadataElement->name, (xmlChar*) "metadataNamespace") == 0) {
 
-						format->metadataNamespace = palloc(sizeof(char)*strlen(xmlNodeGetContent(MetadataElement))+1);
-						format->metadataNamespace = xmlNodeGetContent(MetadataElement);
+						//format->metadataNamespace = palloc(sizeof(char)*strlen(xmlNodeGetContent(MetadataElement))+1);
+						format->metadataNamespace = (char*) xmlNodeGetContent(MetadataElement);
 
 					}
 
@@ -610,13 +612,11 @@ Datum oai_fdw_validator(PG_FUNCTION_ARGS) {
 	Oid			catalog = PG_GETARG_OID(1);
 	ListCell   *cell;
 
-//	Relation rel = table_open(PG_GETARG_DATUM(0), NoLock);
-//
-//	table_close(rel, NoLock);
-
 	struct OAIFdwOption* opt;
-	const char* source = NULL, *driver = NULL;
-	const char* config_options = NULL, *open_options = NULL;
+	//const char* source = NULL, *driver = NULL;
+	//const char* config_options = NULL, *open_options = NULL;
+	//char* url = NULL;
+	//char* metadataFormat = NULL;
 
 	/* Initialize found state to not found */
 	for (opt = valid_options; opt->optname; opt++) {
@@ -645,6 +645,10 @@ Datum oai_fdw_validator(PG_FUNCTION_ARGS) {
 
 				}
 
+				//if(strcmp(opt->optname, OAI_ATTRIBUTE_METADATAPREFIX)==0){
+				//	metadataFormat = defGetString(def);
+				//}
+
 				if(strcmp(opt->optname, OAI_ATTRIBUTE_URL)==0){
 
 					if(!check_url(defGetString(def))) {
@@ -655,10 +659,11 @@ Datum oai_fdw_validator(PG_FUNCTION_ARGS) {
 
 					}
 
+					//url = defGetString(def);
 				}
 
 				/* Store some options for testing later */
-				if (strcmp(opt->optname, OAI_COLUMN_OPTION) == 0) {
+				if (strcmp(opt->optname, OAI_NODE_OPTION) == 0) {
 
 					if(strcmp(defGetString(def), OAI_ATTRIBUTE_IDENTIFIER) !=0 &&
 					   strcmp(defGetString(def), OAI_ATTRIBUTE_METADATAPREFIX) !=0 &&
@@ -669,7 +674,7 @@ Datum oai_fdw_validator(PG_FUNCTION_ARGS) {
 
 						ereport(ERROR,
 							(errcode(ERRCODE_FDW_INVALID_OPTION_NAME),
-							 errmsg("invalid %s option '%s'",OAI_COLUMN_OPTION, defGetString(def)),
+							 errmsg("invalid %s option '%s'",OAI_NODE_OPTION, defGetString(def)),
 							 errhint("Valid column options for oai_fdw are:\nCREATE SERVER: '%s', '%s'\nCREATE TABLE: '%s','%s', '%s', '%s' and '%s'",
 								OAI_ATTRIBUTE_URL,
 								OAI_ATTRIBUTE_METADATAPREFIX,
@@ -716,6 +721,24 @@ Datum oai_fdw_validator(PG_FUNCTION_ARGS) {
 
 
 	}
+
+
+	/*
+	if(metadataFormat!=NULL && url!=NULL) {
+
+		elog(WARNING,"url > %s, metadataFormat %s",url,metadataFormat);
+
+		if(!isMetadataFormatValid(url, metadataFormat)) {
+
+				ereport(ERROR, (
+					errcode(ERRCODE_FDW_INVALID_OPTION_NAME),
+					errmsg("metadata format invalid '%s'", metadataFormat)));
+			}
+
+	}
+
+	*/
+
 
 	PG_RETURN_VOID();
 }
@@ -775,8 +798,8 @@ Datum oai_fdw_listSets(PG_FUNCTION_ARGS) {
 
 	ForeignServer *server;
 	text *srvname_text = PG_GETARG_TEXT_P(0);
-	const char * srvname = text_to_cstring(srvname_text);
-
+	char *srvname = text_to_cstring(srvname_text);
+	MemoryContext   oldcontext;
 	FuncCallContext     *funcctx;
 	AttInMetadata       *attinmeta;
 	TupleDesc            tupdesc;
@@ -785,11 +808,11 @@ Datum oai_fdw_listSets(PG_FUNCTION_ARGS) {
 
 	if (SRF_IS_FIRSTCALL())	{
 
-		funcctx = SRF_FIRSTCALL_INIT();
-		MemoryContext   oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
-
-		const char *url;
+		char *url;
+		List *sets;
 		server = GetForeignServerByName(srvname, true);
+		funcctx = SRF_FIRSTCALL_INIT();
+		oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
 
 		if(server) {
 
@@ -809,7 +832,7 @@ Datum oai_fdw_listSets(PG_FUNCTION_ARGS) {
 
 		}
 
-		List *sets = getSets(url);
+		sets = getSets(url);
 
 		funcctx->user_fctx = sets;
 
@@ -875,15 +898,16 @@ Datum oai_fdw_listMetadataFormats(PG_FUNCTION_ARGS) {
 	int                  max_calls;
 	TupleDesc            tupdesc;
 	AttInMetadata       *attinmeta;
+	MemoryContext  oldcontext;
 
 	/* stuff done only on the first call of the function */
 	if (SRF_IS_FIRSTCALL())
 	{
 
+		char *url;
+		List *formats;
 		funcctx = SRF_FIRSTCALL_INIT();
-		MemoryContext   oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
-
-		const char *url;
+		oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
 
 		server = GetForeignServerByName(srvname, true);
 
@@ -915,7 +939,7 @@ Datum oai_fdw_listMetadataFormats(PG_FUNCTION_ARGS) {
 		/* create a function context for cross-call persistence */
 		//funcctx = SRF_FIRSTCALL_INIT();
 
-		List *formats = getMetadataFormats(url);
+		formats = getMetadataFormats(url);
 
 		funcctx->user_fctx = formats; //getMetadataFormats("https://sammlungen.ulb.uni-muenster.de/oai");
 
@@ -1106,7 +1130,6 @@ int executeOAIRequest(oai_fdw_state **state, struct string *xmlResponse) {
 
 	CURL *curl;
 	CURLcode res;
-	//long resCode;
 	StringInfoData url_bufffer;
 	initStringInfo(&url_bufffer);
 
@@ -1213,10 +1236,6 @@ int executeOAIRequest(oai_fdw_state **state, struct string *xmlResponse) {
 
 		}
 
-	} else if(strcmp((*state)->requestType,OAI_REQUEST_LISTMETADATAFORMATS)==0) {
-
-
-
 	} else {
 
 		if(strcmp((*state)->requestType,OAI_REQUEST_LISTMETADATAFORMATS)!=0 &&
@@ -1226,8 +1245,6 @@ int executeOAIRequest(oai_fdw_state **state, struct string *xmlResponse) {
 			return OAI_UNKNOWN_REQUEST;
 
 		}
-
-
 
 	}
 
@@ -1245,7 +1262,6 @@ int executeOAIRequest(oai_fdw_state **state, struct string *xmlResponse) {
 		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writefunc);
 		curl_easy_setopt(curl, CURLOPT_WRITEDATA, xmlResponse);
 		curl_easy_setopt(curl, CURLOPT_FAILONERROR, true);
-//		curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &resCode);
 
 		res = curl_easy_perform(curl);
 
@@ -1367,11 +1383,10 @@ static void requestPlanner(oai_fdw_TableOptions *opts, ForeignTable *ft, RelOptI
 
 		foreach (lc, options) {
 
+			DefElem *def = (DefElem*) lfirst(lc);
 			opts->numfdwcols++;
 
-			DefElem *def = (DefElem*) lfirst(lc);
-
-			if (strcmp(def->defname, OAI_COLUMN_OPTION)==0) {
+			if (strcmp(def->defname, OAI_NODE_OPTION)==0) {
 
 				char *option_value = defGetString(def);
 
@@ -1508,7 +1523,7 @@ static char *getColumnOption(Oid foreigntableid, int16 attnum) {
 
 				DefElem *def = (DefElem*) lfirst(lc);
 
-				if (strcmp(def->defname, OAI_COLUMN_OPTION)==0) {
+				if (strcmp(def->defname, OAI_NODE_OPTION)==0) {
 
 					optionValue = defGetString(def);
 
@@ -2205,13 +2220,13 @@ void createOAITuple(TupleTableSlot *slot, oai_fdw_state *state, oai_Record *oai 
 
 			DefElem *def = (DefElem*) lfirst(lc);
 
-			if (strcmp(def->defname, OAI_COLUMN_OPTION)==0) {
+			if (strcmp(def->defname, OAI_NODE_OPTION)==0) {
 
 				char * option_value = defGetString(def);
 
 				if (strcmp(option_value,OAI_ATTRIBUTE_STATUS)==0){
 
-					elog(DEBUG2,"  createOAITuple: column %d option '%d'",i,option_value);
+					elog(DEBUG2,"  createOAITuple: column %d option '%s'",i,option_value);
 
 					slot->tts_isnull[i] = false;
 					slot->tts_values[i] = oai->isDeleted;
