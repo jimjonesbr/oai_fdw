@@ -95,25 +95,26 @@ typedef struct oai_fdw_state {
 
 	int end;
 
-	int current_row;
-	int numcols;
-	int numfdwcols;
-	int  rowcount;
-	char *identifier;
-	char *document;
-	char *date;
-	char *set;
-	char *url;
-	char *from;
-	char *until;
-	char *metadataPrefix;
-	char *resumptionToken;
-	char* requestType;
-	char* current_identifier;
+	int 	current_row;
+	int 	numcols;
+	int 	numfdwcols;
+	int		rowcount;
+	char	*completeListSize;
+	char	*identifier;
+	char 	*document;
+	char 	*date;
+	char 	*set;
+	char 	*url;
+	char 	*from;
+	char 	*until;
+	char 	*metadataPrefix;
+	char 	*resumptionToken;
+	char	*requestType;
+	char	*current_identifier;
 
-	Oid foreigntableid;
-	List *columnlist;
-	xmlNodePtr xmlroot;
+	Oid 		foreigntableid;
+	List 		*columnlist;
+	xmlNodePtr 	xmlroot;
 
 } oai_fdw_state;
 
@@ -123,7 +124,9 @@ typedef struct oai_Record {
 	char *content;
 	char *datestamp;
 	char *metadataPrefix;
+	char *completeListSize;
 	bool isDeleted;
+
 	ArrayType *setsArray;
 } oai_Record;
 
@@ -290,7 +293,7 @@ Datum oai_fdw_identity(PG_FUNCTION_ARGS) {
 
 	if (SRF_IS_FIRSTCALL())	{
 
-		char *url;
+		char *url = NULL;
 		funcctx = SRF_FIRSTCALL_INIT();
 		oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
 		server = GetForeignServerByName(srvname, true);
@@ -651,7 +654,7 @@ Datum oai_fdw_validator(PG_FUNCTION_ARGS) {
 
 				if(strcmp(opt->optname, OAI_ATTRIBUTE_URL)==0){
 
-					if(!check_url(defGetString(def))) {
+					if(check_url(defGetString(def))!=CURLE_OK) {
 
 						ereport(ERROR,
 								(errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
@@ -789,9 +792,26 @@ int check_url(char *url)
 
         /* always cleanup */
         curl_easy_cleanup(curl);
+
+    } else {
+
+    	return CURLE_FAILED_INIT;
     }
 
-    return (response == CURLE_OK) ? 1 : 0;
+    /*
+    if(response != CURLE_OK) {
+
+    	return 1;
+
+    } else {
+
+    	return response;
+    }
+    */
+
+    return response;
+
+    //return (response == CURLE_OK) ? 1 : 0;
 }
 
 Datum oai_fdw_listSets(PG_FUNCTION_ARGS) {
@@ -808,8 +828,8 @@ Datum oai_fdw_listSets(PG_FUNCTION_ARGS) {
 
 	if (SRF_IS_FIRSTCALL())	{
 
-		char *url;
 		List *sets;
+		char *url = NULL;
 		server = GetForeignServerByName(srvname, true);
 		funcctx = SRF_FIRSTCALL_INIT();
 		oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
@@ -904,7 +924,7 @@ Datum oai_fdw_listMetadataFormats(PG_FUNCTION_ARGS) {
 	if (SRF_IS_FIRSTCALL())
 	{
 
-		char *url;
+		char *url = NULL;
 		List *formats;
 		funcctx = SRF_FIRSTCALL_INIT();
 		oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
@@ -919,9 +939,7 @@ Datum oai_fdw_listMetadataFormats(PG_FUNCTION_ARGS) {
 
 				DefElem *def = lfirst_node(DefElem, cell);
 
-				if(strcmp(def->defname,"url")==0) {
-					url = defGetString(def);
-				}
+				if(strcmp(def->defname,"url")==0) url = defGetString(def);
 
 			}
 
@@ -933,14 +951,7 @@ Datum oai_fdw_listMetadataFormats(PG_FUNCTION_ARGS) {
 
 		}
 
-
-		//MemoryContext   oldcontext;
-
-		/* create a function context for cross-call persistence */
-		//funcctx = SRF_FIRSTCALL_INIT();
-
 		formats = getMetadataFormats(url);
-
 		funcctx->user_fctx = formats; //getMetadataFormats("https://sammlungen.ulb.uni-muenster.de/oai");
 
 		/* switch to memory context appropriate for multiple function calls */
@@ -1305,6 +1316,7 @@ void listRecordsRequest(oai_fdw_state *state) {
 
 		xmlDocPtr xmldoc;
 		xmlNodePtr recordsList;
+		xmlNodePtr record;
 
 		xmlInitParser();
 
@@ -1330,6 +1342,22 @@ void listRecordsRequest(oai_fdw_state *state) {
 
 					xmlFreeDoc(xmldoc);
 					xmlCleanupParser();
+
+				}
+
+				for (record = recordsList->children; record!= NULL; record = record->next) {
+
+					if (record->type != XML_ELEMENT_NODE) continue;
+
+					if (xmlStrcmp(record->name, (xmlChar*)"resumptionToken")==0){
+
+						if(xmlGetProp(record, (xmlChar*) "completeListSize")) {
+
+							state->completeListSize = xmlGetProp(record, (xmlChar*) "completeListSize");
+
+						}
+
+					}
 
 				}
 
@@ -1370,8 +1398,8 @@ static void requestPlanner(oai_fdw_TableOptions *opts, ForeignTable *ft, RelOptI
 	bool hasContentForeignColumn = false;
 
 	/* The default request type is OAI_REQUEST_LISTRECORDS.
-	 * This can be altered after depending on the columns
-	 * used in the WHERE and SELECT clauses*/
+	 * This can be altered depending on the columns used
+	 * in the WHERE and SELECT clauses */
 	opts->requestType = OAI_REQUEST_LISTRECORDS;
 	opts->numcols = rel->rd_att->natts;
 	opts->foreigntableid = ft->relid;
@@ -1473,6 +1501,10 @@ static void requestPlanner(oai_fdw_TableOptions *opts, ForeignTable *ft, RelOptI
 					}
 
 				}
+
+				//else {
+				//	elog(WARNING,"rel->rd_att->attrs[i].atttypid > %u",rel->rd_att->attrs[i].atttypid);
+				//}
 
 			}
 
@@ -1600,7 +1632,6 @@ static void deparseExpr(Expr *expr, oai_fdw_TableOptions *opts){
 		varleft = (Var *)expr;
 		leftargOption = getColumnOption(opts->foreigntableid,varleft->varattnosyn);
 
-
 		break;
 
 	case T_OpExpr:
@@ -1693,10 +1724,7 @@ static void deparseExpr(Expr *expr, oai_fdw_TableOptions *opts){
 
 			if (strcmp(leftargOption,OAI_ATTRIBUTE_SETSPEC) ==0 && (varleft->vartype == TEXTARRAYOID || varleft->vartype == VARCHARARRAYOID)) {
 
-
-				//ListCell   *lc;
 				Const *constant = (Const*) lsecond(oper->args);
-
 				ArrayType *array = (ArrayType*) constant->constvalue;
 
 				int numitems = ArrayGetNItems(ARR_NDIM(array), ARR_DIMS(array));
@@ -1755,10 +1783,14 @@ static void deparseSelectColumns(oai_fdw_TableOptions *opts){
 
 		Expr * expr = (Expr *) lfirst(cell);
 
+		elog(DEBUG1,"  deparseSelectColumns: evaluating expr->type = %u",expr->type);
+
 		if(expr->type == T_Var)	{
 
 			variable = (Var *)expr;
 			columnOption = getColumnOption(opts->foreigntableid,variable->varattnosyn);
+
+			//elog(DEBUG1,"  deparseSelectColumns: evaluating variable->varattnosyn = %u",variable->varattnosyn);
 
 			if(strcmp(columnOption,OAI_ATTRIBUTE_CONTENT)==0) {
 
@@ -1766,6 +1798,10 @@ static void deparseSelectColumns(oai_fdw_TableOptions *opts){
 				hasContentForeignColumn = true;
 
 			}
+
+
+		} else {
+
 
 
 		}
@@ -1841,7 +1877,7 @@ void oai_fdw_GetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid forei
 
 	oai_fdw_TableOptions *opts = (oai_fdw_TableOptions *)palloc0(sizeof(oai_fdw_TableOptions));
 	ListCell *cell;
-	int start = 0, end = 64; //TODO necessary?
+	int start = 0, end = 64; //TODO DELETE!
 
 	elog(DEBUG1,"oai_fdw_GetForeignRelSize: requestType > %s", opts->requestType);
 
@@ -1863,7 +1899,6 @@ void oai_fdw_GetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid forei
 		}
 
 	}
-
 
 
 	foreach(cell, ft->options) {
@@ -1890,28 +1925,9 @@ void oai_fdw_GetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid forei
 
 	}
 
-//	if(!opts->url){
-//
-//		ereport(ERROR,
-//				(errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
-//				 errmsg("'url' not found"),
-//				 errhint("'url' is a required option. Check the CREATE FOREIGN TABLE options.")));
-//
-//	}
-
-//	if(!opts->metadataPrefix){
-//
-//		ereport(ERROR,
-//				(errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
-//				 errmsg("'metadataPrefix' not found"),
-//				 errhint("metadataPrefix is a required argument (unless the exclusive argument resumptionToken is used). Check the CREATE FOREIGN TABLE options.")));
-//
-//	}
-
-
 	requestPlanner(opts, ft, baserel);
 
-	baserel->rows = end - start; //TODO ??
+	//baserel->rows = end - start; //TODO ??
 
 	baserel->fdw_private = opts;
 
@@ -2011,9 +2027,15 @@ oai_Record *fetchNextRecord(TupleTableSlot *slot, oai_fdw_state *state) {
 
 					if (xmlStrcmp(header->next->name, (xmlChar*)"resumptionToken")==0) {
 
+
 						char *token = (char*)xmlNodeGetContent(header->next);
 
 						if(strlen(token) != 0) {
+
+							/*if(xmlGetProp(header->next, (xmlChar*) "completeListSize")){
+								char *completeSize = (char*) xmlGetProp(header->next, (xmlChar*) "completeListSize");
+								oai->completeListSize = completeSize;
+							} */
 
 							state->resumptionToken = token;
 							elog(DEBUG1,"  fetchNextRecord: (%s) token detected in current page > %s",state->requestType,token);
@@ -2127,7 +2149,7 @@ oai_Record *fetchNextRecord(TupleTableSlot *slot, oai_fdw_state *state) {
 
 					if (xmlStrcmp(metadata->name, (xmlChar*) "metadata") == 0) {
 
-						xmlDocPtr xmldoc; //??
+						xmlDocPtr xmldoc = NULL; //??
 						xmlNodePtr oai_xml_document = metadata->children;
 						xmlBufferPtr buffer = xmlBufferCreate();
 						//size_t content_size = (size_t) xmlNodeDump(buffer, xmldoc, oai_xml_document, 0, 1);
@@ -2200,7 +2222,7 @@ oai_Record *fetchNextRecord(TupleTableSlot *slot, oai_fdw_state *state) {
 		}
 	}
 
-	//return oai;
+	return NULL;
 
 }
 
@@ -2213,6 +2235,8 @@ void createOAITuple(TupleTableSlot *slot, oai_fdw_state *state, oai_Record *oai 
 
 	for (int i = 0; i < state->numcols; i++) {
 
+		//elog(WARNING,">>>>> %u (state->numcols = %d)",slot->tts_nvalid,state->numcols);
+
 		List * options = GetForeignColumnOptions(state->foreigntableid, i+1);
 		ListCell *lc;
 
@@ -2222,7 +2246,7 @@ void createOAITuple(TupleTableSlot *slot, oai_fdw_state *state, oai_Record *oai 
 
 			if (strcmp(def->defname, OAI_NODE_OPTION)==0) {
 
-				char * option_value = defGetString(def);
+				char *option_value = defGetString(def);
 
 				if (strcmp(option_value,OAI_ATTRIBUTE_STATUS)==0){
 
@@ -2330,11 +2354,11 @@ void createOAITuple(TupleTableSlot *slot, oai_fdw_state *state, oai_Record *oai 
 }
 
 TupleTableSlot *oai_fdw_IterateForeignScan(ForeignScanState *node) {
-
+	//node->resultRelInfo->
 	TupleTableSlot *slot = node->ss.ss_ScanTupleSlot;
+
 	oai_fdw_state *state = node->fdw_state;
 	oai_Record *oai = (oai_Record *)palloc0(sizeof(oai_Record));
-
 
 	elog(DEBUG1,"oai_fdw_IterateForeignScan called");
 
@@ -2353,10 +2377,11 @@ TupleTableSlot *oai_fdw_IterateForeignScan(ForeignScanState *node) {
 
 		loadOAIRecords(state);
 		state->current_identifier = NULL;
+		elog(DEBUG1,"completeListSize: %s (rowcount: %d)",state->completeListSize,state->rowcount);
 
 	}
 
-
+	// FIXME: slot parameter isn't used in function fetchNextRecord
 	oai = fetchNextRecord(slot, state);
 
 	if(oai) {
@@ -2366,6 +2391,7 @@ TupleTableSlot *oai_fdw_IterateForeignScan(ForeignScanState *node) {
 
 		ExecStoreVirtualTuple(slot);
 		elog(DEBUG2,"  oai_fdw_IterateForeignScan: virtual tuple stored");
+
 	}
 
 	elog(DEBUG1,"  => oai_fdw_IterateForeignScan: returning tuple (rowcount: %d)", state->rowcount);
@@ -2380,7 +2406,7 @@ int loadOAIRecords(oai_fdw_state *state) {
 
 	if(state->resumptionToken || state->rowcount == 0) {
 
-		elog(DEBUG2,"  fetchNextOAIRecord: loading page ...");
+		elog(DEBUG2,"  loadOAIRecords: loading page ...");
 		listRecordsRequest(state);
 
 	} else {
