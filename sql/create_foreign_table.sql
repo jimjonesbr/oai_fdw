@@ -8,12 +8,7 @@ CREATE FOREIGN TABLE ulb_ulbmsuo_oai_dc (
  ) SERVER oai_server_ulb OPTIONS (setspec 'ulbmsuo', 
                                   metadataPrefix 'oai_dc');
 
-CREATE TABLE tb_ulb_ulbmsuo_oai_dc AS SELECT * FROM ulb_ulbmsuo_oai_dc;
-
-SELECT
-  count(*) = count(distinct id) records_are_distinct,
-  count(*) > 0 AS not_empty
-FROM tb_ulb_ulbmsuo_oai_dc;
+SELECT * FROM ulb_ulbmsuo_oai_dc;
 
 CREATE FOREIGN TABLE foreign_table_without_oai_option (
   foo text
