@@ -21,20 +21,12 @@
 #include <libxml/tree.h>
 #include <catalog/pg_collation.h>
 
-//#include <optimizer/optimizer.h>
-
-//#include <c.h>
-//#include <funcapi.h> //TODO:NECESSARY?
-
-//#include <postgres_ext.h>
-//#include <stdbool.h>
-//#include <pgtime.h>
-//#include <utils/fmgrprotos.h>
-
-//#include <time.h>
 #include <funcapi.h>
 
 #include "lib/stringinfo.h"
+
+//#include "utils/array.h"
+#include <utils/lsyscache.h>
 
 #include "nodes/nodes.h"
 #include "nodes/primnodes.h"
@@ -49,13 +41,8 @@
 #include "catalog/pg_user_mapping.h"
 #include "catalog/pg_type.h"
 #include "access/reloptions.h"
-
-//#include "catalog/pg_aggregate.h"
-//#include "catalog/pg_collation.h"
 #include "catalog/pg_namespace.h"
-//#include "catalog/pg_operator.h"
-//#include "catalog/pg_proc.h"
-//#include "catalog/pg_type.h"
+
 
 
 #define OAI_FDW_VERSION "1.0.0dev"
@@ -1353,7 +1340,7 @@ void listRecordsRequest(oai_fdw_state *state) {
 
 						if(xmlGetProp(record, (xmlChar*) "completeListSize")) {
 
-							state->completeListSize = xmlGetProp(record, (xmlChar*) "completeListSize");
+							state->completeListSize = (char*) xmlGetProp(record, (xmlChar*) "completeListSize");
 
 						}
 
@@ -1877,7 +1864,7 @@ void oai_fdw_GetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid forei
 
 	oai_fdw_TableOptions *opts = (oai_fdw_TableOptions *)palloc0(sizeof(oai_fdw_TableOptions));
 	ListCell *cell;
-	int start = 0, end = 64; //TODO DELETE!
+	//int start = 0, end = 64; //TODO DELETE!
 
 	elog(DEBUG1,"oai_fdw_GetForeignRelSize: requestType > %s", opts->requestType);
 
@@ -2284,7 +2271,7 @@ void createOAITuple(TupleTableSlot *slot, oai_fdw_state *state, oai_Record *oai 
 					elog(DEBUG2,"  createOAITuple: column %d option '%s'",i,option_value);
 
 					slot->tts_isnull[i] = false;
-					slot->tts_values[i] = DatumGetArrayTypeP(oai->setsArray);
+					slot->tts_values[i] = (Datum) DatumGetArrayTypeP(oai->setsArray);
 					elog(DEBUG2,"    createOAITuple: setspec added to tuple");
 
 				}  else if (strcmp(option_value,OAI_ATTRIBUTE_DATESTAMP)==0 && oai->datestamp){
@@ -2315,7 +2302,7 @@ void createOAITuple(TupleTableSlot *slot, oai_fdw_state *state, oai_Record *oai 
 							elog(DEBUG2,"    createOAITuple: datestamp can be decoded");
 
 							slot->tts_isnull[i] = false;
-							slot->tts_values[i] = TimestampTzGetDatum(tmsp);
+							slot->tts_values[i] = (Datum) TimestampTzGetDatum(tmsp);
 
 							elog(DEBUG2,"  createOAITuple: datestamp (\"%s\") parsed and decoded.",oai->datestamp);
 
@@ -2324,7 +2311,7 @@ void createOAITuple(TupleTableSlot *slot, oai_fdw_state *state, oai_Record *oai 
 
 
 							slot->tts_isnull[i] = true;
-							slot->tts_values[i] = NULL;
+							slot->tts_values[i] = (Datum) NULL;
 							elog(WARNING,"  createOAITuple: could not decode datestamp: %s", oai->datestamp);
 
 						}
@@ -2334,7 +2321,7 @@ void createOAITuple(TupleTableSlot *slot, oai_fdw_state *state, oai_Record *oai 
 
 
 						slot->tts_isnull[i] = true;
-						slot->tts_values[i] = NULL;
+						slot->tts_values[i] = (Datum) NULL;
 
 						elog(WARNING,"  createOAITuple: could not parse datestamp: %s", oai->datestamp);
 
