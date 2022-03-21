@@ -87,7 +87,6 @@ CREATE FOREIGN TABLE ulb_oai_dc (
   format text            OPTIONS (oai_node 'metadataprefix')
  ) SERVER oai_server_ulb OPTIONS (metadataprefix 'oai_dc');
  
- SELECT * FROM ulb_oai_dc;                                                  
 ```
 
 2. Create a `SERVER` and a `FOREIGN TABLE` to harvest the [OAI-PMH Endpoint](https://sammlungen.ulb.uni-muenster.de/oai) of the Münster University Library with records encoded as `oai_dc` in the set `ulbmsuo`.
@@ -121,15 +120,13 @@ CREATE FOREIGN TABLE dnb_zdb_oai_dc (
                                   metadataprefix 'oai_dc',
                                   from '2022-01-31', 
                                   until '2022-02-01');
-						   
-SELECT * FROM dnb_zdb_oai_dc LIMIT 1;
-
 ```
 
-4. It is possible to set or overwrite the pre-configured `SERVER OPTION` values by filtering the records with the SQL `WHERE` clause. The following example shows how to set the harversting metadataPrefix, set, and time interval values in query time:
+4. It is possible to set or overwrite the pre-configured `SERVER OPTION` values by filtering the records with the SQL `WHERE` clause. The following example shows how to set the harvesting metadataPrefix, set, and time interval values in query time:
 
 ```sql
-CREATE SERVER oai_server_dnb FOREIGN  DATA WRAPPER oai_fdw OPTIONS (url 'https://services.dnb.de/oai/repository');
+CREATE SERVER oai_server_dnb FOREIGN DATA WRAPPER oai_fdw 
+OPTIONS (url 'https://services.dnb.de/oai/repository');
 
 CREATE FOREIGN TABLE dnb_zdb_oai_dc (
   id text             OPTIONS (oai_node 'identifier'), 
@@ -188,3 +185,85 @@ LIMIT 1;
 
 ```
 
+## Support Functions
+
+These support functions helps to retrieve additional information from an OAI Server, so that queries can be narrowed down.
+
+### OAI_Identify
+
+This function is used to retrieve information about a repository. Some of the information returned is required as part of the OAI-PMH. Repositories may also employ the Identify verb to return additional descriptive information.
+
+Parameter: Foreign Server Name
+
+```sql
+SELECT * FROM OAI_Identify('oai_server_ulb');
+
+       name        |                             description                              
+-------------------+----------------------------------------------------------------------
+ repositoryName    | Visual Library Server der Universitäts- und Landesbibliothek Münster
+ baseURL           | http://sammlungen.ulb.uni-muenster.de/oai/
+ protocolVersion   | 2.0
+ adminEmail        | vl-support@semantics.de
+ earliestDatestamp | 2011-02-22T15:12:26Z
+ deletedRecord     | no
+ granularity       | YYYY-MM-DDThh:mm:ssZ
+(7 rows)
+```
+
+### OAI_ListMetadataFormats
+
+This function is used to retrieve the metadata formats available from a repository. An optional argument restricts the request to the formats available for a specific item.
+
+Parameter: Foreign Server Name
+
+```sql
+SELECT * FROM OAI_ListMetadataFormats('oai_server_ulb');
+
+ metadataprefix |                               schema                               |              metadatanamespace              
+----------------+--------------------------------------------------------------------+---------------------------------------------
+ oai_dc         | http://www.openarchives.org/OAI/2.0/oai_dc.xsd                     | http://www.openarchives.org/OAI/2.0/oai_dc/
+ mets           | http://www.loc.gov/standards/mets/mets.xsd                         | http://www.loc.gov/METS/
+ mods           | http://www.loc.gov/standards/mods/v3/mods-3-0.xsd                  | http://www.loc.gov/mods/v3
+ rawmods        | http://www.loc.gov/standards/mods/v3/mods-3-0.xsd                  | http://www.loc.gov/mods/v3
+ epicur         | http://www.persistent-identifier.de/xepicur/version1.0/xepicur.xsd | urn:nbn:de:1111-2004033116
+(5 rows)
+```
+
+
+### OAI_ListSets
+
+This function is used to retrieve the set structure of a repository, useful for selective harvesting.
+
+Parameter: Foreign Server Name
+
+```sql
+SELECT * FROM OAI_ListSets('oai_server_ulb');
+
+     setspec      |                            setname                            
+------------------+---------------------------------------------------------------
+ ulbmshbw         | Historische Bestände in Westfalen (allegro)
+ ulbmshs          | Schöpper (HANS)
+ ulbmssp          | Schulprogramme (Verbundkatalog)
+ ulbmsuo          | Historische Drucke mit URN (Verbundkatalog ohne Lokalbestand)
+ ulbmsz           | ulbmsz
+ ulbmsum          | Historische Drucke mit URN (Verbundkatalog mit Lokalbestand)
+ ulbmsob          | Historische Drucke (Verbundkatalog ohne Lokalbestand)
+ ulbmshd          | Historische Drucke (Verbundkatalog)
+ ulbmsh           | Handschriften, Nachlässe, Autographen, Sammlungen (HANS)
+ fremdbestand_hbz | Fremdbestand (Verbundkatalog)
+(10 rows)
+```
+
+### OAI_Version
+
+Shows the OAI FDW installed version and its main libraries
+
+```sql
+SELECT OAI_Version();
+                                                                                      oai_version                                                                                    
+  
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+--
+ oai fdw = 1.0.0dev, libxml = 2.9.10, libcurl = libcurl/7.74.0 NSS/3.61 zlib/1.2.11 brotli/1.0.9 libidn2/2.3.0 libpsl/0.21.0 (+libidn2/2.3.0) libssh2/1.9.0 nghttp2/1.43.0 librtmp/2.
+3
+```
