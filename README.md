@@ -191,11 +191,22 @@ These support functions helps to retrieve additional information from an OAI Ser
 
 ### OAI_Identify
 
+** Synopsis **
+
+*SETOF OAI_IdentityNode* **OAI_Identify**(server_name *text*);
+
+`server_name`: Name of a previously created OAI Foreign Data Wrapper Server
+
+** Description **
+
 This function is used to retrieve information about a repository. Some of the information returned is required as part of the OAI-PMH. Repositories may also employ the Identify verb to return additional descriptive information.
 
-Parameter: Foreign Server Name
+** Usage **
 
 ```sql
+CREATE SERVER oai_server_ulb FOREIGN DATA WRAPPER oai_fdw 
+OPTIONS (url 'https://sammlungen.ulb.uni-muenster.de/oai');   
+
 SELECT * FROM OAI_Identify('oai_server_ulb');
 
        name        |                             description                              
@@ -212,11 +223,22 @@ SELECT * FROM OAI_Identify('oai_server_ulb');
 
 ### OAI_ListMetadataFormats
 
+** Synopsis **
+
+*SETOF OAI_MetadataFormat* **OAI_ListMetadataFormats**(server_name *text*);
+
+`server_name`: Name of a previously created OAI Foreign Data Wrapper Server
+
+** Description **
+
 This function is used to retrieve the metadata formats available from a repository. An optional argument restricts the request to the formats available for a specific item.
 
-Parameter: Foreign Server Name
+** Usage **
 
 ```sql
+CREATE SERVER oai_server_ulb FOREIGN DATA WRAPPER oai_fdw 
+OPTIONS (url 'https://sammlungen.ulb.uni-muenster.de/oai');   
+
 SELECT * FROM OAI_ListMetadataFormats('oai_server_ulb');
 
  metadataprefix |                               schema                               |              metadatanamespace              
@@ -232,11 +254,22 @@ SELECT * FROM OAI_ListMetadataFormats('oai_server_ulb');
 
 ### OAI_ListSets
 
+** Synopsis **
+
+*SETOF OAI_Set* **OAI_ListSets**(server_name *text*);
+
+`server_name`: Name of a previously created OAI Foreign Data Wrapper Server
+
+** Description **
+
 This function is used to retrieve the set structure of a repository, useful for selective harvesting.
 
-Parameter: Foreign Server Name
+** Usage **
 
 ```sql
+CREATE SERVER oai_server_ulb FOREIGN DATA WRAPPER oai_fdw 
+OPTIONS (url 'https://sammlungen.ulb.uni-muenster.de/oai');   
+
 SELECT * FROM OAI_ListSets('oai_server_ulb');
 
      setspec      |                            setname                            
@@ -256,7 +289,15 @@ SELECT * FROM OAI_ListSets('oai_server_ulb');
 
 ### OAI_Version
 
-Shows the OAI FDW installed version and its main libraries
+** Synopsis **
+
+*text* **OAI_Version**();
+
+** Description **
+
+Shows the OAI FDW installed version and its main libraries.
+
+** Usage **
 
 ```sql
 SELECT OAI_Version();
