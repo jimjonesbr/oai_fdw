@@ -2,14 +2,19 @@
 ---------------------------------------------
 # PostgreSQL Foreign Data Wrapper for OAI-PMH (oai_fdw)
 
-A PostgreSQL Foreign Data Wrapper to access OAI-PMH Werbservices (Open Archives Initiative Protocol for Metadata Harvesting). It supports the [OAI-PMH 2.0 Protocol](http://www.openarchives.org/OAI/openarchivesprotocol.html). 
+A PostgreSQL Foreign Data Wrapper to access OAI-PMH repositories (Open Archives Initiative Protocol for Metadata Harvesting). This wrapper supports the [OAI-PMH 2.0 Protocol](http://www.openarchives.org/OAI/openarchivesprotocol.html). 
 
+## Index
+
+- [OAI_Version](#version)
+ 
+ 
 ## Requirements
 
 * [LibXML2](http://www.xmlsoft.org/): version 2.5.0 or higher.
 * [LibcURL](https://curl.se/libcurl/): version 7.74.0 or higher.
 
-## Install 
+## Build & Install 
 
 Compile and install the code.
 
@@ -26,7 +31,7 @@ CREATE EXTENSION oai_fdw;
 
 ## Usage
 
-To use the OAI Foreign Data Wrapper you must first create a `SERVER` to connect to an OAI-PMH endpoint. After that create `FOREIGN TABLE`s to enable access to OAI-PMH documents using SQL queries. Each `FOREIGN TABLE` column must be mapped to a `oai_node`, so that PostgreSQL knows where the deliver the OAI data.
+To use the OAI-PMH Foreign Data Wrapper you must first create a `SERVER` to connect to an OAI-PMH repository. After that, create `FOREIGN TABLES` to enable access to OAI-PMH documents using SQL queries. Each `FOREIGN TABLE` column must be mapped to an `oai_node`, so that PostgreSQL knows where the deliver the OAI data.
 
 ### CREATE SERVER
 
@@ -45,7 +50,7 @@ OPTIONS (url 'https://services.dnb.de/oai/repository');
 
 ### CREATE FOREIGN TABLE
 
-The following example creates a `FOREIGN TABLE` connected to the `SERVER` created above, and each table column is mapped to a `oai_node` using the `OPTION` clause. It is mandatory to set a `metadataprefix` to the `SERVER` clause of the `CREATE FOREIGN TABLE` statement, so that the OAI-PMH repository knows which XML format is supposed to be returned. Optionally, it is possible to constraint a `FOREIGN TABLE` to specific OAI sets using the `setspec` option from the `SERVER` clause. Omitting this option means that every SQL query will harvest all sets in the OAI repository.
+The following example creates a `FOREIGN TABLE` connected to the `SERVER` created above, and each table column is mapped to a `oai_node` using the `OPTION` clause. It is mandatory to set a `metadataprefix` to the `SERVER` clause of the `CREATE FOREIGN TABLE` statement, so that the OAI-PMH repository knows which XML format is supposed to be returned (see OAI_ListMetadataFormats). Optionally, it is possible to constraint a `FOREIGN TABLE` to specific OAI sets using the `setspec` option from the `SERVER` clause - omitting this option means that every SQL query will harvest all sets in the OAI repository.
 
 
 ```sql
@@ -267,7 +272,7 @@ SELECT * FROM OAI_ListSets('oai_server_ulb');
 (10 rows)
 ```
 
-### OAI_Version
+### [OAI_Version](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#version)
 
 **Synopsis**
 
