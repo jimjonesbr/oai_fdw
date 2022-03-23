@@ -6,24 +6,34 @@ A PostgreSQL Foreign Data Wrapper to access OAI-PMH repositories (Open Archives 
 
 ## Index
 
-- [OAI_Version](#version)
- 
- 
-## Requirements
+- [Requirements](#requirements)
+- [Build & Install](#build-and-install)
+- [Usage](#usage)
+  - [CREATE SERVER](#create-server)
+  - [CREATE FOREIGN TABLE](#create-foreign-table)
+  - [Examples](#examples)
+- [Support Functions](#support-functions)
+  - [OAI_Identify](#oai_identify)
+  - [OAI_ListMetadataFormats](#oai_listmetadataformats)
+  - [OAI_ListSets](#oai_listsets)  
+  - [OAI_Version](#oai_version)
+   
+## [Requirements](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#requirements)
 
-* [LibXML2](http://www.xmlsoft.org/): version 2.5.0 or higher.
-* [LibcURL](https://curl.se/libcurl/): version 7.74.0 or higher.
+* [libxml2](http://www.xmlsoft.org/): version 2.5.0 or higher.
+* [libcurl](https://curl.se/libcurl/): version 7.74.0 or higher.
+* [PostgreSQL](https://www.postgresql.org): version 11 or higher.
 
-## Build & Install 
+## [Build and Install](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#build_and_install)
 
-Compile and install the code.
+Build and install from source code.
 
 ```bash
 make
 make install
 ```
 
-Create the extension after compiling and installing the code.
+After building and installing the extension, just use create the extension in a database using the following command:
 
 ```sql
 CREATE EXTENSION oai_fdw;
@@ -31,9 +41,9 @@ CREATE EXTENSION oai_fdw;
 
 ## Usage
 
-To use the OAI-PMH Foreign Data Wrapper you must first create a `SERVER` to connect to an OAI-PMH repository. After that, create `FOREIGN TABLES` to enable access to OAI-PMH documents using SQL queries. Each `FOREIGN TABLE` column must be mapped to an `oai_node`, so that PostgreSQL knows where the deliver the OAI data.
+To use the OAI-PMH Foreign Data Wrapper you must first create a `SERVER` to connect to an OAI-PMH repository. After that, create `FOREIGN TABLES` to access OAI-PMH documents using SQL queries. Each `FOREIGN TABLE` column must be mapped to an `oai_node`, so that PostgreSQL knows where the deliver the OAI documents and header data.
 
-### CREATE SERVER
+### [CREATE SERVER](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#create_server)
 
 The following example creates a `SERVER` that connects to the OAI-PMH repository of the German National Library.
 
@@ -48,7 +58,7 @@ OPTIONS (url 'https://services.dnb.de/oai/repository');
 |---------------|--------------------------|--------------------------------------------------------------------------------------------------------------------|
 | `url`  | mandatory        | URL address of the OAI-PMH endpoint.  
 
-### CREATE FOREIGN TABLE
+### [CREATE FOREIGN TABLE](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#create_foreign_table)
 
 The following example creates a `FOREIGN TABLE` connected to the `SERVER` created above, and each table column is mapped to a `oai_node` using the `OPTION` clause. It is mandatory to set a `metadataprefix` to the `SERVER` clause of the `CREATE FOREIGN TABLE` statement, so that the OAI-PMH repository knows which XML format is supposed to be returned (see OAI_ListMetadataFormats). Optionally, it is possible to constraint a `FOREIGN TABLE` to specific OAI sets using the `setspec` option from the `SERVER` clause - omitting this option means that every SQL query will harvest all sets in the OAI repository.
 
@@ -85,7 +95,7 @@ CREATE FOREIGN TABLE dnb_maps_marc21 (
 | `until`  | optional        | an argument with a UTCdatetime value, which specifies a upper bound for datestamp-based selective harvesting.  
 | `setspec`  | optional        | an argument with a setSpec value , which specifies set criteria for selective harvesting. 
 
-####  Further Examples:
+#### [Examples](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#examples)
 
 1. Create a `SERVER` and `FOREIGN TABLE` to harvest the [OAI-PMH Endpoint](https://sammlungen.ulb.uni-muenster.de/oai) of the Münster University Library with records encoded as `oai_dc`
 
@@ -174,7 +184,7 @@ WHERE
 
 These support functions helps to retrieve additional information from an OAI Server, so that queries can be narrowed down.
 
-### OAI_Identify
+### [OAI_Identify](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#oai_identify)
 
 **Synopsis**
 
@@ -206,7 +216,7 @@ SELECT * FROM OAI_Identify('oai_server_ulb');
 (7 rows)
 ```
 
-### OAI_ListMetadataFormats
+### [OAI_ListMetadataFormats](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#oai_listmetadataformats)
 
 **Synopsis**
 
@@ -237,7 +247,7 @@ SELECT * FROM OAI_ListMetadataFormats('oai_server_ulb');
 ```
 
 
-### OAI_ListSets
+### [OAI_ListSets](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#oai_listsets)
 
 **Synopsis**
 
@@ -272,7 +282,7 @@ SELECT * FROM OAI_ListSets('oai_server_ulb');
 (10 rows)
 ```
 
-### [OAI_Version](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#version)
+### [OAI_Version](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#oai_version)
 
 **Synopsis**
 
