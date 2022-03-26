@@ -1,0 +1,17 @@
+name: Regression Tests (PostgreSQL 14)
+
+on:
+  push:
+    branches: '*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+
+    - name: Prepare environment and perform regression tests
+      run:  sudo apt-get install -y make postgresql-server-dev-14 vim libxml2-dev libcurl4 libcurl4-nss-dev gcc
+      run:  make PGUSER=postgres installcheck
