@@ -12,11 +12,14 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v2
 
-    - name: Prepare environment and perform regression tests
+    - name: Prepare environment
       run: |
         curl https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
         sudo echo "deb http://apt.postgresql.org/pub/repos/apt `lsb_release -cs`-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
         sudo apt update
-        sudo apt-get install postgresql-14 
-        sudo apt-get install -y make postgresql-server-dev-14 vim libxml2-dev libcurl4 libcurl4-nss-dev gcc
+        sudo apt-get install -y postgresql-14 make postgresql-server-dev-14 vim libxml2-dev libcurl4 libcurl4-nss-dev gcc
+        
+    - name: Run regression tests
+      run: |
+        make
         make PGUSER=postgres installcheck
