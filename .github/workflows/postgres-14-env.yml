@@ -4,13 +4,15 @@ jobs:
   test:
     strategy:
       matrix:
-        pg: [14]
+        pg: [14,13]
     name: 🐘 PostgreSQL ${{ matrix.pg }}
     runs-on: ubuntu-latest
     container: pgxn/pgxn-tools
     steps:
-      - run: sudo apt-get update
-      - run: sudo apt-get install -y libxml2-dev libcurl4 libcurl4-nss-dev gcc
-      - run: pg-start ${{ matrix.pg }}
+      - name: Prepare environment 
+        run: sudo apt-get update && sudo apt-get install -y libxml2-dev libcurl4 libcurl4-nss-dev gcc
+      - name: Start PostgreSQL ${{ matrix.pg }}
+        run: pg-start ${{ matrix.pg }}
       - uses: actions/checkout@v2
-      - run: pg-build-test
+      - name: Build and Regression Tests 
+        run: pg-build-test
