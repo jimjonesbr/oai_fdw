@@ -13,5 +13,6 @@ jobs:
       uses: actions/checkout@v2
 
     - name: Prepare environment and perform regression tests
-      run:  sudo apt-get install -y make postgresql-server-dev-14 vim libxml2-dev libcurl4 libcurl4-nss-dev gcc
-      run:  make PGUSER=postgres installcheck
+      run: |
+        sudo apt-get install -y make postgresql-server-dev-14 vim libxml2-dev libcurl4 libcurl4-nss-dev gcc
+        make PGUSER=postgres installcheck
