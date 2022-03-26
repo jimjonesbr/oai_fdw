@@ -44,6 +44,8 @@ jobs:
         sudo echo "deb http://apt.postgresql.org/pub/repos/apt `lsb_release -cs`-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
         sudo apt update
         sudo apt-get install -y postgresql-14 make postgresql-server-dev-14 vim libxml2-dev libcurl4 libcurl4-nss-dev gcc
+        sudo systemctl start postgresql.service
+        pg_isready
         
     - name: Run regression tests
       run: |
