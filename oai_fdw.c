@@ -1938,6 +1938,7 @@ void oai_fdw_GetForeignPaths(PlannerInfo *root, RelOptInfo *baserel, Oid foreign
 
 ForeignScan *oai_fdw_GetForeignPlan(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid, ForeignPath *best_path, List *tlist, List *scan_clauses, Plan *outer_plan) {
 
+	List *fdw_private;
 	oai_fdw_TableOptions *opts = baserel->fdw_private;
 	oai_fdw_state *state = (oai_fdw_state *) palloc0(sizeof(oai_fdw_state));
 
@@ -1953,15 +1954,17 @@ ForeignScan *oai_fdw_GetForeignPlan(PlannerInfo *root, RelOptInfo *baserel, Oid 
 	state->columnlist = opts->columnlist;
 	state->numfdwcols = opts->numfdwcols;
 
+	fdw_private = list_make1(state);
+
 	scan_clauses = extract_actual_clauses(scan_clauses, false);
 
 	return make_foreignscan(tlist,
 			scan_clauses,
 			baserel->relid,
-			NIL, /* no expressions we will evaluate */
-			state, /* pass along our start and end */
-			NIL, /* no custom tlist; our scan tuple looks like tlist */
-			NIL, /* no quals we will recheck */
+			NIL, 		 /* no expressions we will evaluate */
+			fdw_private, /* pass along our start and end */
+			NIL, 		 /* no custom tlist; our scan tuple looks like tlist */
+			NIL, 		 /* no quals we will recheck */
 			outer_plan);
 
 }
@@ -1969,7 +1972,7 @@ ForeignScan *oai_fdw_GetForeignPlan(PlannerInfo *root, RelOptInfo *baserel, Oid 
 void oai_fdw_BeginForeignScan(ForeignScanState *node, int eflags) {
 
 	ForeignScan *fs = (ForeignScan *) node->ss.ps.plan;
-	oai_fdw_state *state = (oai_fdw_state *) fs->fdw_private;
+	oai_fdw_state *state = (oai_fdw_state *) linitial(fs->fdw_private);
 
 	if(eflags & EXEC_FLAG_EXPLAIN_ONLY) return;
 
