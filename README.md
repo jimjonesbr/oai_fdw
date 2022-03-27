@@ -2,7 +2,11 @@
 ---------------------------------------------
 # PostgreSQL Foreign Data Wrapper for OAI-PMH (oai_fdw)
 
-A PostgreSQL Foreign Data Wrapper to access OAI-PMH repositories (Open Archives Initiative Protocol for Metadata Harvesting). This wrapper supports the [OAI-PMH 2.0 Protocol](http://www.openarchives.org/OAI/openarchivesprotocol.html). 
+A PostgreSQL Foreign Data Wrapper to access OAI-PMH repositories (Open Archives Initiative Protocol for Metadata Harvesting). This wrapper supports the [OAI-PMH 2.0 Protocol](http://www.openarchives.org/OAI/openarchivesprotocol.html).
+
+![CI](https://github.com/jimjonesbr/oai_fdw/actions/workflows/ci.yml/badge.svg)
+
+**Note**: This foreign data wrapper is still under constant development and therefore NOT production ready.
 
 ## Index
 
