@@ -6,7 +6,7 @@ A PostgreSQL Foreign Data Wrapper to access OAI-PMH repositories (Open Archives 
 
 ![CI](https://github.com/jimjonesbr/oai_fdw/actions/workflows/ci.yml/badge.svg)
 
-**Note**: This foreign data wrapper is still under constant development and therefore NOT production ready.
+**Note**: This software is still under constant development and therefore still NOT production ready.
 
 ## Index
 
@@ -101,7 +101,7 @@ CREATE FOREIGN TABLE dnb_maps_marc21 (
 
 #### [Examples](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#examples)
 
-1. Create a `SERVER` and `FOREIGN TABLE` to harvest the [OAI-PMH Endpoint](https://sammlungen.ulb.uni-muenster.de/oai) of the Münster University Library with records encoded as `oai_dc`
+1. Create a `SERVER` and `FOREIGN TABLE` to harvest the [OAI-PMH repository](https://sammlungen.ulb.uni-muenster.de/oai) of the Münster University Library with records encoded as `oai_dc`
 
 ```sql
 CREATE SERVER oai_server_ulb FOREIGN DATA WRAPPER oai_fdw
@@ -117,7 +117,7 @@ CREATE FOREIGN TABLE ulb_oai_dc (
  
 ```
 
-2. Create a `SERVER` and a `FOREIGN TABLE` to harvest the [OAI-PMH Endpoint](https://sammlungen.ulb.uni-muenster.de/oai) of the Münster University Library with records encoded as `oai_dc` in the set `ulbmsuo`.
+2. Create a `SERVER` and a `FOREIGN TABLE` to harvest the [OAI-PMH repository](https://sammlungen.ulb.uni-muenster.de/oai) of the Münster University Library with records encoded as `oai_dc` in the set `ulbmsuo`.
 
 ```sql
 CREATE SERVER oai_server_ulb FOREIGN DATA WRAPPER oai_fdw
@@ -136,7 +136,7 @@ SELECT * FROM ulb_ulbmsuo_oai_dc;
 
 ```
 
-3. Create a `SERVER` and a `FOREIGN TABLE` to harvest the [OAI-PMH Endpoint](https://services.dnb.de/oai/repository) of the German National Library with records encoded as `oai_dc` in the set `zdb` created between `2022-01-31` and `2022-02-01` (YYYY-MM-DD).
+3. Create a `SERVER` and a `FOREIGN TABLE` to harvest the [OAI-PMH repository](https://services.dnb.de/oai/repository) of the German National Library with records encoded as `oai_dc` in the set `zdb` created between `2022-01-31` and `2022-02-01` (YYYY-MM-DD).
 
 
 ```sql
@@ -186,7 +186,7 @@ WHERE
 
 ## Support Functions
 
-These support functions helps to retrieve additional information from an OAI Server, so that queries can be narrowed down.
+These support functions help to retrieve additional information from an OAI Server, so that queries can be narrowed down.
 
 ### [OAI_Identify](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#oai_identify)
 
@@ -199,6 +199,8 @@ These support functions helps to retrieve additional information from an OAI Ser
 **Description**
 
 This function is used to retrieve information about a repository. Some of the information returned is required as part of the OAI-PMH. Repositories may also employ the Identify verb to return additional descriptive information.
+
+OAI Request: [Identify](http://www.openarchives.org/OAI/openarchivesprotocol.html#Identify)
 
 **Usage**
 
@@ -232,6 +234,8 @@ SELECT * FROM OAI_Identify('oai_server_ulb');
 
 This function is used to retrieve the metadata formats available from a repository. An optional argument restricts the request to the formats available for a specific item.
 
+OAI Request: [ListMetadataFormats](http://www.openarchives.org/OAI/openarchivesprotocol.html#ListMetadataFormats)
+
 **Usage**
 
 ```sql
@@ -262,6 +266,8 @@ SELECT * FROM OAI_ListMetadataFormats('oai_server_ulb');
 **Description**
 
 This function is used to retrieve the set structure of a repository, useful for selective harvesting.
+
+OAI Request: [ListSets](http://www.openarchives.org/OAI/openarchivesprotocol.html#ListSets)
 
 **Usage**
 
@@ -302,8 +308,6 @@ Shows the OAI FDW installed version and its main libraries.
 SELECT OAI_Version();
                                                                                       oai_version                                                                                    
   
--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
---
- oai fdw = 1.0.0dev, libxml = 2.9.10, libcurl = libcurl/7.74.0 NSS/3.61 zlib/1.2.11 brotli/1.0.9 libidn2/2.3.0 libpsl/0.21.0 (+libidn2/2.3.0) libssh2/1.9.0 nghttp2/1.43.0 librtmp/2.
-3
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ oai fdw = 1.0.0dev, libxml = 2.9.10, libcurl = libcurl/7.74.0 NSS/3.61 zlib/1.2.11 brotli/1.0.9 libidn2/2.3.0 libpsl/0.21.0 (+libidn2/2.3.0) libssh2/1.9.0 nghttp2/1.43.0 librtmp/2.3
 ```
