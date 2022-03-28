@@ -6,7 +6,22 @@
 #include "optimizer/restrictinfo.h"
 #include "optimizer/planmain.h"
 #include "utils/rel.h"
+
+#if PG_VERSION_NUM < 120000
+#include "optimizer/var.h"
+#else
+#include "optimizer/optimizer.h"
+#endif
+
+//#include "access/table.h"
+#include "access/htup_details.h"
+#include "access/sysattr.h"
+#include "access/reloptions.h"
+
+#if PG_VERSION_NUM >= 120000
 #include "access/table.h"
+#endif
+
 #include "foreign/foreign.h"
 #include "commands/defrem.h"
 #include "nodes/pg_list.h"
@@ -275,8 +290,11 @@ Datum oai_fdw_identity(PG_FUNCTION_ARGS) {
 
 		} else {
 
-			ereport(ERROR,(errcode(ERRCODE_CONNECTION_DOES_NOT_EXIST),
-					errmsg("FOREIGN SERVER does not exist: '%s'",srvname)));
+			ereport(ERROR,
+			  (errcode(ERRCODE_CONNECTION_DOES_NOT_EXIST),
+			   errmsg("FOREIGN SERVER does not exist: '%s'",srvname)));
+
+
 
 		}
 
@@ -1041,9 +1059,16 @@ int executeOAIRequest(oai_fdw_state *state, struct string *xmlResponse) {
 
 			curl_easy_cleanup(curl);
 
+/*
+	ereport(ERROR,
+					(errcode(ERRCODE_FDW_UNABLE_TO_CREATE_EXECUTION),
+					 errmsg("failed to bind the MySQL query: %s",
+							mysql_error(fmstate->conn))));
+*/
+
 			ereport(ERROR,
-					errcode(ERRCODE_FDW_UNABLE_TO_ESTABLISH_CONNECTION),
-					errmsg("OAI %s request failed. Connection error code %d",state->requestType,res));
+					(errcode(ERRCODE_FDW_UNABLE_TO_ESTABLISH_CONNECTION),
+					errmsg("OAI %s request failed. Connection error code %d",state->requestType,res)));
 
 		}
 
@@ -1088,7 +1113,9 @@ void listRecordsRequest(oai_fdw_state *state) {
 			xmlFreeDoc(xmldoc);
 			xmlCleanupParser();
 
-			ereport(ERROR, errcode(ERRCODE_FDW_UNABLE_TO_CREATE_EXECUTION),	errmsg("Invalid XML response for URL '%s'",state->url));
+			ereport(ERROR,
+			  (errcode(ERRCODE_FDW_UNABLE_TO_CREATE_EXECUTION),
+			  (errmsg("Invalid XML response for URL '%s'",state->url))));
 
 		}
 
@@ -1131,14 +1158,14 @@ void listRecordsRequest(oai_fdw_state *state) {
 
 					state->xmlroot = NULL;
 					ereport(WARNING,
-							errcode(ERRCODE_NO_DATA_FOUND),
-							errmsg("OAI %s: %s",errorCode,errorMessage));
+							(errcode(ERRCODE_NO_DATA_FOUND),
+							errmsg("OAI %s: %s",errorCode,errorMessage)));
 
 				} else {
 
 					ereport(ERROR,
-							errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
-							errmsg("OAI %s: %s",errorCode,errorMessage));
+							(errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
+							errmsg("OAI %s: %s",errorCode,errorMessage)));
 
 				}
 
@@ -1154,8 +1181,16 @@ void listRecordsRequest(oai_fdw_state *state) {
 static void requestPlanner(oai_fdw_TableOptions *opts, ForeignTable *ft, RelOptInfo *baserel) {
 
 	List *conditions = baserel->baserestrictinfo;
-	Relation rel = table_open(ft->relid, NoLock);
 	bool hasContentForeignColumn = false;
+
+#if PG_VERSION_NUM < 130000
+	Relation rel = heap_open(ft->relid, NoLock);
+#else
+	Relation rel = table_open(ft->relid, NoLock);;
+#endif
+
+	//Relation rel = table_open(ft->relid, NoLock);
+
 
 	/* The default request type is OAI_REQUEST_LISTRECORDS.
 	 * This can be altered depending on the columns used
@@ -1183,13 +1218,13 @@ static void requestPlanner(oai_fdw_TableOptions *opts, ForeignTable *ft, RelOptI
 					if (rel->rd_att->attrs[i].atttypid != BOOLOID) {
 
 						ereport(ERROR,
-							errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
+							(errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
 							errmsg("invalid data type for '%s.%s': %d",
 									NameStr(rel->rd_rel->relname),
 									NameStr(rel->rd_att->attrs[i].attname),
 									rel->rd_att->attrs[i].atttypid),
 							errhint("OAI %s must be of type 'boolean'.",
-									OAI_NODE_STATUS));
+									OAI_NODE_STATUS)));
 					}
 
 				} else if (strcmp(option_value,OAI_NODE_IDENTIFIER)==0 || strcmp(option_value,OAI_NODE_METADATAPREFIX)==0){
@@ -1198,13 +1233,13 @@ static void requestPlanner(oai_fdw_TableOptions *opts, ForeignTable *ft, RelOptI
 						rel->rd_att->attrs[i].atttypid != VARCHAROID) {
 
 						ereport(ERROR,
-								errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
+								(errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
 								errmsg("invalid data type for '%s.%s': %d",
 										NameStr(rel->rd_rel->relname),
 										NameStr(rel->rd_att->attrs[i].attname),
 										rel->rd_att->attrs[i].atttypid),
 								errhint("OAI %s must be of type 'text' or 'varchar'.",
-										option_value));
+										option_value)));
 
 					}
 
@@ -1218,13 +1253,13 @@ static void requestPlanner(oai_fdw_TableOptions *opts, ForeignTable *ft, RelOptI
 						rel->rd_att->attrs[i].atttypid != XMLOID) {
 
 						ereport(ERROR,
-								errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
+								(errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
 								errmsg("invalid data type for '%s.%s': %d",
 										NameStr(rel->rd_rel->relname),
 										NameStr(rel->rd_att->attrs[i].attname),
 										rel->rd_att->attrs[i].atttypid),
 								errhint("OAI %s expects one of the following types: 'xml', 'text' or 'varchar'.",
-										OAI_NODE_CONTENT));
+										OAI_NODE_CONTENT)));
 					}
 
 
@@ -1234,13 +1269,13 @@ static void requestPlanner(oai_fdw_TableOptions *opts, ForeignTable *ft, RelOptI
 					    rel->rd_att->attrs[i].atttypid != VARCHARARRAYOID) {
 
 						ereport(ERROR,
-								errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
+								(errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
 								errmsg("invalid data type for '%s.%s': %d",
 										NameStr(rel->rd_rel->relname),
 										NameStr(rel->rd_att->attrs[i].attname),
 										rel->rd_att->attrs[i].atttypid),
 								errhint("OAI %s expects one of the following types: 'text[]', 'varchar[]'.",
-										OAI_NODE_SETSPEC));
+										OAI_NODE_SETSPEC)));
 
 					}
 
@@ -1250,13 +1285,13 @@ static void requestPlanner(oai_fdw_TableOptions *opts, ForeignTable *ft, RelOptI
 					if (rel->rd_att->attrs[i].atttypid != TIMESTAMPOID) {
 
 						ereport(ERROR,
-								errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
+								(errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
 								errmsg("invalid data type for '%s.%s': %d",
 										NameStr(rel->rd_rel->relname),
 										NameStr(rel->rd_att->attrs[i].attname),
 										rel->rd_att->attrs[i].atttypid),
 								errhint("OAI %s expects a 'timestamp'.",
-										OAI_NODE_DATESTAMP));
+										OAI_NODE_DATESTAMP)));
 
 					}
 
@@ -1289,7 +1324,12 @@ static void requestPlanner(oai_fdw_TableOptions *opts, ForeignTable *ft, RelOptI
 	}
 
 
+	//table_close(rel, NoLock);
+#if PG_VERSION_NUM < 130000
+	heap_close(rel, NoLock);
+#else
 	table_close(rel, NoLock);
+#endif
 
 }
 
@@ -1297,8 +1337,16 @@ static void requestPlanner(oai_fdw_TableOptions *opts, ForeignTable *ft, RelOptI
 static char *getColumnOption(Oid foreigntableid, int16 attnum) {
 
 	List *options;
-	Relation rel = table_open(foreigntableid, NoLock);
 	char *optionValue = NULL;
+
+#if PG_VERSION_NUM < 130000
+	Relation rel = heap_open(foreigntableid, NoLock);
+#else
+	Relation rel = table_open(foreigntableid, NoLock);;
+#endif
+
+	//Relation rel = table_open(foreigntableid, NoLock);
+
 
 	for (int i = 0; i < rel->rd_att->natts ; i++) {
 
@@ -1325,7 +1373,12 @@ static char *getColumnOption(Oid foreigntableid, int16 attnum) {
 
 	}
 
+	//table_close(rel, NoLock);
+#if PG_VERSION_NUM < 130000
+	heap_close(rel, NoLock);
+#else
 	table_close(rel, NoLock);
+#endif
 
 	return optionValue;
 
