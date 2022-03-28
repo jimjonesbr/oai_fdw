@@ -1083,7 +1083,6 @@ void listRecordsRequest(oai_fdw_state *state) {
 
 		xmldoc = xmlReadMemory(xmlStream.ptr, strlen(xmlStream.ptr), NULL, NULL, XML_PARSE_SAX1);
 
-
 		if (!xmldoc || (state->xmlroot = xmlDocGetRootElement(xmldoc)) == NULL) {
 
 			xmlFreeDoc(xmldoc);
@@ -1387,7 +1386,7 @@ static void deparseExpr(Expr *expr, oai_fdw_TableOptions *opts){
 
 		elog(DEBUG1,"  deparseExpr: T_Var");
 		varleft = (Var *)expr;
-		leftargOption = getColumnOption(opts->foreigntableid,varleft->varattnosyn);
+		leftargOption = getColumnOption(opts->foreigntableid,varleft->varattno);
 
 		break;
 
@@ -1415,7 +1414,7 @@ static void deparseExpr(Expr *expr, oai_fdw_TableOptions *opts){
 		elog(DEBUG1,"  deparseExpr: opername > %s",opername);
 
 		varleft  = (Var *) linitial(oper->args);
-		leftargOption = getColumnOption(opts->foreigntableid,varleft->varattnosyn);
+		leftargOption = getColumnOption(opts->foreigntableid,varleft->varattno);
 
 		if (strcmp(opername, "=") == 0){
 
@@ -1545,7 +1544,7 @@ static void deparseSelectColumns(oai_fdw_TableOptions *opts){
 		if(expr->type == T_Var)	{
 
 			variable = (Var *)expr;
-			columnOption = getColumnOption(opts->foreigntableid,variable->varattnosyn);
+			columnOption = getColumnOption(opts->foreigntableid,variable->varattno);
 
 			//elog(DEBUG1,"  deparseSelectColumns: evaluating variable->varattnosyn = %u",variable->varattnosyn);
 
