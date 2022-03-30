@@ -221,6 +221,7 @@ void oai_fdw_BeginForeignScan(ForeignScanState *node, int eflags);
 TupleTableSlot *oai_fdw_IterateForeignScan(ForeignScanState *node);
 void oai_fdw_ReScanForeignScan(ForeignScanState *node);
 void oai_fdw_EndForeignScan(ForeignScanState *node);
+static List* oai_ImportForeignSchema(ImportForeignSchemaStmt* stmt, Oid serverOid);
 
 void init_string(struct string *s);
 size_t writefunc(void *ptr, size_t size, size_t nmemb, struct string *s);
@@ -246,14 +247,14 @@ int check_url(char *url);
 
 Datum oai_fdw_version(PG_FUNCTION_ARGS) {
 
-	StringInfoData bufffer;
-	initStringInfo(&bufffer);
+	StringInfoData buffer;
+	initStringInfo(&buffer);
 
-	appendStringInfo(&bufffer,"oai fdw = %s,",OAI_FDW_VERSION);
-	appendStringInfo(&bufffer," libxml = %s,",LIBXML_DOTTED_VERSION);
-	appendStringInfo(&bufffer," libcurl = %s",curl_version());
+	appendStringInfo(&buffer,"oai fdw = %s,",OAI_FDW_VERSION);
+	appendStringInfo(&buffer," libxml = %s,",LIBXML_DOTTED_VERSION);
+	appendStringInfo(&buffer," libcurl = %s",curl_version());
 
-    PG_RETURN_TEXT_P(cstring_to_text(bufffer.data));
+    PG_RETURN_TEXT_P(cstring_to_text(buffer.data));
 }
 
 Datum oai_fdw_identity(PG_FUNCTION_ARGS) {
@@ -557,6 +558,8 @@ Datum oai_fdw_handler(PG_FUNCTION_ARGS) {
 	fdwroutine->IterateForeignScan = oai_fdw_IterateForeignScan;
 	fdwroutine->ReScanForeignScan = oai_fdw_ReScanForeignScan;
 	fdwroutine->EndForeignScan = oai_fdw_EndForeignScan;
+	fdwroutine->ImportForeignSchema = oai_ImportForeignSchema;
+
 	PG_RETURN_POINTER(fdwroutine);
 
 }
@@ -2275,5 +2278,130 @@ void oai_fdw_ReScanForeignScan(ForeignScanState *node) {
 }
 
 void oai_fdw_EndForeignScan(ForeignScanState *node) {
+
+}
+
+static List* oai_ImportForeignSchema(ImportForeignSchemaStmt* stmt, Oid serverOid) {
+
+	ForeignServer* server;
+	ListCell   *cell;
+	List *sql_commands = NIL;
+	List *all_sets = NIL;
+	char *format = "oai_dc";
+	server = GetForeignServer(serverOid);
+
+	foreach(cell, server->options) {
+
+		DefElem *def = lfirst_node(DefElem, cell);
+		if(strcmp(def->defname,"url")==0) all_sets = GetSets(defGetString(def));
+
+	}
+
+	foreach(cell, stmt->options) {
+
+		DefElem *def = lfirst_node(DefElem, cell);
+		if(strcmp(def->defname,"metadataprefix")==0) format = defGetString(def);
+
+	}
+
+	if(strcmp(stmt->remote_schema,"oai_sets") == 0) {
+
+		List *tables = NIL;
+
+		if(stmt->list_type == FDW_IMPORT_SCHEMA_LIMIT_TO) {
+
+			ListCell *cell_limit_to;
+
+			foreach (cell_limit_to, stmt->table_list) {
+
+				RangeVar* rv = (RangeVar*) lfirst(cell_limit_to);
+				OAISet *set = (OAISet *)palloc0(sizeof(OAISet));
+				set->setSpec = rv->relname;
+
+				tables = lappend(tables, set);
+
+			}
+
+		} else if(stmt->list_type == FDW_IMPORT_SCHEMA_EXCEPT) {
+
+			/*
+			ListCell *cell_except;
+
+			foreach (all_sets, stmt->table_list) {
+
+				//OAISet *set = (OAISet *) lfirst(cell);
+
+
+			}
+
+
+			foreach (cell_except, stmt->table_list) {
+
+				RangeVar* rv = (RangeVar*) lfirst(cell_except);
+				OAISet *set = (OAISet *)palloc0(sizeof(OAISet));
+				set->setSpec = rv->relname;
+
+				tables = lappend(tables, set);
+
+			}
+
+			*/
+
+		} else if(stmt->list_type == FDW_IMPORT_SCHEMA_ALL) {
+
+			tables = all_sets;
+
+		}
+
+		foreach(cell, tables) {
+
+			StringInfoData buffer;
+			OAISet *set = (OAISet *) lfirst(cell);
+			initStringInfo(&buffer);
+
+			appendStringInfo(&buffer,"\nCREATE FOREIGN TABLE %s (\n",quote_identifier(set->setSpec));
+			appendStringInfo(&buffer,"  id text                OPTIONS (oai_node 'identifier'),\n");
+			appendStringInfo(&buffer,"  xmldoc xml             OPTIONS (oai_node 'content'),\n");
+			appendStringInfo(&buffer,"  sets text[]            OPTIONS (oai_node 'setspec'),\n");
+			appendStringInfo(&buffer,"  updatedate timestamp   OPTIONS (oai_node 'datestamp'),\n");
+			appendStringInfo(&buffer,"  format text            OPTIONS (oai_node 'metadataprefix'),\n");
+			appendStringInfo(&buffer,"  status boolean         OPTIONS (oai_node 'status')\n");
+			appendStringInfo(&buffer,") SERVER %s OPTIONS (metadataPrefix '%s', setspec '%s');\n",server->servername,format,set->setSpec);
+
+			sql_commands = lappend(sql_commands, pstrdup(buffer.data));
+
+			elog(DEBUG1,"IMPORT FOREIGN SCHEMA (%s): \n%s",stmt->remote_schema,buffer.data);
+
+		}
+
+		elog(NOTICE, "Tables to be created %d", list_length(sql_commands));
+
+	} else if(strcmp(stmt->remote_schema,"oai_repository") == 0){
+
+		StringInfoData buffer;
+		initStringInfo(&buffer);
+
+		appendStringInfo(&buffer,"\nCREATE FOREIGN TABLE %s_repository (\n",server->servername);
+		appendStringInfo(&buffer,"  id text                OPTIONS (oai_node 'identifier'),\n");
+		appendStringInfo(&buffer,"  xmldoc xml             OPTIONS (oai_node 'content'),\n");
+		appendStringInfo(&buffer,"  sets text[]            OPTIONS (oai_node 'setspec'),\n");
+		appendStringInfo(&buffer,"  updatedate timestamp   OPTIONS (oai_node 'datestamp'),\n");
+		appendStringInfo(&buffer,"  format text            OPTIONS (oai_node 'metadataprefix'),\n");
+		appendStringInfo(&buffer,"  status boolean         OPTIONS (oai_node 'status')\n");
+		appendStringInfo(&buffer,") SERVER %s OPTIONS (metadataPrefix '%s');\n",server->servername,format);
+
+		sql_commands = lappend(sql_commands, pstrdup(buffer.data));
+
+		elog(DEBUG1,"IMPORT FOREIGN SCHEMA: \n%s",buffer.data);
+
+	} else {
+
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_SCHEMA_NAME),
+						errmsg("invalid FOREIGN SCHEMA: '%s'",stmt->remote_schema)));
+
+	}
+
+	return sql_commands;
 
 }
