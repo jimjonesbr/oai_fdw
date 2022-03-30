@@ -6,7 +6,7 @@ A PostgreSQL Foreign Data Wrapper to access OAI-PMH repositories (Open Archives 
 
 ![CI](https://github.com/jimjonesbr/oai_fdw/actions/workflows/ci.yml/badge.svg)
 
-**Note**: This software is still under constant development and therefore still NOT production ready.
+**Note**: This software is still under constant development and therefore is still NOT production ready.
 
 ## Index
 
@@ -60,7 +60,7 @@ OPTIONS (url 'https://services.dnb.de/oai/repository');
 
 | Server Option | Requirement          | Description                                                                                                        |
 |---------------|--------------------------|--------------------------------------------------------------------------------------------------------------------|
-| `url`  | mandatory        | URL address of the OAI-PMH endpoint.  
+| `url`  | mandatory        | URL address of the OAI-PMH repository.  
 
 ### [CREATE FOREIGN TABLE](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#create_foreign_table)
 
@@ -87,7 +87,7 @@ CREATE FOREIGN TABLE dnb_maps_marc21 (
 | `setspec`     | `text[]`, `varchar[]`    | The set membership of the item for the purpose of selective harvesting. (OAI Header)                               |
 | `datestamp`   | `timestamp`              | The date of creation, modification or deletion of the record for the purpose of selective harvesting. (OAI Header) |
 | `content`     | `text`, `varchar`, `xml` | The XML document representing the retrieved recored (OAI Record)                                                   |
-| `metadataPrefix`     | `text`, `varchar` | The metadataPrefix - a string that specifies the metadata format in OAI-PMH requests issued to the repository      |
+| `metadataprefix`     | `text`, `varchar` | A string that specifies the metadata format in OAI-PMH requests issued to the repository      |
 
 
 **Server Options**
@@ -140,7 +140,6 @@ SELECT * FROM ulb_ulbmsuo_oai_dc;
 
 
 ```sql
--- German National Library
 CREATE SERVER oai_server_dnb FOREIGN DATA WRAPPER oai_fdw
 OPTIONS (url 'https://services.dnb.de/oai/repository');
 
@@ -159,7 +158,7 @@ SELECT * FROM dnb_zdb_oai_dc;
 
 ```
 
-4. It is possible to set or overwrite the pre-configured `SERVER OPTION` values by filtering the records with the SQL `WHERE` clause. The following example shows how to set the harvesting `metadataPrefix`, `setspec`, and time interval (`from` and `until`) values in query time:
+4. It is possible to set or overwrite the pre-configured `SERVER OPTION` values by filtering the records with the SQL `WHERE` clause. The following example shows how to set the harvesting `metadataprefix`, `setspec`, and time interval (`from` and `until`) values in query time:
 
 ```sql
 CREATE SERVER oai_server_dnb FOREIGN DATA WRAPPER oai_fdw 
@@ -186,7 +185,7 @@ WHERE
 
 ## Support Functions
 
-These support functions help to retrieve additional information from an OAI Server, so that queries can be narrowed down.
+These support functions help to retrieve additional information from an OAI Server to allow harvesters to limit harvest requests to portions of the metadata available from a repository.
 
 ### [OAI_Identify](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#oai_identify)
 
@@ -265,7 +264,7 @@ SELECT * FROM OAI_ListMetadataFormats('oai_server_ulb');
 
 **Description**
 
-This function is used to retrieve the set structure of a repository, useful for selective harvesting.
+This function is used to retrieve the set structure of a repository, useful for [selective harvesting](http://www.openarchives.org/OAI/openarchivesprotocol.html#SelectiveHarvesting).
 
 OAI Request: [ListSets](http://www.openarchives.org/OAI/openarchivesprotocol.html#ListSets)
 
@@ -300,7 +299,7 @@ SELECT * FROM OAI_ListSets('oai_server_ulb');
 
 **Description**
 
-Shows the OAI FDW installed version and its main libraries.
+Shows the version of the installed OAI FDW and its main libraries.
 
 **Usage**
 
