@@ -1060,18 +1060,13 @@ int executeOAIRequest(oai_fdw_state *state, struct string *xmlResponse) {
 
 		if (res != CURLE_OK) {
 
+			long http_code = 0;
+			curl_easy_getinfo (curl, CURLINFO_RESPONSE_CODE, &http_code);
 			curl_easy_cleanup(curl);
 
-/*
-	ereport(ERROR,
-					(errcode(ERRCODE_FDW_UNABLE_TO_CREATE_EXECUTION),
-					 errmsg("failed to bind the MySQL query: %s",
-							mysql_error(fmstate->conn))));
-*/
-
 			ereport(ERROR,
-					(errcode(ERRCODE_FDW_UNABLE_TO_ESTABLISH_CONNECTION),
-					errmsg("OAI %s request failed. Connection error code %d",state->requestType,res)));
+				   (errcode(ERRCODE_FDW_UNABLE_TO_ESTABLISH_CONNECTION),
+					errmsg("OAI %s request failed. The HTTP request '%s?%s' returned an error: %ld",state->requestType,state->url,url_bufffer.data,http_code)));
 
 		}
 
@@ -2313,8 +2308,6 @@ static List* oai_fdw_ImportForeignSchema(ImportForeignSchemaStmt* stmt, Oid serv
 			List *formats = NIL;
 			bool found = false;
 			formats = GetMetadataFormats(url);
-
-			//elog(WARNING,"URL > %s",url);
 
 			foreach(cell_formats, formats) {
 
