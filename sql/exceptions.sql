@@ -142,3 +142,17 @@ SELECT * FROM OAI_Identify('foo');
 
 -- OAI_Identify: NULL FOREIGN SERVER
 SELECT * FROM OAI_Identify(NULL);
+
+CREATE SCHEMA exception_schema;
+-- IMPORT FOREIGN SCHEMA without 'metadataprerifx' OPTION
+IMPORT FOREIGN SCHEMA oai_sets FROM SERVER oai_server_ulb INTO exception_schema;
+
+-- IMPORT FOREIGN SCHEMA with invalid 'metadataprerifx' OPTION
+IMPORT FOREIGN SCHEMA oai_sets FROM SERVER oai_server_ulb INTO exception_schema OPTIONS (metadataprefix 'foo');
+
+-- IMPORT FOREIGN SCHEMA with unknown OPTION
+IMPORT FOREIGN SCHEMA oai_sets FROM SERVER oai_server_ulb INTO exception_schema OPTIONS (metadataprefix 'oai_dc', foo 'bar');
+
+-- IMPORT FOREIGN SCHEMA with unknown foreign schema
+IMPORT FOREIGN SCHEMA foo FROM SERVER oai_server_ulb INTO exception_schema OPTIONS (metadataprefix 'oai_dc');
+

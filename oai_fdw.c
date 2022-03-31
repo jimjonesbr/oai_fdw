@@ -221,7 +221,7 @@ void oai_fdw_BeginForeignScan(ForeignScanState *node, int eflags);
 TupleTableSlot *oai_fdw_IterateForeignScan(ForeignScanState *node);
 void oai_fdw_ReScanForeignScan(ForeignScanState *node);
 void oai_fdw_EndForeignScan(ForeignScanState *node);
-static List* oai_ImportForeignSchema(ImportForeignSchemaStmt* stmt, Oid serverOid);
+static List* oai_fdw_ImportForeignSchema(ImportForeignSchemaStmt* stmt, Oid serverOid);
 
 void init_string(struct string *s);
 size_t writefunc(void *ptr, size_t size, size_t nmemb, struct string *s);
@@ -558,7 +558,7 @@ Datum oai_fdw_handler(PG_FUNCTION_ARGS) {
 	fdwroutine->IterateForeignScan = oai_fdw_IterateForeignScan;
 	fdwroutine->ReScanForeignScan = oai_fdw_ReScanForeignScan;
 	fdwroutine->EndForeignScan = oai_fdw_EndForeignScan;
-	fdwroutine->ImportForeignSchema = oai_ImportForeignSchema;
+	fdwroutine->ImportForeignSchema = oai_fdw_ImportForeignSchema;
 
 	PG_RETURN_POINTER(fdwroutine);
 
@@ -2281,13 +2281,14 @@ void oai_fdw_EndForeignScan(ForeignScanState *node) {
 
 }
 
-static List* oai_ImportForeignSchema(ImportForeignSchemaStmt* stmt, Oid serverOid) {
+static List* oai_fdw_ImportForeignSchema(ImportForeignSchemaStmt* stmt, Oid serverOid) {
 
 	ForeignServer* server;
 	ListCell   *cell;
 	List *sql_commands = NIL;
 	List *all_sets = NIL;
 	char *format = "oai_dc";
+	char *url = NULL;
 	bool format_set = false;
 
 	server = GetForeignServer(serverOid);
@@ -2295,7 +2296,10 @@ static List* oai_ImportForeignSchema(ImportForeignSchemaStmt* stmt, Oid serverOi
 	foreach(cell, server->options) {
 
 		DefElem *def = lfirst_node(DefElem, cell);
-		if(strcmp(def->defname,"url")==0) all_sets = GetSets(defGetString(def));
+		if(strcmp(def->defname,"url")==0) {
+			url = defGetString(def);
+			all_sets = GetSets(url);
+		}
 
 	}
 
@@ -2305,8 +2309,38 @@ static List* oai_ImportForeignSchema(ImportForeignSchemaStmt* stmt, Oid serverOi
 		DefElem *def = lfirst_node(DefElem, cell);
 		if(strcmp(def->defname,"metadataprefix")==0) {
 
+			ListCell *cell_formats;
+			List *formats = NIL;
+			bool found = false;
+			formats = GetMetadataFormats(url);
+
+			//elog(WARNING,"URL > %s",url);
+
+			foreach(cell_formats, formats) {
+
+				OAIMetadataFormat *format = (OAIMetadataFormat *) lfirst(cell_formats);
+
+				if(strcmp(format->metadataPrefix,defGetString(def))==0){
+					found = true;
+				}
+			}
+
+			if(!found) {
+
+				ereport(ERROR,
+					   (errcode(ERRCODE_FDW_OPTION_NAME_NOT_FOUND),
+						errmsg("invalid 'metadataprefix': '%s'",defGetString(def))));
+
+			}
+
 			format = defGetString(def);
 			format_set = true;
+
+		} else {
+
+			ereport(ERROR,
+				   (errcode(ERRCODE_FDW_OPTION_NAME_NOT_FOUND),
+					errmsg("invalid FOREIGN SCHEMA OPTION: '%s'",def->defname)));
 
 		}
 
@@ -2318,8 +2352,6 @@ static List* oai_ImportForeignSchema(ImportForeignSchemaStmt* stmt, Oid serverOi
 			   (errcode(ERRCODE_FDW_OPTION_NAME_NOT_FOUND),
 			    errmsg("missing 'metadataprefix' OPTION."),
 				errhint("A OAI Foreign Table must have a fixed 'metadataprefix'. Execute 'SELECT * FROM OAI_ListMetadataFormats('%s')' to see which formats are offered in the OAI Repository.",server->servername)));
-
-		//elog(WARNING," No 'metadataprefix' OPTION found! Metadata format set to 'oai_dc'.");
 
 	}
 

@@ -171,3 +171,17 @@ SELECT * FROM OAI_Identify(NULL);
 ------+-------------
 (0 rows)
 
+CREATE SCHEMA exception_schema;
+-- IMPORT FOREIGN SCHEMA without 'metadataprerifx' OPTION
+IMPORT FOREIGN SCHEMA oai_sets FROM SERVER oai_server_ulb INTO exception_schema;
+ERROR:  missing 'metadataprefix' OPTION.
+HINT:  A OAI Foreign Table must have a fixed 'metadataprefix'. Execute 'SELECT * FROM OAI_ListMetadataFormats('oai_server_ulb')' to see which formats are offered in the OAI Repository.
+-- IMPORT FOREIGN SCHEMA with invalid 'metadataprerifx' OPTION
+IMPORT FOREIGN SCHEMA oai_sets FROM SERVER oai_server_ulb INTO exception_schema OPTIONS (metadataprefix 'foo');
+ERROR:  invalid 'metadataprefix': 'foo'
+-- IMPORT FOREIGN SCHEMA with unknown OPTION
+IMPORT FOREIGN SCHEMA oai_sets FROM SERVER oai_server_ulb INTO exception_schema OPTIONS (metadataprefix 'oai_dc', foo 'bar');
+ERROR:  invalid FOREIGN SCHEMA OPTION: 'foo'
+-- IMPORT FOREIGN SCHEMA with unknown foreign schema
+IMPORT FOREIGN SCHEMA foo FROM SERVER oai_server_ulb INTO exception_schema OPTIONS (metadataprefix 'oai_dc');
+ERROR:  invalid FOREIGN SCHEMA: 'foo'
