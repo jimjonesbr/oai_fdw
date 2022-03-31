@@ -1,0 +1,206 @@
+-- Importing schema 'oai_sets'
+CREATE SCHEMA ulb_schema;
+IMPORT FOREIGN SCHEMA oai_sets 
+FROM SERVER oai_server_ulb 
+INTO ulb_schema 
+  OPTIONS (metadataprefix 'oai_dc');
+NOTICE:  Foreign tables to be created in schema 'ulb_schema': 10
+  
+SELECT * FROM information_schema.foreign_tables
+WHERE foreign_table_schema = 'ulb_schema';
+ foreign_table_catalog | foreign_table_schema | foreign_table_name | foreign_server_catalog | foreign_server_name 
+-----------------------+----------------------+--------------------+------------------------+---------------------
+ contrib_regression    | ulb_schema           | ulbmshbw           | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | ulbmshs            | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | ulbmssp            | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | ulbmsuo            | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | ulbmsz             | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | ulbmsum            | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | ulbmsob            | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | ulbmshd            | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | ulbmsh             | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | fremdbestand_hbz   | contrib_regression     | oai_server_ulb
+(10 rows)
+
+-- Importing schema 'oai_repository'
+IMPORT FOREIGN SCHEMA oai_repository 
+FROM SERVER oai_server_ulb 
+INTO ulb_schema 
+  OPTIONS (metadataprefix 'oai_dc');
+  
+SELECT * FROM information_schema.foreign_tables
+WHERE foreign_table_schema = 'ulb_schema';
+ foreign_table_catalog | foreign_table_schema |    foreign_table_name     | foreign_server_catalog | foreign_server_name 
+-----------------------+----------------------+---------------------------+------------------------+---------------------
+ contrib_regression    | ulb_schema           | ulbmshbw                  | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | ulbmshs                   | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | ulbmssp                   | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | ulbmsuo                   | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | ulbmsz                    | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | ulbmsum                   | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | ulbmsob                   | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | ulbmshd                   | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | ulbmsh                    | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | fremdbestand_hbz          | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | oai_server_ulb_repository | contrib_regression     | oai_server_ulb
+(11 rows)
+
+-- Import schema 'oai_sets' LIMIT TO 
+CREATE SCHEMA ulb_schema2;
+IMPORT FOREIGN SCHEMA oai_sets LIMIT TO (ulbmshbw,ulbmshs) 
+FROM SERVER oai_server_ulb 
+INTO ulb_schema2 
+  OPTIONS (metadataprefix 'oai_dc');
+NOTICE:  Foreign tables to be created in schema 'ulb_schema2': 2
+  
+SELECT * FROM information_schema.foreign_tables
+WHERE foreign_table_schema = 'ulb_schema2';
+ foreign_table_catalog | foreign_table_schema | foreign_table_name | foreign_server_catalog | foreign_server_name 
+-----------------------+----------------------+--------------------+------------------------+---------------------
+ contrib_regression    | ulb_schema2          | ulbmshbw           | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema2          | ulbmshs            | contrib_regression     | oai_server_ulb
+(2 rows)
+
+-- Import schema 'oai_sets' EXCEPT 
+IMPORT FOREIGN SCHEMA oai_sets EXCEPT (ulbmshbw,ulbmshs) 
+FROM SERVER oai_server_ulb 
+INTO ulb_schema2 
+  OPTIONS (metadataprefix 'oai_dc');
+NOTICE:  Foreign tables to be created in schema 'ulb_schema2': 8
+SELECT * FROM information_schema.foreign_tables
+WHERE foreign_table_schema = 'ulb_schema2';
+ foreign_table_catalog | foreign_table_schema | foreign_table_name | foreign_server_catalog | foreign_server_name 
+-----------------------+----------------------+--------------------+------------------------+---------------------
+ contrib_regression    | ulb_schema2          | ulbmshbw           | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema2          | ulbmshs            | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema2          | ulbmssp            | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema2          | ulbmsuo            | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema2          | ulbmsz             | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema2          | ulbmsum            | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema2          | ulbmsob            | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema2          | ulbmshd            | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema2          | ulbmsh             | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema2          | fremdbestand_hbz   | contrib_regression     | oai_server_ulb
+(10 rows)
+
+-- Importing schema 'oai_sets' (DNB)
+CREATE SCHEMA dnb_schema;
+IMPORT FOREIGN SCHEMA oai_sets 
+FROM SERVER oai_server_dnb 
+INTO dnb_schema 
+  OPTIONS (metadataprefix 'MARC21-xml');
+NOTICE:  Foreign tables to be created in schema 'dnb_schema': 4241
+ 
+SELECT * FROM dnb_schema."dnb:reiheC" 
+WHERE id = 'oai:dnb.de/dnb:reiheC/1253187622';
+                id                |                                             xmldoc                                             |     sets     |        updatedate        |   format   | status 
+----------------------------------+------------------------------------------------------------------------------------------------+--------------+--------------------------+------------+--------
+ oai:dnb.de/dnb:reiheC/1253187622 | <record xmlns="http://www.loc.gov/MARC21/slim" type="Bibliographic">                          +| {dnb:reiheC} | Tue Mar 29 19:31:49 2022 | MARC21-xml | f
+                                  |     <leader>00000nem a2200000 cb4500</leader>                                                 +|              |                          |            | 
+                                  |     <controlfield tag="001">1253187622</controlfield>                                         +|              |                          |            | 
+                                  |     <controlfield tag="003">DE-101</controlfield>                                             +|              |                          |            | 
+                                  |     <controlfield tag="005">20220329213149.0</controlfield>                                   +|              |                          |            | 
+                                  |     <controlfield tag="007">a|||||||</controlfield>                                           +|              |                          |            | 
+                                  |     <controlfield tag="008">220309s2022    gw |||||||a||   ||||ger  </controlfield>           +|              |                          |            | 
+                                  |     <datafield tag="016" ind1="7" ind2=" ">                                                   +|              |                          |            | 
+                                  |       <subfield code="2">DE-101</subfield>                                                    +|              |                          |            | 
+                                  |       <subfield code="a">1253187622</subfield>                                                +|              |                          |            | 
+                                  |     </datafield>                                                                              +|              |                          |            | 
+                                  |     <datafield tag="020" ind1=" " ind2=" ">                                                   +|              |                          |            | 
+                                  |       <subfield code="c">keine Bindung</subfield>                                             +|              |                          |            | 
+                                  |     </datafield>                                                                              +|              |                          |            | 
+                                  |     <datafield tag="035" ind1=" " ind2=" ">                                                   +|              |                          |            | 
+                                  |       <subfield code="a">(DE-599)DNB1253187622</subfield>                                     +|              |                          |            | 
+                                  |     </datafield>                                                                              +|              |                          |            | 
+                                  |     <datafield tag="040" ind1=" " ind2=" ">                                                   +|              |                          |            | 
+                                  |       <subfield code="a">1180</subfield>                                                      +|              |                          |            | 
+                                  |       <subfield code="b">ger</subfield>                                                       +|              |                          |            | 
+                                  |       <subfield code="c">DE-101</subfield>                                                    +|              |                          |            | 
+                                  |       <subfield code="d">9999</subfield>                                                      +|              |                          |            | 
+                                  |       <subfield code="e">rda</subfield>                                                       +|              |                          |            | 
+                                  |     </datafield>                                                                              +|              |                          |            | 
+                                  |     <datafield tag="041" ind1=" " ind2=" ">                                                   +|              |                          |            | 
+                                  |       <subfield code="a">ger</subfield>                                                       +|              |                          |            | 
+                                  |     </datafield>                                                                              +|              |                          |            | 
+                                  |     <datafield tag="044" ind1=" " ind2=" ">                                                   +|              |                          |            | 
+                                  |       <subfield code="c">XA-DE</subfield>                                                     +|              |                          |            | 
+                                  |     </datafield>                                                                              +|              |                          |            | 
+                                  |     <datafield tag="110" ind1="2" ind2=" ">                                                   +|              |                          |            | 
+                                  |       <subfield code="8">1\p</subfield>                                                       +|              |                          |            | 
+                                  |       <subfield code="0">(DE-588)118040811X</subfield>                                        +|              |                          |            | 
+                                  |       <subfield code="0">https://d-nb.info/gnd/118040811X</subfield>                          +|              |                          |            | 
+                                  |       <subfield code="0">(DE-101)118040811X</subfield>                                        +|              |                          |            | 
+                                  |       <subfield code="a">Thüringer Landesamt für Bodenmanagement und Geoinformation</subfield>+|              |                          |            | 
+                                  |       <subfield code="e">Kartograf</subfield>                                                 +|              |                          |            | 
+                                  |       <subfield code="4">ctg</subfield>                                                       +|              |                          |            | 
+                                  |       <subfield code="2">gnd</subfield>                                                       +|              |                          |            | 
+                                  |     </datafield>                                                                              +|              |                          |            | 
+                                  |     <datafield tag="245" ind1="1" ind2="0">                                                   +|              |                          |            | 
+                                  |       <subfield code="a">Schmalkalden-Grumbach</subfield>                                     +|              |                          |            | 
+                                  |     </datafield>                                                                              +|              |                          |            | 
+                                  |     <datafield tag="250" ind1=" " ind2=" ">                                                   +|              |                          |            | 
+                                  |       <subfield code="a">Ausgabe 2022</subfield>                                              +|              |                          |            | 
+                                  |     </datafield>                                                                              +|              |                          |            | 
+                                  |     <datafield tag="255" ind1=" " ind2=" ">                                                   +|              |                          |            | 
+                                  |       <subfield code="a">1:10 000</subfield>                                                  +|              |                          |            | 
+                                  |     </datafield>                                                                              +|              |                          |            | 
+                                  |     <datafield tag="259" ind1=" " ind2=" ">                                                   +|              |                          |            | 
+                                  |       <subfield code="a">42022</subfield>                                                     +|              |                          |            | 
+                                  |     </datafield>                                                                              +|              |                          |            | 
+                                  |     <datafield tag="264" ind1=" " ind2="1">                                                   +|              |                          |            | 
+                                  |       <subfield code="a">Erfurt</subfield>                                                    +|              |                          |            | 
+                                  |       <subfield code="b">Landesamt für Bodenmanagement und Geoinformation</subfield>          +|              |                          |            | 
+                                  |       <subfield code="c">[2022]</subfield>                                                    +|              |                          |            | 
+                                  |     </datafield>                                                                              +|              |                          |            | 
+                                  |     <datafield tag="300" ind1=" " ind2=" ">                                                   +|              |                          |            | 
+                                  |       <subfield code="a">1 Karte</subfield>                                                   +|              |                          |            | 
+                                  |       <subfield code="c">56 x 59 cm, auf Blatt 60 x 76 cm</subfield>                          +|              |                          |            | 
+                                  |     </datafield>                                                                              +|              |                          |            | 
+                                  |     <datafield tag="336" ind1=" " ind2=" ">                                                   +|              |                          |            | 
+                                  |       <subfield code="a">kartografisches Bild</subfield>                                      +|              |                          |            | 
+                                  |       <subfield code="b">cri</subfield>                                                       +|              |                          |            | 
+                                  |       <subfield code="2">rdacontent</subfield>                                                +|              |                          |            | 
+                                  |     </datafield>                                                                              +|              |                          |            | 
+                                  |     <datafield tag="337" ind1=" " ind2=" ">                                                   +|              |                          |            | 
+                                  |       <subfield code="a">ohne Hilfsmittel zu benutzen</subfield>                              +|              |                          |            | 
+                                  |       <subfield code="b">n</subfield>                                                         +|              |                          |            | 
+                                  |       <subfield code="2">rdamedia</subfield>                                                  +|              |                          |            | 
+                                  |     </datafield>                                                                              +|              |                          |            | 
+                                  |     <datafield tag="338" ind1=" " ind2=" ">                                                   +|              |                          |            | 
+                                  |       <subfield code="a">Blatt</subfield>                                                     +|              |                          |            | 
+                                  |       <subfield code="b">nb</subfield>                                                        +|              |                          |            | 
+                                  |       <subfield code="2">rdacarrier</subfield>                                                +|              |                          |            | 
+                                  |     </datafield>                                                                              +|              |                          |            | 
+                                  |     <datafield tag="490" ind1="1" ind2=" ">                                                   +|              |                          |            | 
+                                  |       <subfield code="a">Topographische Karte 1:10 000</subfield>                             +|              |                          |            | 
+                                  |       <subfield code="v">5328-NO</subfield>                                                   +|              |                          |            | 
+                                  |     </datafield>                                                                              +|              |                          |            | 
+                                  |     <datafield tag="810" ind1="2" ind2=" ">                                                   +|              |                          |            | 
+                                  |       <subfield code="a">Thüringer Landesamt für Bodenmanagement und Geoinformation</subfield>+|              |                          |            | 
+                                  |       <subfield code="4">aut</subfield>                                                       +|              |                          |            | 
+                                  |       <subfield code="t">Topographische Karte 1:10 000</subfield>                             +|              |                          |            | 
+                                  |       <subfield code="v">5328-NO</subfield>                                                   +|              |                          |            | 
+                                  |       <subfield code="w">(DE-101)1182592287</subfield>                                        +|              |                          |            | 
+                                  |       <subfield code="9">45328 no</subfield>                                                  +|              |                          |            | 
+                                  |       <subfield code="7">em</subfield>                                                        +|              |                          |            | 
+                                  |     </datafield>                                                                              +|              |                          |            | 
+                                  |     <datafield tag="850" ind1=" " ind2=" ">                                                   +|              |                          |            | 
+                                  |       <subfield code="a">DE-101a</subfield>                                                   +|              |                          |            | 
+                                  |       <subfield code="a">DE-101b</subfield>                                                   +|              |                          |            | 
+                                  |     </datafield>                                                                              +|              |                          |            | 
+                                  |     <datafield tag="883" ind1="2" ind2=" ">                                                   +|              |                          |            | 
+                                  |       <subfield code="8">1\p</subfield>                                                       +|              |                          |            | 
+                                  |       <subfield code="a">dnb</subfield>                                                       +|              |                          |            | 
+                                  |       <subfield code="d">20220329</subfield>                                                  +|              |                          |            | 
+                                  |       <subfield code="q">DE-101</subfield>                                                    +|              |                          |            | 
+                                  |       <subfield code="u">https://d-nb.info/provenance/plan#dnb</subfield>                     +|              |                          |            | 
+                                  |     </datafield>                                                                              +|              |                          |            | 
+                                  |     <datafield tag="925" ind1="r" ind2=" ">                                                   +|              |                          |            | 
+                                  |       <subfield code="a">rc</subfield>                                                        +|              |                          |            | 
+                                  |     </datafield>                                                                              +|              |                          |            | 
+                                  |     <datafield tag="925" ind1="w" ind2=" ">                                                   +|              |                          |            | 
+                                  |       <subfield code="a">b</subfield>                                                         +|              |                          |            | 
+                                  |     </datafield>                                                                              +|              |                          |            | 
+                                  |   </record>                                                                                    |              |                          |            | 
+(1 row)
+

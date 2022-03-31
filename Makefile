@@ -3,7 +3,7 @@ OBJS = oai_fdw.o
 
 EXTENSION = oai_fdw
 DATA = oai_fdw--1.0.sql
-REGRESS = create_server create_foreign_table select_statements exceptions functions
+REGRESS = create_server import_foreign_schema create_foreign_table select_statements exceptions functions
 
 
 CURL_CONFIG = curl-config

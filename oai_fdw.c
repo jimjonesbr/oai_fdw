@@ -2288,6 +2288,8 @@ static List* oai_ImportForeignSchema(ImportForeignSchemaStmt* stmt, Oid serverOi
 	List *sql_commands = NIL;
 	List *all_sets = NIL;
 	char *format = "oai_dc";
+	bool format_set = false;
+
 	server = GetForeignServer(serverOid);
 
 	foreach(cell, server->options) {
@@ -2297,10 +2299,27 @@ static List* oai_ImportForeignSchema(ImportForeignSchemaStmt* stmt, Oid serverOi
 
 	}
 
+
 	foreach(cell, stmt->options) {
 
 		DefElem *def = lfirst_node(DefElem, cell);
-		if(strcmp(def->defname,"metadataprefix")==0) format = defGetString(def);
+		if(strcmp(def->defname,"metadataprefix")==0) {
+
+			format = defGetString(def);
+			format_set = true;
+
+		}
+
+	}
+
+	if(!format_set) {
+
+		ereport(ERROR,
+			   (errcode(ERRCODE_FDW_OPTION_NAME_NOT_FOUND),
+			    errmsg("missing 'metadataprefix' OPTION."),
+				errhint("A OAI Foreign Table must have a fixed 'metadataprefix'. Execute 'SELECT * FROM OAI_ListMetadataFormats('%s')' to see which formats are offered in the OAI Repository.",server->servername)));
+
+		//elog(WARNING," No 'metadataprefix' OPTION found! Metadata format set to 'oai_dc'.");
 
 	}
 
@@ -2324,28 +2343,30 @@ static List* oai_ImportForeignSchema(ImportForeignSchemaStmt* stmt, Oid serverOi
 
 		} else if(stmt->list_type == FDW_IMPORT_SCHEMA_EXCEPT) {
 
-			/*
-			ListCell *cell_except;
+			ListCell *cell_sets;
 
-			foreach (all_sets, stmt->table_list) {
+			foreach (cell_sets, all_sets) {
 
-				//OAISet *set = (OAISet *) lfirst(cell);
-
-
-			}
-
-
-			foreach (cell_except, stmt->table_list) {
-
-				RangeVar* rv = (RangeVar*) lfirst(cell_except);
+				ListCell *cell_except;
+				bool found = false;
 				OAISet *set = (OAISet *)palloc0(sizeof(OAISet));
-				set->setSpec = rv->relname;
+				set = (OAISet *) lfirst(cell_sets);
 
-				tables = lappend(tables, set);
+				foreach (cell_except, stmt->table_list) {
+
+					RangeVar* rv = (RangeVar*) lfirst(cell_except);
+					if(strcmp(rv->relname,set->setSpec)==0) {
+
+						found = true;
+						break;
+					}
+
+				}
+
+				if(!found) tables = lappend(tables,set);
 
 			}
 
-			*/
 
 		} else if(stmt->list_type == FDW_IMPORT_SCHEMA_ALL) {
 
@@ -2374,7 +2395,7 @@ static List* oai_ImportForeignSchema(ImportForeignSchemaStmt* stmt, Oid serverOi
 
 		}
 
-		elog(NOTICE, "Tables to be created %d", list_length(sql_commands));
+		elog(NOTICE, "Foreign tables to be created in schema '%s': %d", stmt->local_schema, list_length(sql_commands));
 
 	} else if(strcmp(stmt->remote_schema,"oai_repository") == 0){
 
@@ -2398,7 +2419,7 @@ static List* oai_ImportForeignSchema(ImportForeignSchemaStmt* stmt, Oid serverOi
 
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_SCHEMA_NAME),
-						errmsg("invalid FOREIGN SCHEMA: '%s'",stmt->remote_schema)));
+				 errmsg("invalid FOREIGN SCHEMA: '%s'",stmt->remote_schema)));
 
 	}
 
