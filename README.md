@@ -6,7 +6,7 @@ A PostgreSQL Foreign Data Wrapper to access OAI-PMH repositories (Open Archives 
 
 ![CI](https://github.com/jimjonesbr/oai_fdw/actions/workflows/ci.yml/badge.svg)
 
-**Note**: This software is still under constant development and therefore is still NOT production ready.
+**Note**: This software is still under constant development and therefore is still **NOT** production ready.
 
 ## Index
 
@@ -14,6 +14,7 @@ A PostgreSQL Foreign Data Wrapper to access OAI-PMH repositories (Open Archives 
 - [Build & Install](#build-and-install)
 - [Usage](#usage)
   - [CREATE SERVER](#create-server)
+  - [IMPORT FOREIGN SCHEMA](#import-foreign-schema)
   - [CREATE FOREIGN TABLE](#create-foreign-table)
   - [Examples](#examples)
 - [Support Functions](#support-functions)
@@ -30,14 +31,26 @@ A PostgreSQL Foreign Data Wrapper to access OAI-PMH repositories (Open Archives 
 
 ## [Build and Install](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#build_and_install)
 
-Build and install from source code.
+To compile the source code you need to ensure the [pg_config](https://www.postgresql.org/docs/current/app-pgconfig.html) executable is properly set when you run make. This executable is typically in your PostgreSQL installation's bin directory. After that, just run `make` in the root directory:
 
 ```bash
-make
-make install
+$ cd oai_fdw
+$ make
 ```
 
-After building and installing the extension, just use create the extension in a database using the following command:
+After compilation, just run make install to install the foreign data wrapper:
+
+```bash
+$ make install
+```
+
+To run the predefined regression tests run `make installcheck` with the user `postgres`:
+
+```bash
+$ make PGUSER=postgres installcheck
+```
+
+After building and installing the extension you're ready to create the extension in a PostgreSQL database with `CREATE EXTENSION`:
 
 ```sql
 CREATE EXTENSION oai_fdw;
@@ -45,7 +58,7 @@ CREATE EXTENSION oai_fdw;
 
 ## Usage
 
-To use the OAI-PMH Foreign Data Wrapper you must first create a `SERVER` to connect to an OAI-PMH repository. After that, create `FOREIGN TABLES` to access OAI-PMH documents using SQL queries. Each `FOREIGN TABLE` column must be mapped to an `oai_node`, so that PostgreSQL knows where the deliver the OAI documents and header data.
+To use the OAI-PMH Foreign Data Wrapper you must first create a `SERVER` to connect to an OAI-PMH repository. After that, either automatically create foreign tables using `IMPORT FOREIGN SCHEMA` or create them manually using `CREATE FOREIGN TABLE`.
 
 ### [CREATE SERVER](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#create_server)
 
@@ -62,9 +75,159 @@ OPTIONS (url 'https://services.dnb.de/oai/repository');
 |---------------|--------------------------|--------------------------------------------------------------------------------------------------------------------|
 | `url`  | mandatory        | URL address of the OAI-PMH repository.  
 
+### [IMPORT FOREIGN SCHEMA](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#import-foreign-schema)
+
+The [IMPORT FOREIGN SCHEMA](https://www.postgresql.org/docs/current/sql-importforeignschema.html) command creates `FOREIGN TABLES` that represent tables existing on a foreign server. The OAI FDW offers the following `FOREIGN SCHEMAS` to automatically:
+
+ | Foreign Schema | Description          |
+|---------------|--------------------------|
+| `oai_repository`  | Creates a single table that can access all sets in the OAI repository.        
+| `oai_sets`  | Creates a table for each set in the OAI repository
+
+OAI repositories publish data sets in many different customizable data formats, such as MARC21/XML or Dublin Core. So, in order to retrieve documents from OAI repositories it is necessary to tell which format is supposed to be returned. The same goes for the OAI Foreign Data Wrapper, using the option `metadataprefix` in the `OPTION` clause. To see which formats are supported in an OAI repository, see [OAI_ListMetadataFormats](#oai_listmetadataformats).
+
+#### Examples
+
+1. Import a single table using the schema `oai_repository`
+
+```sql
+
+CREATE SERVER oai_server_ulb FOREIGN DATA WRAPPER oai_fdw 
+OPTIONS (url 'https://sammlungen.ulb.uni-muenster.de/oai');
+
+IMPORT FOREIGN SCHEMA oai_repository 
+FROM SERVER oai_server_ulb 
+INTO ulb_schema OPTIONS (metadataprefix 'oai_dc');
+
+-- Table created
+SELECT foreign_table_schema, foreign_table_name
+FROM information_schema.foreign_tables;
+
+ foreign_table_schema |    foreign_table_name     
+----------------------+---------------------------
+ ulb_schema           | oai_server_ulb_repository
+(1 row)
+```
+
+The created `FOREIGN TABLE` is named with the server name and `_repository`.
+
+```
+                          Foreign table "ulb_schema.oai_server_ulb_repository"
+   Column   |            Type             | Collation | Nullable | Default |         FDW options         
+------------+-----------------------------+-----------+----------+---------+-----------------------------
+ id         | text                        |           |          |         | (oai_node 'identifier')
+ xmldoc     | xml                         |           |          |         | (oai_node 'content')
+ sets       | text[]                      |           |          |         | (oai_node 'setspec')
+ updatedate | timestamp without time zone |           |          |         | (oai_node 'datestamp')
+ format     | text                        |           |          |         | (oai_node 'metadataprefix')
+ status     | boolean                     |           |          |         | (oai_node 'status')
+Server: oai_server_ulb
+FDW options: (metadataprefix 'oai_dc')
+```
+        
+ 2. Import a table for each OAI Set using the schema `oai_sets`
+  
+```sql
+CREATE SERVER oai_server_ulb FOREIGN DATA WRAPPER oai_fdw 
+OPTIONS (url 'https://sammlungen.ulb.uni-muenster.de/oai');   
+
+IMPORT FOREIGN SCHEMA oai_sets 
+FROM SERVER oai_server_ulb 
+INTO ulb_schema OPTIONS (metadataprefix 'oai_dc');    
+
+-- Tables created
+SELECT foreign_table_schema, foreign_table_name
+FROM information_schema.foreign_tables;
+
+ foreign_table_schema | foreign_table_name 
+----------------------+--------------------
+ ulb_schema           | ulbmshbw
+ ulb_schema           | ulbmshs
+ ulb_schema           | ulbmssp
+ ulb_schema           | ulbmsuo
+ ulb_schema           | ulbmsz
+ ulb_schema           | ulbmsum
+ ulb_schema           | ulbmsob
+ ulb_schema           | ulbmshd
+ ulb_schema           | ulbmsh
+ ulb_schema           | fremdbestand_hbz
+(10 rows)
+
+``` 
+
+The created `FOREIGN TABLES` are named with set name, for instance the set `ulbmshbw`
+
+```
+                                   Foreign table "ulb_schema.ulbmshbw"
+   Column   |            Type             | Collation | Nullable | Default |         FDW options         
+------------+-----------------------------+-----------+----------+---------+-----------------------------
+ id         | text                        |           |          |         | (oai_node 'identifier')
+ xmldoc     | xml                         |           |          |         | (oai_node 'content')
+ sets       | text[]                      |           |          |         | (oai_node 'setspec')
+ updatedate | timestamp without time zone |           |          |         | (oai_node 'datestamp')
+ format     | text                        |           |          |         | (oai_node 'metadataprefix')
+ status     | boolean                     |           |          |         | (oai_node 'status')
+Server: oai_server_ulb
+FDW options: (metadataprefix 'oai_dc', setspec 'ulbmshbw')
+```
+
+ 3. Import foreign table for each OAI Set using the schema `oai_sets` excluding specific sets using `EXCEPT`.
+ 
+ ```sql
+CREATE SCHEMA ulb_schema;
+
+CREATE SERVER oai_server_ulb FOREIGN DATA WRAPPER oai_fdw 
+OPTIONS (url 'https://sammlungen.ulb.uni-muenster.de/oai');   
+
+IMPORT FOREIGN SCHEMA oai_sets EXCEPT (ulbmshbw,ulbmshs) 
+FROM SERVER oai_server_ulb 
+INTO ulb_schema OPTIONS (metadataprefix 'oai_dc');  
+
+-- Tables created
+SELECT foreign_table_schema, foreign_table_name
+FROM information_schema.foreign_tables;
+
+ foreign_table_schema | foreign_table_name 
+----------------------+--------------------
+ ulb_schema           | ulbmssp
+ ulb_schema           | ulbmsuo
+ ulb_schema           | ulbmsz
+ ulb_schema           | ulbmsum
+ ulb_schema           | ulbmsob
+ ulb_schema           | ulbmshd
+ ulb_schema           | ulbmsh
+ ulb_schema           | fremdbestand_hbz
+(8 rows)
+ ```
+ 
+ 4. Import foreign tables for specific OAI Sets using `LIMIT TO`. 
+
+```sql
+CREATE SCHEMA ulb_schema;
+
+CREATE SERVER oai_server_ulb FOREIGN DATA WRAPPER oai_fdw 
+OPTIONS (url 'https://sammlungen.ulb.uni-muenster.de/oai');  
+
+IMPORT FOREIGN SCHEMA oai_sets LIMIT TO (ulbmshbw,ulbmshs) 
+FROM SERVER oai_server_ulb 
+INTO ulb_schema OPTIONS (metadataprefix 'oai_dc');
+
+-- Tables created      
+SELECT foreign_table_schema, foreign_table_name
+FROM information_schema.foreign_tables;
+
+ foreign_table_schema | foreign_table_name 
+----------------------+--------------------
+ ulb_schema           | ulbmshbw
+ ulb_schema           | ulbmshs
+(2 rows)
+```
+
 ### [CREATE FOREIGN TABLE](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#create_foreign_table)
 
-The following example creates a `FOREIGN TABLE` connected to the `SERVER` created above, and each table column is mapped to a `oai_node` using the `OPTION` clause. It is mandatory to set a `metadataprefix` to the `SERVER` clause of the `CREATE FOREIGN TABLE` statement, so that the OAI-PMH repository knows which XML format is supposed to be returned (see OAI_ListMetadataFormats). Optionally, it is possible to constraint a `FOREIGN TABLE` to specific OAI sets using the `setspec` option from the `SERVER` clause - omitting this option means that every SQL query will harvest all sets in the OAI repository.
+OAI FDW `FOREIGN TABLES` work as a proxy between SQL Queries and OAI Repositories. Each `FOREIGN TABLE` column must be mapped to an `oai_node`, so that PostgreSQL knows where the deliver the OAI documents and header data. It is mandatory to set a `metadataprefix` to the `SERVER` clause of the `CREATE FOREIGN TABLE` statement, so that the OAI-PMH repository knows which XML format is supposed to be returned (see [OAI_ListMetadataFormats](#oai_listmetadataformats)). Optionally, it is possible to constraint a `FOREIGN TABLE` to specific OAI sets using the `setspec` option from the `SERVER` clause - omitting this option means that every SQL query will harvest all sets in the OAI repository.
+
+The following example creates a `FOREIGN TABLE` connected to the `SERVER` created in the previous section. Queries run against this table will harvest the set `dnb:reiheC` and will return the documents encoded as `oai_dc`. Each column is set with an `oai_node` in the `OPTION` clause:
 
 
 ```sql
@@ -101,7 +264,7 @@ CREATE FOREIGN TABLE dnb_maps_marc21 (
 
 #### [Examples](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#examples)
 
-1. Create a `SERVER` and `FOREIGN TABLE` to harvest the [OAI-PMH repository](https://sammlungen.ulb.uni-muenster.de/oai) of the Münster University Library with records encoded as `oai_dc`
+1. Create a `SERVER` and `FOREIGN TABLE` to harvest the [OAI-PMH repository](https://sammlungen.ulb.uni-muenster.de/oai) of the Münster University Library with records encoded as `oai_dc`:
 
 ```sql
 CREATE SERVER oai_server_ulb FOREIGN DATA WRAPPER oai_fdw
@@ -117,7 +280,7 @@ CREATE FOREIGN TABLE ulb_oai_dc (
  
 ```
 
-2. Create a `SERVER` and a `FOREIGN TABLE` to harvest the [OAI-PMH repository](https://sammlungen.ulb.uni-muenster.de/oai) of the Münster University Library with records encoded as `oai_dc` in the set `ulbmsuo`.
+2. Create a `SERVER` and a `FOREIGN TABLE` to harvest the [OAI-PMH repository](https://sammlungen.ulb.uni-muenster.de/oai) of the Münster University Library with records encoded as `oai_dc` in the set `ulbmsuo`:
 
 ```sql
 CREATE SERVER oai_server_ulb FOREIGN DATA WRAPPER oai_fdw
