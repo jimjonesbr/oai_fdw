@@ -6,7 +6,7 @@ A PostgreSQL Foreign Data Wrapper to access OAI-PMH repositories (Open Archives 
 
 ![CI](https://github.com/jimjonesbr/oai_fdw/actions/workflows/ci.yml/badge.svg)
 
-**Note**: This software is still under constant development and therefore is still **NOT** production ready.
+**Note**: This software is still unstable and under constant development, and therefore still **NOT** production ready.
 
 ## Index
 
@@ -31,23 +31,17 @@ A PostgreSQL Foreign Data Wrapper to access OAI-PMH repositories (Open Archives 
 
 ## [Build and Install](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#build_and_install)
 
-To compile the source code you need to ensure the [pg_config](https://www.postgresql.org/docs/current/app-pgconfig.html) executable is properly set when you run make. This executable is typically in your PostgreSQL installation's bin directory. After that, just run `make` in the root directory:
+To compile the source code you need to ensure the [pg_config](https://www.postgresql.org/docs/current/app-pgconfig.html) executable is properly set when you run `make` - this executable is typically in your PostgreSQL installation's bin directory. After that, just run `make` in the root directory:
 
 ```bash
 $ cd oai_fdw
 $ make
 ```
 
-After compilation, just run make install to install the foreign data wrapper:
+After compilation, just run `make install` to install the OAI-PMH Foreign Data Wrapper:
 
 ```bash
 $ make install
-```
-
-To run the predefined regression tests run `make installcheck` with the user `postgres`:
-
-```bash
-$ make PGUSER=postgres installcheck
 ```
 
 After building and installing the extension you're ready to create the extension in a PostgreSQL database with `CREATE EXTENSION`:
@@ -56,17 +50,25 @@ After building and installing the extension you're ready to create the extension
 CREATE EXTENSION oai_fdw;
 ```
 
+To run the predefined regression tests run `make installcheck` with the user `postgres`:
+
+```bash
+$ make PGUSER=postgres installcheck
+```
+
 ## Usage
 
-To use the OAI-PMH Foreign Data Wrapper you must first create a `SERVER` to connect to an OAI-PMH repository. After that, either automatically create foreign tables using `IMPORT FOREIGN SCHEMA` or create them manually using `CREATE FOREIGN TABLE`.
+To use the OAI-PMH Foreign Data Wrapper you must first create a `SERVER` to connect to an OAI-PMH repository. After that, you can either automatically generate foreign tables using `IMPORT FOREIGN SCHEMA` or create them manually using `CREATE FOREIGN TABLE`.
 
 ### [CREATE SERVER](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#create_server)
 
-The following example creates a `SERVER` that connects to the OAI-PMH repository of the German National Library.
+The SQL command [CREATE SERVER](https://www.postgresql.org/docs/current/sql-createserver.html) defines a new foreign server. The user who defines the server becomes its owner. An OAI Foreign Server requires an `url`, so that the Foreign Data Wrapper knows where to sent the http requests.
+
+The following example creates a `SERVER` that connects to the OAI-PMH repository of the Münster University Library:
 
 ```sql
-CREATE SERVER oai_server_dnb FOREIGN DATA WRAPPER oai_fdw
-OPTIONS (url 'https://services.dnb.de/oai/repository');
+CREATE SERVER oai_server_ulb FOREIGN DATA WRAPPER oai_fdw 
+OPTIONS (url 'https://sammlungen.ulb.uni-muenster.de/oai'); 
 ```
 
 **Server Options**:
@@ -77,18 +79,24 @@ OPTIONS (url 'https://services.dnb.de/oai/repository');
 
 ### [IMPORT FOREIGN SCHEMA](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#import-foreign-schema)
 
-The [IMPORT FOREIGN SCHEMA](https://www.postgresql.org/docs/current/sql-importforeignschema.html) command creates `FOREIGN TABLES` that represent tables existing on a foreign server. The OAI FDW offers the following `FOREIGN SCHEMAS` to automatically:
+The [IMPORT FOREIGN SCHEMA](https://www.postgresql.org/docs/current/sql-importforeignschema.html) command creates `FOREIGN TABLES` that represent [sets](http://www.openarchives.org/OAI/openarchivesprotocol.html#Set) existing on an OAI foreign server. The OAI Foreign Data Wrapper offers the following `FOREIGN SCHEMAS` to automatically gernate `FOREIGN TABLES`:
 
  | Foreign Schema | Description          |
 |---------------|--------------------------|
-| `oai_repository`  | Creates a single table that can access all sets in the OAI repository.        
-| `oai_sets`  | Creates a table for each set in the OAI repository
+| `oai_repository`  | Creates a single foreign table that can access all sets in the OAI repository.        
+| `oai_sets`  | Creates a foreign table for each `set` in the OAI repository
 
-OAI repositories publish data sets in many different customizable data formats, such as MARC21/XML or Dublin Core. So, in order to retrieve documents from OAI repositories it is necessary to tell which format is supposed to be returned. The same goes for the OAI Foreign Data Wrapper, using the option `metadataprefix` in the `OPTION` clause. To see which formats are supported in an OAI repository, see [OAI_ListMetadataFormats](#oai_listmetadataformats).
+OAI-PMH repositories publish data sets in many different customizable data formats, such as [MARC21/XML](https://www.loc.gov/standards/marcxml/) and [Dublin Core](http://www.openarchives.org/OAI/openarchivesprotocol.html#dublincore). So, in order to retrieve documents from OAI-PMH repositories it is necessary to tell which format is supposed to be returned from the server. The same goes for the OAI Foreign Data Wrapper, using the option `metadataprefix` in the `OPTION` clause as shown in the following examples. To see which formats are supported in an OAI repository, see [OAI_ListMetadataFormats](#oai_listmetadataformats).
+
+**Foreign Schema Options**:
+
+| Server Option | Requirement          | Description                                                                                                        |
+|---------------|--------------------------|--------------------------------------------------------------------------------------------------------------------|
+| `metadataprefix`  | mandatory        | A string that specifies the metadata format in OAI-PMH requests issued to the repository.  
 
 #### Examples
 
-1. Import a single table using the schema `oai_repository`
+1. Import a single foreign table to access all available OAI Sets using the schema `oai_repository`
 
 ```sql
 
@@ -109,7 +117,7 @@ FROM information_schema.foreign_tables;
 (1 row)
 ```
 
-The created `FOREIGN TABLE` is named with the server name and `_repository`.
+The created foreign table is named with the server name and the suffix `_repository`. In this case `oai_server_ulb_repository`:
 
 ```
                           Foreign table "ulb_schema.oai_server_ulb_repository"
@@ -125,7 +133,7 @@ Server: oai_server_ulb
 FDW options: (metadataprefix 'oai_dc')
 ```
         
- 2. Import a table for each OAI Set using the schema `oai_sets`
+ 2. Import a foreign table for each OAI Set using the schema `oai_sets`
   
 ```sql
 CREATE SERVER oai_server_ulb FOREIGN DATA WRAPPER oai_fdw 
@@ -155,7 +163,7 @@ FROM information_schema.foreign_tables;
 
 ``` 
 
-The created `FOREIGN TABLES` are named with set name, for instance the set `ulbmshbw`
+The created foreign tables are named with `set` name, for instance the set `ulbmshbw`:
 
 ```
                                    Foreign table "ulb_schema.ulbmshbw"
@@ -171,7 +179,7 @@ Server: oai_server_ulb
 FDW options: (metadataprefix 'oai_dc', setspec 'ulbmshbw')
 ```
 
- 3. Import foreign table for each OAI Set using the schema `oai_sets` excluding specific sets using `EXCEPT`.
+ 3. Import a foreign table for each OAI Set using the schema `oai_sets`, excluding specific sets using `EXCEPT`.
  
  ```sql
 CREATE SCHEMA ulb_schema;
@@ -225,9 +233,9 @@ FROM information_schema.foreign_tables;
 
 ### [CREATE FOREIGN TABLE](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#create_foreign_table)
 
-OAI FDW `FOREIGN TABLES` work as a proxy between SQL Queries and OAI Repositories. Each `FOREIGN TABLE` column must be mapped to an `oai_node`, so that PostgreSQL knows where the deliver the OAI documents and header data. It is mandatory to set a `metadataprefix` to the `SERVER` clause of the `CREATE FOREIGN TABLE` statement, so that the OAI-PMH repository knows which XML format is supposed to be returned (see [OAI_ListMetadataFormats](#oai_listmetadataformats)). Optionally, it is possible to constraint a `FOREIGN TABLE` to specific OAI sets using the `setspec` option from the `SERVER` clause - omitting this option means that every SQL query will harvest all sets in the OAI repository.
+Foreign Tables from the OAI Foreign Data Wrapper work as a proxy between PostgreSQL clients and OAI-PMH Repositories. Each `FOREIGN TABLE` column must be mapped to an `oai_node`, so that PostgreSQL knows where to display the OAI documents and header data. It is mandatory to set a `metadataprefix` to the `SERVER` clause of the `CREATE FOREIGN TABLE` statement, so that the OAI-PMH repository knows which XML format is supposed to be returned (see [OAI_ListMetadataFormats](#oai_listmetadataformats)). Optionally, it is possible to constraint a `FOREIGN TABLE` to specific OAI sets using the `setspec` option from the `SERVER` clause - omitting this option means that every SQL query will harvest *all sets* in the OAI repository.
 
-The following example creates a `FOREIGN TABLE` connected to the `SERVER` created in the previous section. Queries run against this table will harvest the set `dnb:reiheC` and will return the documents encoded as `oai_dc`. Each column is set with an `oai_node` in the `OPTION` clause:
+The following example creates a `FOREIGN TABLE` connected to the `SERVER` created in the previous section. Queries executed against this table will harvest the set `dnb:reiheC` and will return the documents encoded as `oai_dc`. Each column is set with an `oai_node` in the `OPTION` clause:
 
 
 ```sql
@@ -321,7 +329,7 @@ SELECT * FROM dnb_zdb_oai_dc;
 
 ```
 
-4. It is possible to set or overwrite the pre-configured `SERVER OPTION` values by filtering the records with the SQL `WHERE` clause. The following example shows how to set the harvesting `metadataprefix`, `setspec`, and time interval (`from` and `until`) values in query time:
+4. It is possible to set (or even overwrite) the pre-configured `SERVER OPTION` values by filtering the records in the SQL `WHERE` clause. The following example shows how to set the harvesting `metadataprefix`, `setspec`, and time interval (`from` and `until`) values in query time, overwriting the values defined in the `CREATE FOREIGN TABLE` statement:
 
 ```sql
 CREATE SERVER oai_server_dnb FOREIGN DATA WRAPPER oai_fdw 
