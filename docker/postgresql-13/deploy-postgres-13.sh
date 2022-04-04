@@ -1,13 +1,14 @@
 #!/bin/bash
 
-CONTAINER_NAME=oai_fdw_pg14
-BASE_IMAGE=postgres:14
+CONTAINER_NAME=oai_fdw_pg13
+BASE_IMAGE=postgres:13
 BASEPATH=$(pwd)
-DOCKERFILE=$BASEPATH/dockerfiles
+# DOCKERFILE=$BASEPATH/dockerfiles
+DOCKERFILE=$(pwd)
 DATUM=$(date +'%Y-%m-%d')
-IMAGE_NAME=img_oai_fdw_pg14
+IMAGE_NAME=img_oai_fdw_pg13
 NETWORK_BASE_IP=172.14.0
-CONTAINER_IP=$NETWORK_BASE_IP.114
+CONTAINER_IP=$NETWORK_BASE_IP.113
 DOCKER_NETWORK_NAME=oainet
 DOCKER_NETWORK_SUBNET=172.14.0.0/16
 
@@ -34,7 +35,7 @@ docker create --name $CONTAINER_NAME \
 --restart=unless-stopped \
 --net=$DOCKER_NETWORK_NAME --ip=$CONTAINER_IP \
 -v $BASEPATH:/home/postgres:Z \
--v $(pwd):/home/postgres/oai_fdw:Z \
+-v /home/jones/git/oai_fdw:/home/postgres/oai_fdw:Z \
 -e PGDATA=/home/postgres/data \
 -e POSTGRES_HOST_AUTH_METHOD=trust \
 -e POSTGRES_DB=db \
