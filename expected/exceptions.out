@@ -185,3 +185,15 @@ ERROR:  invalid FOREIGN SCHEMA OPTION: 'foo'
 -- IMPORT FOREIGN SCHEMA with unknown foreign schema
 IMPORT FOREIGN SCHEMA foo FROM SERVER oai_server_ulb INTO exception_schema OPTIONS (metadataprefix 'oai_dc');
 ERROR:  invalid FOREIGN SCHEMA: 'foo'
+-- UPDATE query
+UPDATE ulb_ulbmsuo_oai_dc SET status = true;
+ERROR:  Operation not supported.
+HINT:  The OAI Foreign Data Wrapper does not support UPDATE queries.
+-- INSERT query
+INSERT INTO ulb_ulbmsuo_oai_dc (status) VALUES (false);
+ERROR:  Operation not supported.
+HINT:  The OAI Foreign Data Wrapper does not support INSERT queries.
+-- DELETE query
+DELETE FROM ulb_ulbmsuo_oai_dc;
+ERROR:  Operation not supported.
+HINT:  The OAI Foreign Data Wrapper does not support DELETE queries.

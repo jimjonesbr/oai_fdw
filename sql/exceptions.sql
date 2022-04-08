@@ -156,3 +156,12 @@ IMPORT FOREIGN SCHEMA oai_sets FROM SERVER oai_server_ulb INTO exception_schema 
 -- IMPORT FOREIGN SCHEMA with unknown foreign schema
 IMPORT FOREIGN SCHEMA foo FROM SERVER oai_server_ulb INTO exception_schema OPTIONS (metadataprefix 'oai_dc');
 
+-- UPDATE query
+UPDATE ulb_ulbmsuo_oai_dc SET status = true;
+
+-- INSERT query
+INSERT INTO ulb_ulbmsuo_oai_dc (status) VALUES (false);
+
+-- DELETE query
+DELETE FROM ulb_ulbmsuo_oai_dc;
+
