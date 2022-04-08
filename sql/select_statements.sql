@@ -16,9 +16,6 @@ WHERE
   datestamp BETWEEN '2022-02-01' AND '2022-02-02' AND
   setspec <@ ARRAY['dnb:reiheC'];
 
-SELECT ROW_NUMBER() OVER (), * 
-FROM tb_dnb_zdb_oai_dc;
-
 
 --override 'set' option
 --maps January,2021
@@ -28,6 +25,13 @@ WHERE
   datestamp BETWEEN '2021-01-01' AND '2021-01-31' AND
   setspec <@ ARRAY['dnb:reiheC'];
 
+-- counting (computed locally)
+SELECT count(*) 
+FROM dnb_zdb_oai_dc
+WHERE
+  datestamp BETWEEN '2021-01-01' AND '2021-01-31' AND
+  setspec <@ ARRAY['dnb:reiheC'];
+  
 -- GetRecord request
 SELECT * FROM dnb_zdb_oai_dc
 WHERE id = 'oai:dnb.de/zdb/1250800153';

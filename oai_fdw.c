@@ -108,7 +108,7 @@ typedef struct oai_fdw_state {
 	char	*current_identifier;
 
 	Oid 		foreigntableid;
-	List 		*selectColumns;
+	//List 		*selectColumns;
 	xmlNodePtr 	xmlroot;
 
 } oai_fdw_state;
@@ -138,7 +138,7 @@ typedef struct oai_Column {
 typedef struct oai_fdw_TableOptions {
 
 	Oid foreigntableid;
-	List *selectColumns;
+	//List *selectColumns;
 	//List *selectColumns;
 
 	int numcols;
@@ -384,7 +384,7 @@ List *GetIdentity(char *url) {
 		if (!xmldoc || (xmlroot = xmlDocGetRootElement(xmldoc)) == NULL) {
 			xmlFreeDoc(xmldoc);
 			xmlCleanupParser();
-			elog(WARNING,"invalid MARC21/XML document.");
+			elog(WARNING,"invalid XML document.");
 		}
 
 		for (oai_root = xmlroot->children; oai_root != NULL; oai_root = oai_root->next) {
@@ -440,7 +440,7 @@ List *GetSets(char *url) {
 		if (!xmldoc || (xmlroot = xmlDocGetRootElement(xmldoc)) == NULL) {
 			xmlFreeDoc(xmldoc);
 			xmlCleanupParser();
-			elog(WARNING,"invalid MARC21/XML document.");
+			elog(WARNING,"invalid XML document.");
 		}
 
 		for (oai_root = xmlroot->children; oai_root != NULL; oai_root = oai_root->next) {
@@ -509,7 +509,7 @@ List *GetMetadataFormats(char *url) {
 		if (!xmldoc || (xmlroot = xmlDocGetRootElement(xmldoc)) == NULL) {
 			xmlFreeDoc(xmldoc);
 			xmlCleanupParser();
-			elog(WARNING,"invalid MARC21/XML document.");
+			elog(WARNING,"invalid XML document.");
 		}
 
 		for (oai_root = xmlroot->children; oai_root != NULL; oai_root = oai_root->next) {
@@ -1189,7 +1189,7 @@ void listRecordsRequest(oai_fdw_state *state) {
 static void requestPlanner(oai_fdw_TableOptions *opts, ForeignTable *ft, RelOptInfo *baserel) {
 
 	List *conditions = baserel->baserestrictinfo;
-	//bool hasContentForeignColumn = false;
+	bool hasContentForeignColumn = false;
 
 #if PG_VERSION_NUM < 130000
 	Relation rel = heap_open(ft->relid, NoLock);
@@ -1200,10 +1200,10 @@ static void requestPlanner(oai_fdw_TableOptions *opts, ForeignTable *ft, RelOptI
 	//Relation rel = table_open(ft->relid, NoLock);
 
 
-	/* The default request type is OAI_REQUEST_IDENTIFIERS.
+	/* The default request type is OAI_REQUEST_LISTRECORDS.
 	 * This can be altered depending on the columns used
 	 * in the WHERE and SELECT clauses */
-	opts->requestType = OAI_REQUEST_LISTIDENTIFIERS;
+	opts->requestType = OAI_REQUEST_LISTRECORDS;
 	opts->numcols = rel->rd_att->natts;
 	opts->foreigntableid = ft->relid;
 
@@ -1254,7 +1254,7 @@ static void requestPlanner(oai_fdw_TableOptions *opts, ForeignTable *ft, RelOptI
 
 				} else if (strcmp(option_value,OAI_NODE_CONTENT)==0){
 
-					//hasContentForeignColumn = true;
+					hasContentForeignColumn = true;
 
 					if (rel->rd_att->attrs[i].atttypid != TEXTOID &&
 						rel->rd_att->attrs[i].atttypid != VARCHAROID &&
@@ -1315,13 +1315,13 @@ static void requestPlanner(oai_fdw_TableOptions *opts, ForeignTable *ft, RelOptI
 	/* If the foreign table has no "oai_attribute = 'content'" there is no need
 	 * to retrieve the document itself. The ListIdentifiers request lists the
 	 * whole OAI header */
-//	if(!hasContentForeignColumn) {
-//
-//		opts->requestType = OAI_REQUEST_LISTIDENTIFIERS;
-//		elog(DEBUG1,"  requestPlanner: the foreign table '%s' has no 'content' OAI node. Request type set to '%s'",
-//				NameStr(rel->rd_rel->relname),OAI_REQUEST_LISTIDENTIFIERS);
-//
-//	}
+	if(!hasContentForeignColumn) {
+
+		opts->requestType = OAI_REQUEST_LISTIDENTIFIERS;
+		elog(DEBUG1,"  %s: the foreign table '%s' has no 'content' OAI node. Request type set to '%s'",
+				__func__,NameStr(rel->rd_rel->relname),OAI_REQUEST_LISTIDENTIFIERS);
+
+	}
 
 
 
@@ -1432,13 +1432,13 @@ static void deparseExpr(Expr *expr, oai_fdw_TableOptions *opts){
 	char *opername;
 	//Oid leftargtype;
 
-	oai_Column *col = (oai_Column*)palloc0(sizeof(oai_Column));
+	//oai_Column *col = (oai_Column*)palloc0(sizeof(oai_Column));
 	char* leftargOption;
 	//int numcols = 0;
 	elog(DEBUG1,"deparseExpr: expr->type %u",expr->type);
 
 	switch (expr->type)	{
-
+/*
 	case T_Var:
 
 		varleft = (Var *)expr;
@@ -1451,7 +1451,7 @@ static void deparseExpr(Expr *expr, oai_fdw_TableOptions *opts){
 
 		elog(DEBUG1,"  deparseExpr: T_Var =  oai_node > '%s', id > %d",col->oaiNode,varleft->varattno);
 		break;
-
+*/
 	case T_OpExpr:
 
 		elog(DEBUG1,"  deparseExpr: case T_OpExpr");
@@ -1595,24 +1595,15 @@ static void deparseSelectColumns(oai_fdw_TableOptions *opts,List* exprs){
 	//bool hasContentForeignColumn = false;
 	//char *columnOption;
 
-	elog(DEBUG1,"deparseSelectColumns called");
-	//xxxxxxxxxxxxxxxx
-	//CRIAR TIPO OAI_COLUM (id,name,option,function)
-	//CRIAR LISTA DE SELCT COLUMNS
-	//ADICIONAR COLUNAS PARSEADAS NA LISTA
+	elog(DEBUG1,"%s called",__func__);
 
-	/**
-	 * Default request type: ListIdentifiers
-	 * Request type changes if the OAI Node 'content' is selected.
-	 */
-
-	opts->requestType = OAI_REQUEST_LISTIDENTIFIERS;
+	//opts->requestType = OAI_REQUEST_LISTIDENTIFIERS;
 
 	foreach(cell, exprs) {
 
 		Expr *expr = (Expr *) lfirst(cell);
 
-		elog(DEBUG1,"  deparseSelectColumns: evaluating expr->type = %u",expr->type);
+		elog(DEBUG1,"  %s: evaluating expr->type = %u",__func__,expr->type);
 
 		deparseExpr(expr, opts);
 
@@ -1711,7 +1702,7 @@ void oai_fdw_GetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid forei
 	oai_fdw_TableOptions *opts = (oai_fdw_TableOptions *)palloc0(sizeof(oai_fdw_TableOptions));
 	ListCell *cell;
 
-	elog(DEBUG1,"oai_fdw_GetForeignRelSize: requestType > %s", opts->requestType);
+	elog(DEBUG1,"%s: requestType > %s",__func__, opts->requestType);
 
 	foreach(cell, server->options) {
 
@@ -1731,7 +1722,6 @@ void oai_fdw_GetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid forei
 		}
 
 	}
-
 
 	foreach(cell, ft->options) {
 
@@ -1792,7 +1782,7 @@ ForeignScan *oai_fdw_GetForeignPlan(PlannerInfo *root, RelOptInfo *baserel, Oid 
 	state->numcols = opts->numcols;
 	state->requestType = opts->requestType;
 	state->identifier = opts->identifier;
-	state->selectColumns = opts->selectColumns;
+	//state->selectColumns = opts->selectColumns;
 	state->numfdwcols = opts->numfdwcols;
 
 	fdw_private = list_make1(state);
@@ -1839,7 +1829,7 @@ oai_Record *FetchNextOAIRecord(TupleTableSlot *slot, oai_fdw_state *state) {
 	oai->metadataPrefix = state->metadataPrefix;
 	oai->isDeleted = false;
 
-	elog(DEBUG1,"fetchNextRecord for '%s'",state->requestType);
+	elog(DEBUG1,"%s called: RequestType > '%s'",__func__,state->requestType);
 
 	xmlInitParser(); //????????????????
 
@@ -2057,14 +2047,16 @@ oai_Record *FetchNextOAIRecord(TupleTableSlot *slot, oai_fdw_state *state) {
 
 void CreateOAITuple(TupleTableSlot *slot, oai_fdw_state *state, oai_Record *oai) {
 
-	ListCell *cell;
+	//ListCell *cell;
 
-	elog(DEBUG1,"createOAITuple called: numfdwcols = %d\n\n "
-			"- identifier > %s\n "
-			"- datestamp: %s\n "
-			"- content: %s\n",state->selectColumns->length,oai->identifier,oai->datestamp,oai->content);
+	elog(DEBUG1,"%s called",__func__);
 
-	foreach (cell, state->selectColumns) {
+//	elog(DEBUG1,"createOAITuple called: numfdwcols = %d\n\n "
+//			"- identifier > %s\n "
+//			"- datestamp: %s\n "
+//			"- content: %s\n",state->selectColumns->length,oai->identifier,oai->datestamp,oai->content);
+
+	/*foreach (cell, state->selectColumns) {
 
 		oai_Column *col = (oai_Column*)palloc0(sizeof(oai_Column));
 		col = (oai_Column*) lfirst(cell);
@@ -2160,16 +2152,14 @@ void CreateOAITuple(TupleTableSlot *slot, oai_fdw_state *state, oai_Record *oai)
 		//elog(DEBUG2,"  createOAITuple: column %d option '%s'",col->id,col->oaiNode);
 
 	}
+*/
 
-	/*
 
 	for (int i = 0; i < state->numcols; i++) {
 
 		//List * options = GetForeignColumnOptions(state->foreigntableid, i+1);
 		List * options = GetForeignColumnOptions(state->foreigntableid, i+1);
 		ListCell *lc;
-
-
 
 		foreach (lc, options) {
 
@@ -2181,7 +2171,7 @@ void CreateOAITuple(TupleTableSlot *slot, oai_fdw_state *state, oai_Record *oai)
 
 				if (strcmp(option_value,OAI_NODE_STATUS)==0){
 
-					elog(DEBUG2,"  createOAITuple: column %d option '%s'",i,option_value);
+					elog(DEBUG2,"  %s: setting column %d option '%s'",__func__,i,option_value);
 
 					slot->tts_isnull[i] = false;
 					slot->tts_values[i] = oai->isDeleted;
@@ -2189,7 +2179,7 @@ void CreateOAITuple(TupleTableSlot *slot, oai_fdw_state *state, oai_Record *oai)
 
 				} else if (strcmp(option_value,OAI_NODE_IDENTIFIER)==0 && oai->identifier){
 
-					elog(DEBUG2,"  createOAITuple: column %d option '%s'",i,option_value);
+					elog(DEBUG2,"  %s: setting column %d option '%s'",__func__,i,option_value);
 
 					slot->tts_isnull[i] = false;
 					slot->tts_values[i] = CStringGetTextDatum(oai->identifier);
@@ -2197,7 +2187,7 @@ void CreateOAITuple(TupleTableSlot *slot, oai_fdw_state *state, oai_Record *oai)
 
 				} else if (strcmp(option_value,OAI_NODE_METADATAPREFIX)==0 && oai->metadataPrefix){
 
-					elog(DEBUG2,"  createOAITuple: column %d option '%s'",i,option_value);
+					elog(DEBUG2,"  %s: setting column %d option '%s'",__func__,i,option_value);
 
 					slot->tts_isnull[i] = false;
 					slot->tts_values[i] = CStringGetTextDatum(oai->metadataPrefix);
@@ -2205,20 +2195,20 @@ void CreateOAITuple(TupleTableSlot *slot, oai_fdw_state *state, oai_Record *oai)
 
 				} else if (strcmp(option_value,OAI_NODE_CONTENT)==0 && oai->content){
 
-					elog(DEBUG2,"  createOAITuple: column %d option '%s'",i,option_value);
+					elog(DEBUG2,"  %s: setting column %d option '%s'",__func__,i,option_value);
 
 					slot->tts_isnull[i] = false;
 					slot->tts_values[i] = CStringGetTextDatum((char*)oai->content);
 
 				} else if (strcmp(option_value,OAI_NODE_SETSPEC)==0 && oai->setsArray){
 
-					elog(DEBUG2,"  createOAITuple: column %d option '%s'",i,option_value);
+					elog(DEBUG2,"  %s: setting column %d option '%s'",__func__,i,option_value);
 
 					slot->tts_isnull[i] = false;
 					slot->tts_values[i] = (Datum) DatumGetArrayTypeP(oai->setsArray);
-					elog(DEBUG2,"    createOAITuple: setspec added to tuple");
+					//elog(DEBUG2,"    %s: setspec added to tuple",__func__);
 
-				}  else if (strcmp(option_value,OAI_NODE_DATESTAMP)==0 && oai->datestamp){
+				}  else if (strcmp(option_value,OAI_NODE_DATESTAMP)==0 && oai->datestamp) {
 
 					char lowstr[MAXDATELEN + 1];
 					char *field[MAXDATEFIELDS];
@@ -2226,7 +2216,7 @@ void CreateOAITuple(TupleTableSlot *slot, oai_fdw_state *state, oai_Record *oai)
 					int nf;
 					int parseError = ParseDateTime(oai->datestamp, lowstr, MAXDATELEN, field, ftype, MAXDATEFIELDS, &nf);
 
-					elog(DEBUG2,"  createOAITuple: column %d option '%s'",i,option_value);
+					elog(DEBUG2,"  %s: setting column %d option '%s'",__func__,i,option_value);
 
 
 					if (parseError == 0) {
@@ -2243,20 +2233,17 @@ void CreateOAITuple(TupleTableSlot *slot, oai_fdw_state *state, oai_Record *oai)
 
 						if (decodeError == 0) {
 
-							elog(DEBUG2,"    createOAITuple: datestamp can be decoded");
-
 							slot->tts_isnull[i] = false;
 							slot->tts_values[i] = (Datum) TimestampTzGetDatum(tmsp);
 
-							elog(DEBUG2,"  createOAITuple: datestamp (\"%s\") parsed and decoded.",oai->datestamp);
+							elog(DEBUG2,"  %s: datestamp (\"%s\") parsed and decoded.",__func__,oai->datestamp);
 
 
 						} else {
 
-
 							slot->tts_isnull[i] = true;
-							slot->tts_values[i] = (Datum) NULL;
-							elog(WARNING,"  createOAITuple: could not decode datestamp: %s", oai->datestamp);
+							slot->tts_values[i] = PointerGetDatum(NULL);;
+							elog(WARNING,"  %s: could not decode datestamp: %s",__func__, oai->datestamp);
 
 						}
 
@@ -2265,12 +2252,16 @@ void CreateOAITuple(TupleTableSlot *slot, oai_fdw_state *state, oai_Record *oai)
 
 
 						slot->tts_isnull[i] = true;
-						slot->tts_values[i] = (Datum) NULL;
+						slot->tts_values[i] = PointerGetDatum(NULL);;
 
-						elog(WARNING,"  createOAITuple: could not parse datestamp: %s", oai->datestamp);
+						elog(WARNING,"  %s: could not parse datestamp: %s",__func__, oai->datestamp);
 
 					}
 
+				} else {
+
+					slot->tts_isnull[i] = true;
+					slot->tts_values[i] = PointerGetDatum(NULL);
 				}
 
 			}
@@ -2279,9 +2270,9 @@ void CreateOAITuple(TupleTableSlot *slot, oai_fdw_state *state, oai_Record *oai)
 
 	}
 
-	*/
+
 	state->rowcount++;
-	elog(DEBUG1,"  createOAITuple finished (rowcount: %d)",state->rowcount);
+	elog(DEBUG1,"  %s finished (rowcount: %d)",__func__,state->rowcount);
 
 }
 
