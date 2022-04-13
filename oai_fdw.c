@@ -1,3 +1,14 @@
+/**********************************************************************
+ *
+ * oai_fdw - Open Archive Initiative Foreign Data Wrapper for PostgreSQL
+ *
+ * oai_fdw is free software: you can redistribute it and/or modify
+ * it under the terms of the MIT Licence.
+ *
+ * Copyright (C) 2022 University of Münster (WWU), Germany
+ * Written by Jim Jones <jim.jones@uni-muenster.de>
+ *
+ **********************************************************************/
 
 #include "postgres.h"
 #include "fmgr.h"
@@ -76,6 +87,7 @@
 #define OAI_NODE_FROM "from"
 #define OAI_NODE_UNTIL "until"
 #define OAI_NODE_STATUS "status"
+#define OAI_NODE_RESUMPTIONTOKEN "resumptionToken"
 #define OAI_NODE_OPTION "oai_node"
 
 #define OAI_ERROR_ID_DOES_NOT_EXIST "idDoesNotExist"
@@ -88,7 +100,7 @@
 
 PG_MODULE_MAGIC;
 
-typedef struct oai_fdw_state {
+typedef struct OAIFdwState {
 
 	int 	current_row;
 	int 	numcols;
@@ -108,12 +120,11 @@ typedef struct oai_fdw_state {
 	char	*current_identifier;
 
 	Oid 		foreigntableid;
-	//List 		*selectColumns;
 	xmlNodePtr 	xmlroot;
 
-} oai_fdw_state;
+} OAIFdwState;
 
-typedef struct oai_Record {
+typedef struct OAIRecord {
 
 	char *identifier;
 	char *content;
@@ -123,24 +134,21 @@ typedef struct oai_Record {
 	bool isDeleted;
 	ArrayType *setsArray;
 
-} oai_Record;
+} OAIRecord;
 
-typedef struct oai_Column {
+typedef struct OAIColumn {
 
 	int   id;
 	char *oaiNode;
 	char *label;
 	char *function;
 
-} oai_Column;
+} OAIColumn;
 
 
-typedef struct oai_fdw_TableOptions {
+typedef struct OAIFdwTableOptions {
 
 	Oid foreigntableid;
-	//List *selectColumns;
-	//List *selectColumns;
-
 	int numcols;
 	int numfdwcols;
 	char *metadataPrefix;
@@ -151,7 +159,7 @@ typedef struct oai_fdw_TableOptions {
 	char* identifier;
 	char* requestType;
 
-} oai_fdw_TableOptions;
+} OAIFdwTableOptions;
 
 typedef struct OAIMetadataFormat {
 
@@ -168,12 +176,12 @@ typedef struct OAISet {
 
 } OAISet;
 
-typedef struct OAIIdentityNode {
+typedef struct OAIFdwIdentityNode {
 
 	char *name;
 	char *description;
 
-} OAIIdentityNode;
+} OAIFdwIdentityNode;
 
 struct string {
 	char *ptr;
@@ -202,7 +210,7 @@ static struct OAIFdwOption valid_options[] =
 
 	{OAI_NODE_OPTION, AttributeRelationId, true, false},
 
-	/* EOList marker */
+	/* EOList option */
 	{NULL, InvalidOid, false, false}
 };
 
@@ -216,7 +224,6 @@ extern Datum oai_fdw_listMetadataFormats(PG_FUNCTION_ARGS);
 extern Datum oai_fdw_listSets(PG_FUNCTION_ARGS);
 extern Datum oai_fdw_identity(PG_FUNCTION_ARGS);
 
-
 PG_FUNCTION_INFO_V1(oai_fdw_handler);
 PG_FUNCTION_INFO_V1(oai_fdw_validator);
 PG_FUNCTION_INFO_V1(oai_fdw_version);
@@ -224,41 +231,57 @@ PG_FUNCTION_INFO_V1(oai_fdw_listMetadataFormats);
 PG_FUNCTION_INFO_V1(oai_fdw_listSets);
 PG_FUNCTION_INFO_V1(oai_fdw_identity);
 
-void oai_fdw_GetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid);
-void oai_fdw_GetForeignPaths(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid);
-ForeignScan *oai_fdw_GetForeignPlan(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid, ForeignPath *best_path, List *tlist, List *scan_clauses, Plan *outer_plan);
-void oai_fdw_BeginForeignScan(ForeignScanState *node, int eflags);
-TupleTableSlot *oai_fdw_IterateForeignScan(ForeignScanState *node);
-void oai_fdw_ReScanForeignScan(ForeignScanState *node);
-void oai_fdw_EndForeignScan(ForeignScanState *node);
+static void OAIFdwGetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid);
+static void OAIFdwGetForeignPaths(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid);
+static ForeignScan *OAIFdwGetForeignPlan(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid, ForeignPath *best_path, List *tlist, List *scan_clauses, Plan *outer_plan);
+static void OAIFdwBeginForeignScan(ForeignScanState *node, int eflags);
+static TupleTableSlot *OAIFdwIterateForeignScan(ForeignScanState *node);
+static void OAIFdwReScanForeignScan(ForeignScanState *node);
+static void OAIFdwEndForeignScan(ForeignScanState *node);
+static TupleTableSlot *OAIFdwExecForeignUpdate(EState *estate, ResultRelInfo *rinfo, TupleTableSlot *slot, TupleTableSlot *planSlot);
+static TupleTableSlot *OAIFdwExecForeignInsert(EState *estate, ResultRelInfo *rinfo, TupleTableSlot *slot, TupleTableSlot *planSlot);
+static TupleTableSlot *OAIFdwExecForeignDelete(EState *estate, ResultRelInfo *rinfo, TupleTableSlot *slot, TupleTableSlot *planSlot);
+static List* OAIFdwImportForeignSchema(ImportForeignSchemaStmt* stmt, Oid serverOid);
 
-static TupleTableSlot *oai_fdw_ExecForeignUpdate(EState *estate, ResultRelInfo *rinfo, TupleTableSlot *slot, TupleTableSlot *planSlot);
-static TupleTableSlot *oai_fdw_ExecForeignInsert(EState *estate, ResultRelInfo *rinfo, TupleTableSlot *slot, TupleTableSlot *planSlot);
-static TupleTableSlot *oai_fdw_ExecForeignDelete(EState *estate, ResultRelInfo *rinfo, TupleTableSlot *slot, TupleTableSlot *planSlot);
+static void InitCURLString(struct string *s);
+static size_t WriteCURLFunc(void *ptr, size_t size, size_t nmemb, struct string *s);
+static void appendTextArray(ArrayType **array, char* text_element) ;
+static int ExecuteOAIRequest(OAIFdwState *state, struct string *xmlResponse);
+static void CreateOAITuple(TupleTableSlot *slot, OAIFdwState *state, OAIRecord *oai );
+static OAIRecord *FetchNextOAIRecord(OAIFdwState *state);
+static void LoadOAIRecords(OAIFdwState *state);
 
-static List* oai_fdw_ImportForeignSchema(ImportForeignSchemaStmt* stmt, Oid serverOid);
-
-void init_string(struct string *s);
-size_t writefunc(void *ptr, size_t size, size_t nmemb, struct string *s);
-void appendTextArray(ArrayType **array, char* text_element) ;
-int executeOAIRequest(oai_fdw_state *state, struct string *xmlResponse);
-void listRecordsRequest(oai_fdw_state *state);
-void CreateOAITuple(TupleTableSlot *slot, oai_fdw_state *state, oai_Record *oai );
-oai_Record *FetchNextOAIRecord(TupleTableSlot *slot, oai_fdw_state *state);
-int LoadOAIRecords(oai_fdw_state *state);
-
-static void deparseExpr(Expr *expr, oai_fdw_TableOptions *opts);
+static void deparseExpr(Expr *expr, OAIFdwTableOptions *opts);
 static char *datumToString(Datum datum, Oid type);
-
 static char *GetOAINodeFromColumn(Oid foreigntableid, int16 attnum);
-static void deparseWhereClause(List *conditions, oai_fdw_TableOptions *opts);
-static void deparseSelectColumns(oai_fdw_TableOptions *opts, List* exprs);
-static void requestPlanner(oai_fdw_TableOptions *opts, ForeignTable *ft, RelOptInfo *baserel);
+static void deparseWhereClause(List *conditions, OAIFdwTableOptions *opts);
+static void deparseSelectColumns(OAIFdwTableOptions *opts, List* exprs);
+static void OAIRequestPlanner(OAIFdwTableOptions *opts, ForeignTable *ft, RelOptInfo *baserel);
 static char *deparseTimestamp(Datum datum);
-List *GetMetadataFormats(char *url);
-List *GetIdentity(char *url);
-List *GetSets(char *url);
-int check_url(char *url);
+static int CheckURL(char *url);
+static List *GetMetadataFormats(char *url);
+static List *GetIdentity(char *url);
+static List *GetSets(char *url);
+
+Datum oai_fdw_handler(PG_FUNCTION_ARGS) {
+
+	FdwRoutine *fdwroutine = makeNode(FdwRoutine);
+	fdwroutine->GetForeignRelSize = OAIFdwGetForeignRelSize;
+	fdwroutine->GetForeignPaths = OAIFdwGetForeignPaths;
+	fdwroutine->GetForeignPlan = OAIFdwGetForeignPlan;
+	fdwroutine->BeginForeignScan = OAIFdwBeginForeignScan;
+	fdwroutine->IterateForeignScan = OAIFdwIterateForeignScan;
+	fdwroutine->ReScanForeignScan = OAIFdwReScanForeignScan;
+	fdwroutine->EndForeignScan = OAIFdwEndForeignScan;
+
+	fdwroutine->ExecForeignUpdate = OAIFdwExecForeignUpdate;
+	fdwroutine->ExecForeignDelete = OAIFdwExecForeignDelete;
+	fdwroutine->ExecForeignInsert = OAIFdwExecForeignInsert;
+	fdwroutine->ImportForeignSchema = OAIFdwImportForeignSchema;
+
+	PG_RETURN_POINTER(fdwroutine);
+
+}
 
 Datum oai_fdw_version(PG_FUNCTION_ARGS) {
 
@@ -343,7 +366,7 @@ Datum oai_fdw_identity(PG_FUNCTION_ARGS) {
 		Datum        result;
 		int MAX_SIZE = 512;
 
-		OAIIdentityNode *set = (OAIIdentityNode *) list_nth((List*) funcctx->user_fctx, call_cntr);
+		OAIFdwIdentityNode *set = (OAIFdwIdentityNode *) list_nth((List*) funcctx->user_fctx, call_cntr);
 
 		values = (char **) palloc(2 * sizeof(char *));
 		values[0] = (char *) palloc(MAX_SIZE * sizeof(char));
@@ -362,386 +385,6 @@ Datum oai_fdw_identity(PG_FUNCTION_ARGS) {
 		SRF_RETURN_DONE(funcctx);
 
 	}
-
-}
-
-List *GetIdentity(char *url) {
-
-	struct string xmlStream;
-	int oaiExecuteResponse;
-	oai_fdw_state *state = (oai_fdw_state *) palloc0(sizeof(oai_fdw_state));
-	List *result = NIL;
-
-	state->url = url;
-	state->requestType = OAI_REQUEST_IDENTIFY;
-
-	oaiExecuteResponse = executeOAIRequest(state,&xmlStream);
-
-	if(oaiExecuteResponse == OAI_SUCCESS) {
-
-		xmlNodePtr xmlroot = NULL;
-		xmlDocPtr xmldoc;
-		xmlNodePtr oai_root;
-		xmlNodePtr Identity;
-
-		xmldoc = xmlReadMemory(xmlStream.ptr, strlen(xmlStream.ptr), NULL, NULL, XML_PARSE_SAX1);
-
-		if (!xmldoc || (xmlroot = xmlDocGetRootElement(xmldoc)) == NULL) {
-			xmlFreeDoc(xmldoc);
-			xmlCleanupParser();
-			elog(WARNING,"invalid XML document.");
-		}
-
-		for (oai_root = xmlroot->children; oai_root != NULL; oai_root = oai_root->next) {
-
-			if (oai_root->type != XML_ELEMENT_NODE) continue;
-
-			if (xmlStrcmp(oai_root->name, (xmlChar*) "Identify") != 0) continue;
-
-			for (Identity = oai_root->children; Identity != NULL; Identity = Identity->next) {
-
-				OAIIdentityNode *node = (OAIIdentityNode *)palloc0(sizeof(OAIIdentityNode));
-
-				if (Identity->type != XML_ELEMENT_NODE)	continue;
-
-				node->name = (char*) Identity->name;
-				node->description = (char*) xmlNodeGetContent(Identity);
-
-				result = lappend(result, node);
-
-			}
-
-		}
-
-	}
-
-	return result;
-
-}
-
-
-List *GetSets(char *url) {
-
-	struct string xmlStream;
-	int oaiExecuteResponse;
-	oai_fdw_state *state = (oai_fdw_state *) palloc0(sizeof(oai_fdw_state));
-	List *result = NIL;
-
-	state->url = url;
-	state->requestType = OAI_REQUEST_LISTSETS;
-
-	oaiExecuteResponse = executeOAIRequest(state,&xmlStream);
-
-	if(oaiExecuteResponse == OAI_SUCCESS) {
-
-		xmlNodePtr xmlroot = NULL;
-		xmlDocPtr xmldoc;
-		xmlNodePtr oai_root;
-		xmlNodePtr ListSets;
-		xmlNodePtr SetElement;
-
-		xmldoc = xmlReadMemory(xmlStream.ptr, strlen(xmlStream.ptr), NULL, NULL, XML_PARSE_SAX1);
-
-		if (!xmldoc || (xmlroot = xmlDocGetRootElement(xmldoc)) == NULL) {
-			xmlFreeDoc(xmldoc);
-			xmlCleanupParser();
-			elog(WARNING,"invalid XML document.");
-		}
-
-		for (oai_root = xmlroot->children; oai_root != NULL; oai_root = oai_root->next) {
-
-			if (oai_root->type != XML_ELEMENT_NODE) continue;
-
-			if (xmlStrcmp(oai_root->name, (xmlChar*) "ListSets") != 0) continue;
-
-			for (ListSets = oai_root->children; ListSets != NULL; ListSets = ListSets->next) {
-
-				OAISet *set = (OAISet *)palloc0(sizeof(OAISet));
-
-				if (ListSets->type != XML_ELEMENT_NODE)	continue;
-				if (xmlStrcmp(ListSets->name, (xmlChar*) "set") != 0) continue;
-
-				for (SetElement = ListSets->children; SetElement != NULL; SetElement = SetElement->next) {
-
-					if (SetElement->type != XML_ELEMENT_NODE)	continue;
-
-					if (xmlStrcmp(SetElement->name, (xmlChar*) "setSpec") == 0) {
-
-						set->setSpec = (char*) xmlNodeGetContent(SetElement);
-
-
-					} else if (xmlStrcmp(SetElement->name, (xmlChar*) "setName") == 0) {
-
-						set->setName = (char*) xmlNodeGetContent(SetElement);
-
-					}
-
-				}
-
-				result = lappend(result, set);
-
-			}
-
-		}
-
-	}
-
-	return result;
-}
-
-List *GetMetadataFormats(char *url) {
-
-	struct string xmlStream;
-	int oaiExecuteResponse;
-	oai_fdw_state *state = (oai_fdw_state *) palloc0(sizeof(oai_fdw_state));
-	List *result = NIL;
-
-	state->url = url;
-	state->requestType = OAI_REQUEST_LISTMETADATAFORMATS;
-
-	oaiExecuteResponse = executeOAIRequest(state,&xmlStream);
-
-	if(oaiExecuteResponse == OAI_SUCCESS) {
-
-		xmlNodePtr xmlroot = NULL;
-		xmlDocPtr xmldoc;
-		xmlNodePtr oai_root;
-		xmlNodePtr ListMetadataFormats;
-		xmlNodePtr MetadataElement;
-
-		xmldoc = xmlReadMemory(xmlStream.ptr, strlen(xmlStream.ptr), NULL, NULL, XML_PARSE_SAX1);
-
-		if (!xmldoc || (xmlroot = xmlDocGetRootElement(xmldoc)) == NULL) {
-			xmlFreeDoc(xmldoc);
-			xmlCleanupParser();
-			elog(WARNING,"invalid XML document.");
-		}
-
-		for (oai_root = xmlroot->children; oai_root != NULL; oai_root = oai_root->next) {
-
-			if (oai_root->type != XML_ELEMENT_NODE) continue;
-
-			if (xmlStrcmp(oai_root->name, (xmlChar*) "ListMetadataFormats") != 0) continue;
-
-			for (ListMetadataFormats = oai_root->children; ListMetadataFormats != NULL; ListMetadataFormats = ListMetadataFormats->next) {
-
-				OAIMetadataFormat *format = (OAIMetadataFormat *)palloc0(sizeof(OAIMetadataFormat));
-
-				if (ListMetadataFormats->type != XML_ELEMENT_NODE)	continue;
-				if (xmlStrcmp(ListMetadataFormats->name, (xmlChar*) "metadataFormat") != 0) continue;
-
-				for (MetadataElement = ListMetadataFormats->children; MetadataElement != NULL; MetadataElement = MetadataElement->next) {
-
-					if (MetadataElement->type != XML_ELEMENT_NODE)	continue;
-
-					if (xmlStrcmp(MetadataElement->name, (xmlChar*) "metadataPrefix") == 0) {
-
-						format->metadataPrefix = (char*) xmlNodeGetContent(MetadataElement);
-
-					} else if (xmlStrcmp(MetadataElement->name, (xmlChar*) "schema") == 0) {
-
-						format->schema = (char*) xmlNodeGetContent(MetadataElement);
-
-					} else if (xmlStrcmp(MetadataElement->name, (xmlChar*) "metadataNamespace") == 0) {
-
-						format->metadataNamespace = (char*) xmlNodeGetContent(MetadataElement);
-
-					}
-
-				}
-
-				result = lappend(result, format);
-
-			}
-
-		}
-
-	}
-
-	return result;
-}
-
-
-
-Datum oai_fdw_handler(PG_FUNCTION_ARGS) {
-
-	FdwRoutine *fdwroutine = makeNode(FdwRoutine);
-	fdwroutine->GetForeignRelSize = oai_fdw_GetForeignRelSize;
-	fdwroutine->GetForeignPaths = oai_fdw_GetForeignPaths;
-	fdwroutine->GetForeignPlan = oai_fdw_GetForeignPlan;
-	fdwroutine->BeginForeignScan = oai_fdw_BeginForeignScan;
-	fdwroutine->IterateForeignScan = oai_fdw_IterateForeignScan;
-	fdwroutine->ReScanForeignScan = oai_fdw_ReScanForeignScan;
-	fdwroutine->EndForeignScan = oai_fdw_EndForeignScan;
-
-	fdwroutine->ExecForeignUpdate = oai_fdw_ExecForeignUpdate;
-	fdwroutine->ExecForeignDelete = oai_fdw_ExecForeignDelete;
-	fdwroutine->ExecForeignInsert = oai_fdw_ExecForeignInsert;
-	fdwroutine->ImportForeignSchema = oai_fdw_ImportForeignSchema;
-
-	PG_RETURN_POINTER(fdwroutine);
-
-}
-
-
-Datum oai_fdw_validator(PG_FUNCTION_ARGS) {
-
-	List	   *options_list = untransformRelOptions(PG_GETARG_DATUM(0));
-	Oid			catalog = PG_GETARG_OID(1);
-	ListCell   *cell;
-	struct OAIFdwOption* opt;
-
-	/* Initialize found state to not found */
-	for (opt = valid_options; opt->optname; opt++) {
-
-		opt->optfound = false;
-
-	}
-
-	foreach (cell, options_list) {
-
-		DefElem* def = (DefElem*) lfirst(cell);
-		bool optfound = false;
-
-		for (opt = valid_options; opt->optname; opt++) {
-
-			if (catalog == opt->optcontext && strcmp(opt->optname, def->defname)==0) {
-
-				/* Mark that this user option was found */
-				opt->optfound = optfound = true;
-
-				if(strlen(defGetString(def))==0) {
-
-					ereport(ERROR,
-						(errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
-						 errmsg("empty value for option '%s'",opt->optname)));
-
-				}
-
-				if(strcmp(opt->optname, OAI_NODE_URL)==0){
-
-					if(check_url(defGetString(def))!=CURLE_OK) {
-
-						ereport(ERROR,
-								(errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
-							 errmsg("invalid %s: '%s'",OAI_NODE_URL, defGetString(def))));
-
-					}
-
-				}
-
-				if (strcmp(opt->optname, OAI_NODE_OPTION) == 0) {
-
-					if(strcmp(defGetString(def), OAI_NODE_IDENTIFIER) !=0 &&
-					   strcmp(defGetString(def), OAI_NODE_METADATAPREFIX) !=0 &&
-					   strcmp(defGetString(def), OAI_NODE_SETSPEC) !=0 &&
-					   strcmp(defGetString(def), OAI_NODE_DATESTAMP) !=0 &&
-					   strcmp(defGetString(def), OAI_NODE_CONTENT) !=0 &&
-					   strcmp(defGetString(def), OAI_NODE_STATUS) !=0) {
-
-						ereport(ERROR,
-							(errcode(ERRCODE_FDW_INVALID_OPTION_NAME),
-							 errmsg("invalid %s option '%s'",OAI_NODE_OPTION, defGetString(def)),
-							 errhint("Valid column options for oai_fdw are:\nCREATE SERVER: '%s', '%s'\nCREATE TABLE: '%s','%s', '%s', '%s' and '%s'",
-								OAI_NODE_URL,
-								OAI_NODE_METADATAPREFIX,
-								OAI_NODE_METADATAPREFIX,
-								OAI_NODE_SETSPEC,
-								OAI_NODE_FROM,
-								OAI_NODE_UNTIL,
-								OAI_NODE_STATUS)));
-
-					}
-
-				}
-
-//				opt->optfound = true;
-//				optfound = true;
-
-				break;
-			}
-
-		}
-
-		if (!optfound) {
-
-			ereport(ERROR,
-				(errcode(ERRCODE_FDW_INVALID_OPTION_NAME),
-				 errmsg("invalid oai_fdw option \"%s\"", def->defname)));
-
-		}
-	}
-
-
-	for (opt = valid_options; opt->optname; opt++) {
-
-		/* Required option for this catalog type is missing? */
-		if (catalog == opt->optcontext && opt->optrequired && !opt->optfound) {
-
-			ereport(ERROR, (
-			    errcode(ERRCODE_FDW_DYNAMIC_PARAMETER_VALUE_NEEDED),
-			    errmsg("required option '%s' is missing", opt->optname)));
-
-		}
-
-	}
-
-	PG_RETURN_VOID();
-}
-
-/*cURL code*/
-void init_string(struct string *s) {
-	s->len = 0;
-	s->ptr = malloc(s->len+1);
-	if (s->ptr == NULL) {
-		fprintf(stderr, "malloc() failed\n");
-		exit(EXIT_FAILURE);
-	}
-	s->ptr[0] = '\0';
-}
-
-/*cURL code*/
-size_t writefunc(void *ptr, size_t size, size_t nmemb, struct string *s) {
-
-	size_t new_len = s->len + size*nmemb;
-	s->ptr = realloc(s->ptr, new_len+1);
-	if (s->ptr == NULL) {
-		fprintf(stderr, "realloc() failed\n");
-		exit(EXIT_FAILURE);
-	}
-	memcpy(s->ptr+s->len, ptr, size*nmemb);
-	s->ptr[new_len] = '\0';
-	s->len = new_len;
-
-	return size*nmemb;
-
-}
-
-int check_url(char *url)
-{
-    CURL *curl;
-    CURLcode response;
-
-    curl = curl_easy_init();
-
-    if(curl) {
-        curl_easy_setopt(curl, CURLOPT_URL, url);
-
-        /* don't write output to stdout */
-        curl_easy_setopt(curl, CURLOPT_NOBODY, 1);
-
-        /* Perform the request */
-        response = curl_easy_perform(curl);
-
-        /* always cleanup */
-        curl_easy_cleanup(curl);
-
-    } else {
-
-    	return CURLE_FAILED_INIT;
-    }
-
-    return response;
 
 }
 
@@ -938,14 +581,382 @@ Datum oai_fdw_listMetadataFormats(PG_FUNCTION_ARGS) {
 
 }
 
-int executeOAIRequest(oai_fdw_state *state, struct string *xmlResponse) {
+Datum oai_fdw_validator(PG_FUNCTION_ARGS) {
+
+	List	   *options_list = untransformRelOptions(PG_GETARG_DATUM(0));
+	Oid			catalog = PG_GETARG_OID(1);
+	ListCell   *cell;
+	struct OAIFdwOption* opt;
+
+	/* Initialize found state to not found */
+	for (opt = valid_options; opt->optname; opt++) {
+
+		opt->optfound = false;
+
+	}
+
+	foreach (cell, options_list) {
+
+		DefElem* def = (DefElem*) lfirst(cell);
+		bool optfound = false;
+
+		for (opt = valid_options; opt->optname; opt++) {
+
+			if (catalog == opt->optcontext && strcmp(opt->optname, def->defname)==0) {
+
+				/* Mark that this user option was found */
+				opt->optfound = optfound = true;
+
+				if(strlen(defGetString(def))==0) {
+
+					ereport(ERROR,
+						(errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
+						 errmsg("empty value for option '%s'",opt->optname)));
+
+				}
+
+				if(strcmp(opt->optname, OAI_NODE_URL)==0){
+
+					if(CheckURL(defGetString(def))!=CURLE_OK) {
+
+						ereport(ERROR,
+								(errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
+							 errmsg("invalid %s: '%s'",OAI_NODE_URL, defGetString(def))));
+
+					}
+
+				}
+
+				if (strcmp(opt->optname, OAI_NODE_OPTION) == 0) {
+
+					if(strcmp(defGetString(def), OAI_NODE_IDENTIFIER) !=0 &&
+					   strcmp(defGetString(def), OAI_NODE_METADATAPREFIX) !=0 &&
+					   strcmp(defGetString(def), OAI_NODE_SETSPEC) !=0 &&
+					   strcmp(defGetString(def), OAI_NODE_DATESTAMP) !=0 &&
+					   strcmp(defGetString(def), OAI_NODE_CONTENT) !=0 &&
+					   strcmp(defGetString(def), OAI_NODE_STATUS) !=0) {
+
+						ereport(ERROR,
+							(errcode(ERRCODE_FDW_INVALID_OPTION_NAME),
+							 errmsg("invalid %s option '%s'",OAI_NODE_OPTION, defGetString(def)),
+							 errhint("Valid column options for oai_fdw are:\nCREATE SERVER: '%s', '%s'\nCREATE TABLE: '%s','%s', '%s', '%s' and '%s'",
+								OAI_NODE_URL,
+								OAI_NODE_METADATAPREFIX,
+								OAI_NODE_METADATAPREFIX,
+								OAI_NODE_SETSPEC,
+								OAI_NODE_FROM,
+								OAI_NODE_UNTIL,
+								OAI_NODE_STATUS)));
+
+					}
+
+				}
+
+//				opt->optfound = true;
+//				optfound = true;
+
+				break;
+			}
+
+		}
+
+		if (!optfound) {
+
+			ereport(ERROR,
+				(errcode(ERRCODE_FDW_INVALID_OPTION_NAME),
+				 errmsg("invalid oai_fdw option \"%s\"", def->defname)));
+
+		}
+	}
+
+
+	for (opt = valid_options; opt->optname; opt++) {
+
+		/* Required option for this catalog type is missing? */
+		if (catalog == opt->optcontext && opt->optrequired && !opt->optfound) {
+
+			ereport(ERROR, (
+			    errcode(ERRCODE_FDW_DYNAMIC_PARAMETER_VALUE_NEEDED),
+			    errmsg("required option '%s' is missing", opt->optname)));
+
+		}
+
+	}
+
+	PG_RETURN_VOID();
+}
+
+static List *GetIdentity(char *url) {
+
+	struct string xmlStream;
+	int oaiExecuteResponse;
+	OAIFdwState *state = (OAIFdwState *) palloc0(sizeof(OAIFdwState));
+	List *result = NIL;
+
+	elog(DEBUG1, "  %s called",__func__);
+
+	state->url = url;
+	state->requestType = OAI_REQUEST_IDENTIFY;
+
+	oaiExecuteResponse = ExecuteOAIRequest(state,&xmlStream);
+
+	if(oaiExecuteResponse == OAI_SUCCESS) {
+
+		xmlNodePtr xmlroot = NULL;
+		xmlDocPtr xmldoc;
+		xmlNodePtr oai_root;
+		xmlNodePtr Identity;
+
+		xmldoc = xmlReadMemory(xmlStream.ptr, strlen(xmlStream.ptr), NULL, NULL, XML_PARSE_SAX1);
+
+		if (!xmldoc || (xmlroot = xmlDocGetRootElement(xmldoc)) == NULL) {
+			xmlFreeDoc(xmldoc);
+			xmlCleanupParser();
+			elog(WARNING,"invalid XML document.");
+		}
+
+		for (oai_root = xmlroot->children; oai_root != NULL; oai_root = oai_root->next) {
+
+			if (oai_root->type != XML_ELEMENT_NODE) continue;
+
+			if (xmlStrcmp(oai_root->name, (xmlChar*) "Identify") != 0) continue;
+
+			for (Identity = oai_root->children; Identity != NULL; Identity = Identity->next) {
+
+				OAIFdwIdentityNode *node = (OAIFdwIdentityNode *)palloc0(sizeof(OAIFdwIdentityNode));
+
+				if (Identity->type != XML_ELEMENT_NODE)	continue;
+
+				node->name = (char*) Identity->name;
+				node->description = (char*) xmlNodeGetContent(Identity);
+
+				result = lappend(result, node);
+
+			}
+
+		}
+
+	}
+
+	elog(DEBUG1, "  %s => finished",__func__);
+
+	return result;
+
+}
+
+static List *GetSets(char *url) {
+
+	struct string xmlStream;
+	int oaiExecuteResponse;
+	OAIFdwState *state = (OAIFdwState *) palloc0(sizeof(OAIFdwState));
+	List *result = NIL;
+
+	elog(DEBUG1, "  %s called",__func__);
+
+	state->url = url;
+	state->requestType = OAI_REQUEST_LISTSETS;
+
+	oaiExecuteResponse = ExecuteOAIRequest(state,&xmlStream);
+
+	if(oaiExecuteResponse == OAI_SUCCESS) {
+
+		xmlNodePtr xmlroot = NULL;
+		xmlDocPtr xmldoc;
+		xmlNodePtr oai_root;
+		xmlNodePtr ListSets;
+		xmlNodePtr SetElement;
+
+		xmldoc = xmlReadMemory(xmlStream.ptr, strlen(xmlStream.ptr), NULL, NULL, XML_PARSE_SAX1);
+
+		if (!xmldoc || (xmlroot = xmlDocGetRootElement(xmldoc)) == NULL) {
+			xmlFreeDoc(xmldoc);
+			xmlCleanupParser();
+			elog(WARNING,"invalid XML document.");
+		}
+
+		for (oai_root = xmlroot->children; oai_root != NULL; oai_root = oai_root->next) {
+
+			if (oai_root->type != XML_ELEMENT_NODE) continue;
+
+			if (xmlStrcmp(oai_root->name, (xmlChar*) "ListSets") != 0) continue;
+
+			for (ListSets = oai_root->children; ListSets != NULL; ListSets = ListSets->next) {
+
+				OAISet *set = (OAISet *)palloc0(sizeof(OAISet));
+
+				if (ListSets->type != XML_ELEMENT_NODE)	continue;
+				if (xmlStrcmp(ListSets->name, (xmlChar*) "set") != 0) continue;
+
+				for (SetElement = ListSets->children; SetElement != NULL; SetElement = SetElement->next) {
+
+					if (SetElement->type != XML_ELEMENT_NODE)	continue;
+
+					if (xmlStrcmp(SetElement->name, (xmlChar*) "setSpec") == 0) {
+
+						set->setSpec = (char*) xmlNodeGetContent(SetElement);
+
+
+					} else if (xmlStrcmp(SetElement->name, (xmlChar*) "setName") == 0) {
+
+						set->setName = (char*) xmlNodeGetContent(SetElement);
+
+					}
+
+				}
+
+				result = lappend(result, set);
+
+			}
+
+		}
+
+	}
+
+	elog(DEBUG1, "  %s => finished",__func__);
+
+	return result;
+}
+
+static List *GetMetadataFormats(char *url) {
+
+	struct string xmlStream;
+	int oaiExecuteResponse;
+	OAIFdwState *state = (OAIFdwState *) palloc0(sizeof(OAIFdwState));
+	List *result = NIL;
+
+	elog(DEBUG1, "  %s called",__func__);
+
+	state->url = url;
+	state->requestType = OAI_REQUEST_LISTMETADATAFORMATS;
+
+	oaiExecuteResponse = ExecuteOAIRequest(state,&xmlStream);
+
+	if(oaiExecuteResponse == OAI_SUCCESS) {
+
+		xmlNodePtr xmlroot = NULL;
+		xmlDocPtr xmldoc;
+		xmlNodePtr oai_root;
+		xmlNodePtr ListMetadataFormats;
+		xmlNodePtr MetadataElement;
+
+		xmldoc = xmlReadMemory(xmlStream.ptr, strlen(xmlStream.ptr), NULL, NULL, XML_PARSE_SAX1);
+
+		if (!xmldoc || (xmlroot = xmlDocGetRootElement(xmldoc)) == NULL) {
+			xmlFreeDoc(xmldoc);
+			xmlCleanupParser();
+			elog(WARNING,"invalid XML document.");
+		}
+
+		for (oai_root = xmlroot->children; oai_root != NULL; oai_root = oai_root->next) {
+
+			if (oai_root->type != XML_ELEMENT_NODE) continue;
+
+			if (xmlStrcmp(oai_root->name, (xmlChar*) "ListMetadataFormats") != 0) continue;
+
+			for (ListMetadataFormats = oai_root->children; ListMetadataFormats != NULL; ListMetadataFormats = ListMetadataFormats->next) {
+
+				OAIMetadataFormat *format = (OAIMetadataFormat *)palloc0(sizeof(OAIMetadataFormat));
+
+				if (ListMetadataFormats->type != XML_ELEMENT_NODE)	continue;
+				if (xmlStrcmp(ListMetadataFormats->name, (xmlChar*) "metadataFormat") != 0) continue;
+
+				for (MetadataElement = ListMetadataFormats->children; MetadataElement != NULL; MetadataElement = MetadataElement->next) {
+
+					if (MetadataElement->type != XML_ELEMENT_NODE)	continue;
+
+					if (xmlStrcmp(MetadataElement->name, (xmlChar*) "metadataPrefix") == 0) {
+
+						format->metadataPrefix = (char*) xmlNodeGetContent(MetadataElement);
+
+					} else if (xmlStrcmp(MetadataElement->name, (xmlChar*) "schema") == 0) {
+
+						format->schema = (char*) xmlNodeGetContent(MetadataElement);
+
+					} else if (xmlStrcmp(MetadataElement->name, (xmlChar*) "metadataNamespace") == 0) {
+
+						format->metadataNamespace = (char*) xmlNodeGetContent(MetadataElement);
+
+					}
+
+				}
+
+				result = lappend(result, format);
+
+			}
+
+		}
+
+	}
+
+	elog(DEBUG1, "  %s => finished.",__func__);
+
+	return result;
+}
+
+/*cURL code*/
+static void InitCURLString(struct string *s) {
+	s->len = 0;
+	s->ptr = malloc(s->len+1);
+	if (s->ptr == NULL) {
+		fprintf(stderr, "malloc() failed\n");
+		exit(EXIT_FAILURE);
+	}
+	s->ptr[0] = '\0';
+}
+
+/*cURL code*/
+static size_t WriteCURLFunc(void *ptr, size_t size, size_t nmemb, struct string *s) {
+
+	size_t new_len = s->len + size*nmemb;
+	s->ptr = realloc(s->ptr, new_len+1);
+	if (s->ptr == NULL) {
+		fprintf(stderr, "realloc() failed\n");
+		exit(EXIT_FAILURE);
+	}
+	memcpy(s->ptr+s->len, ptr, size*nmemb);
+	s->ptr[new_len] = '\0';
+	s->len = new_len;
+
+	return size*nmemb;
+
+}
+
+static int CheckURL(char *url) {
+
+    CURL *curl;
+    CURLcode response;
+
+    curl = curl_easy_init();
+
+    if(curl) {
+        curl_easy_setopt(curl, CURLOPT_URL, url);
+
+        /* don't write output to stdout */
+        curl_easy_setopt(curl, CURLOPT_NOBODY, 1);
+
+        /* Perform the request */
+        response = curl_easy_perform(curl);
+
+        /* always cleanup */
+        curl_easy_cleanup(curl);
+
+    } else {
+
+    	return CURLE_FAILED_INIT;
+    }
+
+    return response;
+
+}
+
+static int ExecuteOAIRequest(OAIFdwState *state, struct string *xmlResponse) {
 
 	CURL *curl;
 	CURLcode res;
 	StringInfoData url_bufffer;
 	initStringInfo(&url_bufffer);
 
-	elog(DEBUG1,"executeOAIRequest called: url > %s ",state->url);
+	elog(DEBUG1,"%s called: url > %s ",__func__,state->url);
 
 	appendStringInfo(&url_bufffer,"verb=%s",state->requestType);
 
@@ -953,35 +964,35 @@ int executeOAIRequest(oai_fdw_state *state, struct string *xmlResponse) {
 
 		if(state->set) {
 
-			elog(DEBUG2,"  executeOAIRequest (%s): appending 'set' > %s",state->requestType,state->set);
+			elog(DEBUG2,"  %s (%s): appending 'set' > %s",__func__,state->requestType,state->set);
 			appendStringInfo(&url_bufffer,"&set=%s",state->set);
 
 		}
 
 		if(state->from) {
 
-			elog(DEBUG2,"  executeOAIRequest (%s): appending 'from' > %s",state->requestType,state->from);
+			elog(DEBUG2,"  %s (%s): appending 'from' > %s",__func__,state->requestType,state->from);
 			appendStringInfo(&url_bufffer,"&from=%s",state->from);
 
 		}
 
 		if(state->until) {
 
-			elog(DEBUG2,"  executeOAIRequest (%s): appending 'until' > %s",state->requestType,state->until);
+			elog(DEBUG2,"  %s (%s): appending 'until' > %s",__func__,state->requestType,state->until);
 			appendStringInfo(&url_bufffer,"&until=%s",state->until);
 
 		}
 
 		if(state->metadataPrefix) {
 
-			elog(DEBUG2,"  executeOAIRequest (%s): appending 'metadataPrefix' > %s",state->requestType,state->metadataPrefix);
+			elog(DEBUG2,"  %s (%s): appending 'metadataPrefix' > %s",__func__,state->requestType,state->metadataPrefix);
 			appendStringInfo(&url_bufffer,"&metadataPrefix=%s",state->metadataPrefix);
 
 		}
 
 		if(state->resumptionToken) {
 
-			elog(DEBUG2,"  executeOAIRequest (%s): appending 'resumptionToken' > %s",state->requestType,state->resumptionToken);
+			elog(DEBUG2,"  %s (%s): appending 'resumptionToken' > %s",__func__,state->requestType,state->resumptionToken);
 			resetStringInfo(&url_bufffer);
 			appendStringInfo(&url_bufffer,"verb=%s&resumptionToken=%s",state->requestType,state->resumptionToken);
 
@@ -993,14 +1004,14 @@ int executeOAIRequest(oai_fdw_state *state, struct string *xmlResponse) {
 
 		if(state->identifier) {
 
-			elog(DEBUG2,"  executeOAIRequest (%s): appending 'identifier' > %s",state->requestType,state->identifier);
+			elog(DEBUG2,"  %s (%s): appending 'identifier' > %s",__func__,state->requestType,state->identifier);
 			appendStringInfo(&url_bufffer,"&identifier=%s",state->identifier);
 
 		}
 
 		if(state->metadataPrefix) {
 
-			elog(DEBUG2,"  executeOAIRequest (%s): appending 'metadataPrefix' > %s",state->requestType,state->metadataPrefix);
+			elog(DEBUG2,"  %s (%s): appending 'metadataPrefix' > %s",__func__,state->requestType,state->metadataPrefix);
 			appendStringInfo(&url_bufffer,"&metadataPrefix=%s",state->metadataPrefix);
 
 		}
@@ -1010,14 +1021,14 @@ int executeOAIRequest(oai_fdw_state *state, struct string *xmlResponse) {
 
 		if(state->set) {
 
-			elog(DEBUG2,"  executeOAIRequest (%s): appending 'set' > %s",state->requestType,state->set);
+			elog(DEBUG2,"  %s (%s): appending 'set' > %s",__func__,state->requestType,state->set);
 			appendStringInfo(&url_bufffer,"&set=%s",state->set);
 
 		}
 
 		if(state->from) {
 
-			elog(DEBUG2,"  executeOAIRequest (%s): appending 'from' > %s",state->requestType,state->from);
+			elog(DEBUG2,"  %s (%s): appending 'from' > %s",__func__,state->requestType,state->from);
 			appendStringInfo(&url_bufffer,"&from=%s",state->from);
 
 
@@ -1025,14 +1036,14 @@ int executeOAIRequest(oai_fdw_state *state, struct string *xmlResponse) {
 
 		if(state->until) {
 
-			elog(DEBUG2,"  %s: appending 'until' > %s",state->requestType,state->until);
+			elog(DEBUG2,"  %s (%s): appending 'until' > %s",__func__,state->requestType,state->until);
 			appendStringInfo(&url_bufffer,"&until=%s",state->until);
 
 		}
 
 		if(state->metadataPrefix) {
 
-			elog(DEBUG2,"  executeOAIRequest (%s): appending 'metadataPrefix' > %s",state->requestType,state->metadataPrefix);
+			elog(DEBUG2,"  %s (%s): appending 'metadataPrefix' > %s",__func__,state->requestType,state->metadataPrefix);
 			appendStringInfo(&url_bufffer,"&metadataPrefix=%s",state->metadataPrefix);
 
 		}
@@ -1040,7 +1051,7 @@ int executeOAIRequest(oai_fdw_state *state, struct string *xmlResponse) {
 
 		if(state->resumptionToken) {
 
-			elog(DEBUG2,"  executeOAIRequest (%s): appending 'resumptionToken' > %s",state->requestType,state->resumptionToken);
+			elog(DEBUG2,"  %s (%s): appending 'resumptionToken' > %s",__func__,state->requestType,state->resumptionToken);
 			resetStringInfo(&url_bufffer);
 			appendStringInfo(&url_bufffer,"verb=%s&resumptionToken=%s",state->requestType,state->resumptionToken);
 
@@ -1061,17 +1072,17 @@ int executeOAIRequest(oai_fdw_state *state, struct string *xmlResponse) {
 	}
 
 
-	elog(DEBUG1,"  executeOAIRequest (%s): url build > %s?%s",state->requestType,state->url,url_bufffer.data);
+	elog(DEBUG1,"  %s (%s): url build > %s?%s",__func__,state->requestType,state->url,url_bufffer.data);
 
 	curl = curl_easy_init();
 
 	if(curl) {
 
-		init_string(xmlResponse);
+		InitCURLString(xmlResponse);
 
 		curl_easy_setopt(curl, CURLOPT_URL, state->url);
 		curl_easy_setopt(curl, CURLOPT_POSTFIELDS, url_bufffer.data);
-		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writefunc);
+		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCURLFunc);
 		curl_easy_setopt(curl, CURLOPT_WRITEDATA, xmlResponse);
 		curl_easy_setopt(curl, CURLOPT_FAILONERROR, true);
 
@@ -1091,111 +1102,21 @@ int executeOAIRequest(oai_fdw_state *state, struct string *xmlResponse) {
 
 	} else {
 
-		elog(DEBUG2, "  => %s: curl failed",state->requestType);
+		elog(DEBUG1, "  %s (%s) => curl failed",__func__,state->requestType);
 		return OAI_FAIL;
 
 	}
 
 	curl_easy_cleanup(curl);
 
-	elog(DEBUG2, "  => %s: curl http_return > '%d'",state->requestType, res);
+	elog(DEBUG1, "%s (%s) => curl http_return > '%d'",__func__,state->requestType, res);
 
 	return OAI_SUCCESS;
 
 
 }
 
-
-void listRecordsRequest(oai_fdw_state *state) {
-
-	struct string xmlStream;
-	int oaiExecuteResponse;
-
-	elog(DEBUG1,"ListRecordsRequest/LoadData called");
-
-	oaiExecuteResponse = executeOAIRequest(state,&xmlStream);
-
-	if(oaiExecuteResponse == OAI_SUCCESS) {
-
-		xmlDocPtr xmldoc;
-		xmlNodePtr recordsList;
-		xmlNodePtr record;
-
-		xmlInitParser();
-
-		xmldoc = xmlReadMemory(xmlStream.ptr, strlen(xmlStream.ptr), NULL, NULL, XML_PARSE_SAX1);
-
-		if (!xmldoc || (state->xmlroot = xmlDocGetRootElement(xmldoc)) == NULL) {
-
-			xmlFreeDoc(xmldoc);
-			xmlCleanupParser();
-
-			ereport(ERROR,
-			  (errcode(ERRCODE_FDW_UNABLE_TO_CREATE_EXECUTION),
-			  (errmsg("Invalid XML response for URL '%s'",state->url))));
-
-		}
-
-		for (recordsList = state->xmlroot->children; recordsList != NULL; recordsList = recordsList->next) {
-
-			if (recordsList->type != XML_ELEMENT_NODE) continue;
-
-			if (xmlStrcmp(recordsList->name, (xmlChar*)state->requestType)==0) {
-
-				if (!xmldoc || (state->xmlroot = xmlDocGetRootElement(xmldoc)) == NULL) {
-
-					xmlFreeDoc(xmldoc);
-					xmlCleanupParser();
-
-				}
-
-				for (record = recordsList->children; record!= NULL; record = record->next) {
-
-					if (record->type != XML_ELEMENT_NODE) continue;
-
-					if (xmlStrcmp(record->name, (xmlChar*)"resumptionToken")==0){
-
-						if(xmlGetProp(record, (xmlChar*) "completeListSize")) {
-
-							state->completeListSize = (char*) xmlGetProp(record, (xmlChar*) "completeListSize");
-
-						}
-
-					}
-
-				}
-
-			} else if (xmlStrcmp(recordsList->name, (xmlChar*)"error")==0) {
-
-				char *errorMessage = (char*)xmlNodeGetContent(recordsList);
-				char *errorCode = (char*) xmlGetProp(recordsList, (xmlChar*) "code");
-
-				if(strcmp(errorCode,OAI_ERROR_ID_DOES_NOT_EXIST)==0 ||
-				   strcmp(errorCode,OAI_ERROR_NO_RECORD_MATCH)==0) {
-
-					state->xmlroot = NULL;
-					ereport(WARNING,
-							(errcode(ERRCODE_NO_DATA_FOUND),
-							errmsg("OAI %s: %s",errorCode,errorMessage)));
-
-				} else {
-
-					ereport(ERROR,
-							(errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
-							errmsg("OAI %s: %s",errorCode,errorMessage)));
-
-				}
-
-
-			}
-
-		}
-
-	}
-
-}
-
-static void requestPlanner(oai_fdw_TableOptions *opts, ForeignTable *ft, RelOptInfo *baserel) {
+static void OAIRequestPlanner(OAIFdwTableOptions *opts, ForeignTable *ft, RelOptInfo *baserel) {
 
 	List *conditions = baserel->baserestrictinfo;
 	bool hasContentForeignColumn = false;
@@ -1206,7 +1127,7 @@ static void requestPlanner(oai_fdw_TableOptions *opts, ForeignTable *ft, RelOptI
 	Relation rel = table_open(ft->relid, NoLock);;
 #endif
 
-	//Relation rel = table_open(ft->relid, NoLock);
+	elog(DEBUG1, "%s called.",__func__);
 
 
 	/* The default request type is OAI_REQUEST_LISTRECORDS.
@@ -1344,9 +1265,10 @@ static void requestPlanner(oai_fdw_TableOptions *opts, ForeignTable *ft, RelOptI
 	table_close(rel, NoLock);
 #endif
 
+	elog(DEBUG1, "%s => finished.",__func__);
 }
 
-static TupleTableSlot *oai_fdw_ExecForeignUpdate(EState *estate, ResultRelInfo *rinfo, TupleTableSlot *slot, TupleTableSlot *planSlot) {
+static TupleTableSlot *OAIFdwExecForeignUpdate(EState *estate, ResultRelInfo *rinfo, TupleTableSlot *slot, TupleTableSlot *planSlot) {
 
 	ereport(
 	  ERROR,(
@@ -1355,10 +1277,11 @@ static TupleTableSlot *oai_fdw_ExecForeignUpdate(EState *estate, ResultRelInfo *
   		errhint("The OAI Foreign Data Wrapper does not support UPDATE queries.")
 	  )
 	);
+
+	return NULL;
 }
 
-
-static TupleTableSlot *oai_fdw_ExecForeignInsert(EState *estate, ResultRelInfo *rinfo, TupleTableSlot *slot, TupleTableSlot *planSlot) {
+static TupleTableSlot *OAIFdwExecForeignInsert(EState *estate, ResultRelInfo *rinfo, TupleTableSlot *slot, TupleTableSlot *planSlot) {
 
 	ereport(
 	  ERROR,(
@@ -1367,9 +1290,11 @@ static TupleTableSlot *oai_fdw_ExecForeignInsert(EState *estate, ResultRelInfo *
   		errhint("The OAI Foreign Data Wrapper does not support INSERT queries.")
 	  )
 	);
+
+	return NULL;
 }
 
-static TupleTableSlot *oai_fdw_ExecForeignDelete(EState *estate, ResultRelInfo *rinfo, TupleTableSlot *slot, TupleTableSlot *planSlot) {
+static TupleTableSlot *OAIFdwExecForeignDelete(EState *estate, ResultRelInfo *rinfo, TupleTableSlot *slot, TupleTableSlot *planSlot) {
 
 	ereport(
 	  ERROR,(
@@ -1378,6 +1303,8 @@ static TupleTableSlot *oai_fdw_ExecForeignDelete(EState *estate, ResultRelInfo *
   		errhint("The OAI Foreign Data Wrapper does not support DELETE queries.")
 	  )
 	);
+
+	return NULL;
 }
 
 static char *GetOAINodeFromColumn(Oid foreigntableid, int16 attnum) {
@@ -1391,7 +1318,7 @@ static char *GetOAINodeFromColumn(Oid foreigntableid, int16 attnum) {
 	Relation rel = table_open(foreigntableid, NoLock);;
 #endif
 
-	//Relation rel = table_open(foreigntableid, NoLock);
+	elog(DEBUG1, "  %s called",__func__);
 
 
 	for (int i = 0; i < rel->rd_att->natts ; i++) {
@@ -1430,113 +1357,82 @@ static char *GetOAINodeFromColumn(Oid foreigntableid, int16 attnum) {
 
 }
 
-
 static char *datumToString(Datum datum, Oid type) {
 
-	//StringInfoData result;
 	regproc typoutput;
 	HeapTuple tuple;
-	char *str;
+	char *result;
 
 	tuple = SearchSysCache1(TYPEOID, ObjectIdGetDatum(type));
 
-	if (!HeapTupleIsValid(tuple)) elog(ERROR, "cache lookup failed for type %u", type);
+	if (!HeapTupleIsValid(tuple)) elog(ERROR, "%s: cache lookup failed for type %u",__func__, type);
 
 	typoutput = ((Form_pg_type)GETSTRUCT(tuple))->typoutput;
 
 	ReleaseSysCache(tuple);
 
-	elog(DEBUG1,"datumToString: type > %u",type);
+	elog(DEBUG1,"%s: type > %u",__func__,type);
 
 	switch (type) {
 
 	case TEXTOID:
 	case VARCHAROID:
-		str =  DatumGetCString(OidFunctionCall1(typoutput, datum));
+		result =  DatumGetCString(OidFunctionCall1(typoutput, datum));
 		break;
 	default:
 		return NULL;
 	}
 
-	return str;
+	return result;
 
 }
 
-
-static void deparseExpr(Expr *expr, oai_fdw_TableOptions *opts){
+static void deparseExpr(Expr *expr, OAIFdwTableOptions *opts){
 
 	OpExpr *oper;
-	Var *varleft;
-	//Var *varright;
+	Var *var;
 	HeapTuple tuple;
-//	char *opername, *left, *right, *arg, oprkind;
-//	Oid leftargtype, rightargtype;
-	char *opername;
-	//Oid leftargtype;
+	char *operName;
+	char* oaiNode;
 
-	//oai_Column *col = (oai_Column*)palloc0(sizeof(oai_Column));
-	char* leftargOption;
-	//int numcols = 0;
-	elog(DEBUG1,"deparseExpr: expr->type %u",expr->type);
+	elog(DEBUG1,"%s called for expr->type %u",__func__,expr->type);
 
 	switch (expr->type)	{
-/*
-	case T_Var:
 
-		varleft = (Var *)expr;
-
-		col->oaiNode = GetOAINodeFromColumn(opts->foreigntableid,varleft->varattno);
-		col->id = varleft->varattno-1;
-		opts->selectColumns = lappend(opts->selectColumns, col);
-
-		if(strcmp(col->oaiNode,OAI_NODE_CONTENT)==0) opts->requestType = OAI_REQUEST_LISTRECORDS;
-
-		elog(DEBUG1,"  deparseExpr: T_Var =  oai_node > '%s', id > %d",col->oaiNode,varleft->varattno);
-		break;
-*/
 	case T_OpExpr:
 
-		elog(DEBUG1,"  deparseExpr: case T_OpExpr");
+		elog(DEBUG1,"  %s: case T_OpExpr",__func__);
 		oper = (OpExpr *)expr;
 
 		tuple = SearchSysCache1(OPEROID, ObjectIdGetDatum(oper->opno));
 
-		if (!HeapTupleIsValid(tuple)) elog(ERROR, "cache lookup failed for operator %u", oper->opno);
+		if (!HeapTupleIsValid(tuple)) elog(ERROR, "%s: cache lookup failed for operator %u",__func__, oper->opno);
 
-		opername = pstrdup(((Form_pg_operator)GETSTRUCT(tuple))->oprname.data);
-		//oprkind = ((Form_pg_operator)GETSTRUCT(tuple))->oprkind;
-		//leftargtype = ((Form_pg_operator)GETSTRUCT(tuple))->oprleft;
-		//rightargtype = ((Form_pg_operator)GETSTRUCT(tuple))->oprright;
-		//schema = ((Form_pg_operator)GETSTRUCT(tuple))->oprnamespace;
-
-//		return opername;
-
+		operName = pstrdup(((Form_pg_operator)GETSTRUCT(tuple))->oprname.data);
 
 		ReleaseSysCache(tuple);
 
 
-		elog(DEBUG1,"  deparseExpr: opername > %s",opername);
+		elog(DEBUG1,"  %s: opername > %s",__func__,operName);
 
-		varleft  = (Var *) linitial(oper->args);
-		leftargOption = GetOAINodeFromColumn(opts->foreigntableid,varleft->varattno);
+		var  = (Var *) linitial(oper->args);
+		oaiNode = GetOAINodeFromColumn(opts->foreigntableid,var->varattno);
 
-		if (strcmp(opername, "=") == 0){
+		if (strcmp(operName, "=") == 0){
 
-			//varright = (Var *) lsecond(oper->args);
-
-			if (strcmp(leftargOption,OAI_NODE_IDENTIFIER) ==0 && (varleft->vartype == TEXTOID || varleft->vartype == VARCHAROID)) {
+			if (strcmp(oaiNode,OAI_NODE_IDENTIFIER) ==0 && (var->vartype == TEXTOID || var->vartype == VARCHAROID)) {
 
 				Const *constant = (Const*) lsecond(oper->args);
 
 				opts->requestType = OAI_REQUEST_GETRECORD;
 				opts->identifier = datumToString(constant->constvalue,constant->consttype);
 
-				elog(DEBUG1,"  deparseExpr: request type set to '%s' with identifier '%s'",OAI_REQUEST_GETRECORD,opts->identifier);
+				elog(DEBUG2,"  %s: request type set to '%s' with identifier '%s'",__func__,OAI_REQUEST_GETRECORD,opts->identifier);
 
 			}
 
 
-			if (strcmp(leftargOption,OAI_NODE_DATESTAMP) ==0 && (varleft->vartype == TIMESTAMPOID)) {
+			if (strcmp(oaiNode,OAI_NODE_DATESTAMP) ==0 && (var->vartype == TIMESTAMPOID)) {
 
 				Const *constant = (Const*) lsecond(oper->args);
 				opts->from = deparseTimestamp(constant->constvalue);
@@ -1544,22 +1440,22 @@ static void deparseExpr(Expr *expr, oai_fdw_TableOptions *opts){
 
 			}
 
-			if (strcmp(leftargOption,OAI_NODE_METADATAPREFIX) ==0 && (varleft->vartype == TEXTOID || varleft->vartype == VARCHAROID)) {
+			if (strcmp(oaiNode,OAI_NODE_METADATAPREFIX) ==0 && (var->vartype == TEXTOID || var->vartype == VARCHAROID)) {
 
 				Const *constant = (Const*) lsecond(oper->args);
 
 				opts->metadataPrefix = datumToString(constant->constvalue,constant->consttype);
 
-				elog(DEBUG1,"  deparseExpr: metadataPrefix set to '%s'",opts->metadataPrefix);
+				elog(DEBUG2,"  %s: metadataPrefix set to '%s'",__func__,opts->metadataPrefix);
 
 			}
 
 
 		}
 
-		if (strcmp(opername, ">=") == 0 || strcmp(opername, ">") == 0){
+		if (strcmp(operName, ">=") == 0 || strcmp(operName, ">") == 0){
 
-			if (strcmp(leftargOption,OAI_NODE_DATESTAMP) ==0 && (varleft->vartype == TIMESTAMPOID)) {
+			if (strcmp(oaiNode,OAI_NODE_DATESTAMP) ==0 && (var->vartype == TIMESTAMPOID)) {
 
 				Const *constant = (Const*) lsecond(oper->args);
 				opts->from = deparseTimestamp(constant->constvalue);
@@ -1568,9 +1464,9 @@ static void deparseExpr(Expr *expr, oai_fdw_TableOptions *opts){
 
 		}
 
-		if (strcmp(opername, "<=") == 0 || strcmp(opername, "<") == 0){
+		if (strcmp(operName, "<=") == 0 || strcmp(operName, "<") == 0){
 
-			if (strcmp(leftargOption,OAI_NODE_DATESTAMP) ==0 && (varleft->vartype == TIMESTAMPOID)) {
+			if (strcmp(oaiNode,OAI_NODE_DATESTAMP) ==0 && (var->vartype == TIMESTAMPOID)) {
 
 				Const *constant = (Const*) lsecond(oper->args);
 				opts->until = deparseTimestamp(constant->constvalue);
@@ -1580,9 +1476,9 @@ static void deparseExpr(Expr *expr, oai_fdw_TableOptions *opts){
 
 		}
 
-		if (strcmp(opername, "<@") == 0 || strcmp(opername, "@>") == 0 || strcmp(opername, "&&") == 0 ){
+		if (strcmp(operName, "<@") == 0 || strcmp(operName, "@>") == 0 || strcmp(operName, "&&") == 0 ){
 
-			if (strcmp(leftargOption,OAI_NODE_SETSPEC) ==0 && (varleft->vartype == TEXTARRAYOID || varleft->vartype == VARCHARARRAYOID)) {
+			if (strcmp(oaiNode,OAI_NODE_SETSPEC) ==0 && (var->vartype == TEXTARRAYOID || var->vartype == VARCHARARRAYOID)) {
 
 				Const *constant = (Const*) lsecond(oper->args);
 				ArrayType *array = (ArrayType*) constant->constvalue;
@@ -1592,7 +1488,7 @@ static void deparseExpr(Expr *expr, oai_fdw_TableOptions *opts){
 				if(numitems > 1) {
 
 					elog(WARNING,"The OAI standard requests do not support multiple '%s' attributes. This filter will be applied AFTER the OAI request.",OAI_NODE_SETSPEC);
-					elog(DEBUG1,"  deparseExpr: clearing '%s' attribute.",OAI_NODE_SETSPEC);
+					elog(DEBUG2,"  %s: clearing '%s' attribute.",__func__,OAI_NODE_SETSPEC);
 					opts->set = NULL;
 
 				} else if (numitems == 1) {
@@ -1606,7 +1502,7 @@ static void deparseExpr(Expr *expr, oai_fdw_TableOptions *opts){
 
 					while (array_iterate(iterator, &value, &isnull)) {
 
-						elog(DEBUG1,"  deparseExpr: setSpec set to '%s'",datumToString(value,TEXTOID));
+						elog(DEBUG2,"  %s: setSpec set to '%s'",__func__,datumToString(value,TEXTOID));
 						opts->set = datumToString(value,TEXTOID);
 
 					}
@@ -1622,15 +1518,14 @@ static void deparseExpr(Expr *expr, oai_fdw_TableOptions *opts){
 		break;
 
 	default:
-		elog(DEBUG1,"NONE");
+
 		break;
 
 	}
 
 }
 
-
-static void deparseSelectColumns(oai_fdw_TableOptions *opts,List* exprs){
+static void deparseSelectColumns(OAIFdwTableOptions *opts,List* exprs){
 
 	ListCell *cell;
 	//Var *variable;
@@ -1645,7 +1540,7 @@ static void deparseSelectColumns(oai_fdw_TableOptions *opts,List* exprs){
 
 		Expr *expr = (Expr *) lfirst(cell);
 
-		elog(DEBUG1,"  %s: evaluating expr->type = %u",__func__,expr->type);
+		elog(DEBUG2,"  %s: evaluating expr->type = %u",__func__,expr->type);
 
 		deparseExpr(expr, opts);
 
@@ -1682,16 +1577,12 @@ static void deparseSelectColumns(oai_fdw_TableOptions *opts,List* exprs){
 
 }
 
-
 static char *deparseTimestamp(Datum datum) {
 
 	struct pg_tm datetime_tm;
-	//int32 tzoffset;
 	fsec_t datetime_fsec;
 	StringInfoData s;
 
-	/* get the parts */
-	//tzoffset = 0;
 	(void)timestamp2tm(DatumGetTimestampTz(datum),
 				NULL,
 				&datetime_tm,
@@ -1709,17 +1600,13 @@ static char *deparseTimestamp(Datum datum) {
 
 }
 
-
-static void deparseWhereClause(List *conditions, oai_fdw_TableOptions *opts){
+static void deparseWhereClause(List *conditions, OAIFdwTableOptions *opts){
 
 	ListCell *cell;
-	int i = 0;
 
 	foreach(cell, conditions) {
 
 		Expr  *expr = (Expr *) lfirst(cell);
-
-		elog(DEBUG1,"round %d, expr->type %u",++i,expr->type);
 
 		/* extract WHERE clause from RestrictInfo */
 		if (IsA(expr, RestrictInfo)) {
@@ -1736,15 +1623,15 @@ static void deparseWhereClause(List *conditions, oai_fdw_TableOptions *opts){
 
 }
 
-void oai_fdw_GetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid) {
+static void OAIFdwGetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid) {
 
 	ForeignTable *ft = GetForeignTable(foreigntableid);
 	ForeignServer *server = GetForeignServer(ft->serverid);
 
-	oai_fdw_TableOptions *opts = (oai_fdw_TableOptions *)palloc0(sizeof(oai_fdw_TableOptions));
+	OAIFdwTableOptions *opts = (OAIFdwTableOptions *)palloc0(sizeof(OAIFdwTableOptions));
 	ListCell *cell;
 
-	elog(DEBUG1,"%s: requestType > %s",__func__, opts->requestType);
+	elog(DEBUG1,"%s called",__func__);
 
 	foreach(cell, server->options) {
 
@@ -1789,12 +1676,12 @@ void oai_fdw_GetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid forei
 
 	}
 
-	requestPlanner(opts, ft, baserel);
+	OAIRequestPlanner(opts, ft, baserel);
 	baserel->fdw_private = opts;
 
 }
 
-void oai_fdw_GetForeignPaths(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid) {
+static void OAIFdwGetForeignPaths(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid) {
 
 	Path *path = (Path *)create_foreignscan_path(root, baserel,
 			NULL,              /* default pathtarget */
@@ -1809,11 +1696,11 @@ void oai_fdw_GetForeignPaths(PlannerInfo *root, RelOptInfo *baserel, Oid foreign
 
 }
 
-ForeignScan *oai_fdw_GetForeignPlan(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid, ForeignPath *best_path, List *tlist, List *scan_clauses, Plan *outer_plan) {
+static ForeignScan *OAIFdwGetForeignPlan(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid, ForeignPath *best_path, List *tlist, List *scan_clauses, Plan *outer_plan) {
 
 	List *fdw_private;
-	oai_fdw_TableOptions *opts = baserel->fdw_private;
-	oai_fdw_state *state = (oai_fdw_state *) palloc0(sizeof(oai_fdw_state));
+	OAIFdwTableOptions *opts = baserel->fdw_private;
+	OAIFdwState *state = (OAIFdwState *) palloc0(sizeof(OAIFdwState));
 
 	state->url = opts->url;
 	state->set = opts->set;
@@ -1824,7 +1711,6 @@ ForeignScan *oai_fdw_GetForeignPlan(PlannerInfo *root, RelOptInfo *baserel, Oid 
 	state->numcols = opts->numcols;
 	state->requestType = opts->requestType;
 	state->identifier = opts->identifier;
-	//state->selectColumns = opts->selectColumns;
 	state->numfdwcols = opts->numfdwcols;
 
 	fdw_private = list_make1(state);
@@ -1842,10 +1728,10 @@ ForeignScan *oai_fdw_GetForeignPlan(PlannerInfo *root, RelOptInfo *baserel, Oid 
 
 }
 
-void oai_fdw_BeginForeignScan(ForeignScanState *node, int eflags) {
+static void OAIFdwBeginForeignScan(ForeignScanState *node, int eflags) {
 
 	ForeignScan *fs = (ForeignScan *) node->ss.ps.plan;
-	oai_fdw_state *state = (oai_fdw_state *) linitial(fs->fdw_private);
+	OAIFdwState *state = (OAIFdwState *) linitial(fs->fdw_private);
 
 	if(eflags & EXEC_FLAG_EXPLAIN_ONLY) return;
 
@@ -1855,14 +1741,14 @@ void oai_fdw_BeginForeignScan(ForeignScanState *node, int eflags) {
 
 }
 
-oai_Record *FetchNextOAIRecord(TupleTableSlot *slot, oai_fdw_state *state) {
+static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 
 	xmlNodePtr headerList;
 	xmlNodePtr header;
 	xmlNodePtr rootNode;
 	xmlNodePtr rec;
 	xmlNodePtr metadata;
-	oai_Record *oai = (oai_Record*) palloc0(sizeof(oai_Record));
+	OAIRecord *oai = (OAIRecord*) palloc0(sizeof(OAIRecord));
 	bool getNext = false;
     bool eof = false;
 
@@ -1875,6 +1761,10 @@ oai_Record *FetchNextOAIRecord(TupleTableSlot *slot, oai_fdw_state *state) {
 
 	xmlInitParser(); //????????????????
 
+
+	/*
+	 * Fetches next record from OAI ListIdentifiers request
+	 */
 	if(strcmp(state->requestType,OAI_REQUEST_LISTIDENTIFIERS)==0) {
 
 		for (rootNode = state->xmlroot->children; rootNode!= NULL; rootNode = rootNode->next) {
@@ -1895,11 +1785,11 @@ oai_Record *FetchNextOAIRecord(TupleTableSlot *slot, oai_fdw_state *state) {
 						if(strlen(token) != 0) {
 
 							state->resumptionToken = token;
-							elog(DEBUG1,"  fetchNextRecord: (%s) token detected in current page > %s",state->requestType,token);
+							elog(DEBUG2,"  %s: (%s) token detected in current page > %s",__func__,state->requestType,token);
 
 						} else {
 
-							elog(DEBUG1,"  fetchNextRecord: empty token in '%s' (EOF)",state->requestType);
+							elog(DEBUG2,"  %s: empty token in '%s' (EOF)",__func__,state->requestType);
 							eof = true;
 
 						}
@@ -1934,14 +1824,14 @@ oai_Record *FetchNextOAIRecord(TupleTableSlot *slot, oai_fdw_state *state) {
 				if(!state->current_identifier) {
 
 					state->current_identifier = oai->identifier;
-					elog(DEBUG1,"  fetchNextRecord: (%s) setting first current identifier > %s",state->requestType,state->current_identifier );
+					elog(DEBUG2,"  %s: (%s) setting first current identifier > %s",__func__,state->requestType,state->current_identifier );
 					return oai;
 
 				}
 
 				if (strcmp(state->current_identifier,oai->identifier)==0){
 
-					elog(DEBUG1,"  fetchNextRecord: (%s) there is a match! next iteration will be returned > %s",state->requestType,oai->identifier);
+					elog(DEBUG2,"  %s: (%s) there is a match! next iteration will be returned > %s",__func__,state->requestType,oai->identifier);
 					oai->setsArray = NULL;
 					getNext = true;
 
@@ -1950,13 +1840,13 @@ oai_Record *FetchNextOAIRecord(TupleTableSlot *slot, oai_fdw_state *state) {
 				} else if(getNext == true) {
 
 					state->current_identifier = oai->identifier;
-					elog(DEBUG1,"  fetchNextRecord: (%s) getNext=true > %s",state->requestType,state->current_identifier);
+					elog(DEBUG2,"  %s: (%s) getNext=true > %s",__func__,state->requestType,state->current_identifier);
 					return oai;
 
 				}
 
 				if(!header->next && !state->resumptionToken) {
-					elog(DEBUG1,"  fetchNextRecord: (%s) wrapping up .. ",state->requestType);
+					elog(DEBUG2,"  %s: (%s) wrapping up .. ",__func__,state->requestType);
 					return NULL;
 				}
 
@@ -1968,12 +1858,9 @@ oai_Record *FetchNextOAIRecord(TupleTableSlot *slot, oai_fdw_state *state) {
 	}
 
 
-
-
-
-
-
-
+	/*
+	 * Fetches next record from OAI ListRecord or GetRecord requests.
+	 */
 	if(strcmp(state->requestType,OAI_REQUEST_LISTRECORDS)==0 || strcmp(state->requestType,OAI_REQUEST_GETRECORD)==0) {
 
 		for (rootNode = state->xmlroot->children; rootNode!= NULL; rootNode = rootNode->next) {
@@ -1988,14 +1875,14 @@ oai_Record *FetchNextOAIRecord(TupleTableSlot *slot, oai_fdw_state *state) {
 
 				if(rec->next) {
 
-					if (xmlStrcmp(rec->next->name, (xmlChar*)"resumptionToken")==0) {
+					if (xmlStrcmp(rec->next->name, (xmlChar*)OAI_NODE_RESUMPTIONTOKEN)==0) {
 
 						char *token = (char*)xmlNodeGetContent(rec->next);
 
 						if(strlen(token) != 0) {
 
 							state->resumptionToken = token;
-							elog(DEBUG2,"  fetchNextRecord: (%s): Token detected in current page > %s",state->requestType,token);
+							elog(DEBUG2,"  %s: (%s): Token detected in current page > %s",__func__,state->requestType,token);
 
 						}
 					}
@@ -2016,7 +1903,7 @@ oai_Record *FetchNextOAIRecord(TupleTableSlot *slot, oai_fdw_state *state) {
 						xmlBufferPtr buffer = xmlBufferCreate();
 						size_t content_size = (size_t) xmlNodeDump(buffer, xmldoc, oai_xml_document, 0, 1);
 
-						elog(DEBUG2,"  fetchNextRecord: (%s) XML Buffer size: %ld",state->requestType,content_size);
+						elog(DEBUG2,"  %s: (%s) XML Buffer size: %ld",__func__,state->requestType,content_size);
 
 						oai->content = (char*) buffer->content;
 						oai->setsArray = NULL;
@@ -2057,20 +1944,20 @@ oai_Record *FetchNextOAIRecord(TupleTableSlot *slot, oai_fdw_state *state) {
 				if(!state->current_identifier) {
 
 					state->current_identifier = oai->identifier;
-					elog(DEBUG1,"  fetchNextRecord: (%s) setting first current identifier > %s",state->requestType,state->current_identifier );
+					elog(DEBUG2,"  %s: (%s) setting first current identifier > %s",__func__,state->requestType,state->current_identifier );
 					return oai;
 
 				}
 
 				if (strcmp(state->current_identifier,oai->identifier)==0){
 
-					elog(DEBUG1,"  fetchNextRecord: (%s) match > %s",state->requestType,oai->identifier);
+					elog(DEBUG2,"  %s: (%s) match > %s",__func__,state->requestType,oai->identifier);
 					getNext = true;
 
 				} else if(getNext == true) {
 
 					state->current_identifier = oai->identifier;
-					elog(DEBUG1,"  fetchNextRecord: (%s) setting new current identifier > %s",state->requestType,state->current_identifier);
+					elog(DEBUG2,"  %s: (%s) setting new current identifier > %s",__func__,state->requestType,state->current_identifier);
 					return oai;
 
 				}
@@ -2087,119 +1974,12 @@ oai_Record *FetchNextOAIRecord(TupleTableSlot *slot, oai_fdw_state *state) {
 
 }
 
-void CreateOAITuple(TupleTableSlot *slot, oai_fdw_state *state, oai_Record *oai) {
-
-	//ListCell *cell;
+static void CreateOAITuple(TupleTableSlot *slot, OAIFdwState *state, OAIRecord *oai) {
 
 	elog(DEBUG1,"%s called",__func__);
 
-//	elog(DEBUG1,"createOAITuple called: numfdwcols = %d\n\n "
-//			"- identifier > %s\n "
-//			"- datestamp: %s\n "
-//			"- content: %s\n",state->selectColumns->length,oai->identifier,oai->datestamp,oai->content);
-
-	/*foreach (cell, state->selectColumns) {
-
-		oai_Column *col = (oai_Column*)palloc0(sizeof(oai_Column));
-		col = (oai_Column*) lfirst(cell);
-
-		elog(DEBUG1,"  createOAITuple: parsing column > col->id = %d, col->oaiNode '%s'",col->id,col->oaiNode);
-
-		if(strcmp(col->oaiNode,OAI_NODE_STATUS)==0) {
-
-			slot->tts_isnull[col->id] = false;
-			slot->tts_values[col->id] = oai->isDeleted;
-
-			elog(DEBUG1,"  createOAITuple: col->id = %d, col->oaiNode = '%s', value = 'x'",col->id,col->oaiNode);
-
-		} else if(strcmp(col->oaiNode,OAI_NODE_IDENTIFIER)==0 && oai->identifier) {
-
-			slot->tts_isnull[col->id] = false;
-			slot->tts_values[col->id] = CStringGetTextDatum(oai->identifier);
-
-			elog(DEBUG1,"  createOAITuple: col->id = %d, col->oaiNode = '%s', value = '%s'",col->id,col->oaiNode,oai->identifier);
-
-		} else if(strcmp(col->oaiNode,OAI_NODE_METADATAPREFIX)==0 && oai->metadataPrefix) {
-
-			slot->tts_isnull[col->id] = false;
-			slot->tts_values[col->id] = CStringGetTextDatum(oai->metadataPrefix);
-
-			elog(DEBUG1,"  createOAITuple: col->id = %d, col->oaiNode = '%s', value = '%s'",col->id,col->oaiNode,oai->metadataPrefix);
-
-		} else if(strcmp(col->oaiNode,OAI_NODE_CONTENT)==0 && oai->content) {
-
-			slot->tts_isnull[col->id] = false;
-			slot->tts_values[col->id] = CStringGetTextDatum((char*)oai->content);
-
-			elog(DEBUG1,"  createOAITuple: col->id = %d, col->oaiNode = '%s'",col->id,col->oaiNode);
-
-		} else if(strcmp(col->oaiNode,OAI_NODE_SETSPEC)==0 && oai->setsArray) {
-
-			slot->tts_isnull[col->id] = false;
-			slot->tts_values[col->id] = (Datum) DatumGetArrayTypeP(oai->setsArray);
-
-			elog(DEBUG1,"  createOAITuple: col->id = %d, col->oaiNode = '%s', value = 'x'",col->id,col->oaiNode);
-
-		} else if(strcmp(col->oaiNode,OAI_NODE_DATESTAMP)==0 && oai->datestamp) {
-
-			char lowstr[MAXDATELEN + 1];
-			char *field[MAXDATEFIELDS];
-			int  ftype[MAXDATEFIELDS];
-			int  nf;
-			int  parseError = ParseDateTime(oai->datestamp, lowstr, MAXDATELEN, field, ftype, MAXDATEFIELDS, &nf);
-
-			if (parseError == 0) {
-
-				int dtype;
-				struct pg_tm date;
-				fsec_t fsec = 0;
-				int tz = 0;
-
-				int decodeError = DecodeDateTime(field, ftype, nf, &dtype, &date, &fsec, &tz);
-
-				Timestamp tmsp;
-				tm2timestamp(&date, fsec, &tz, &tmsp);
-
-				if (decodeError == 0) {
-
-					elog(DEBUG2,"    createOAITuple: datestamp can be decoded");
-
-					slot->tts_isnull[col->id] = false;
-					slot->tts_values[col->id] = (Datum) TimestampTzGetDatum(tmsp);
-
-					elog(DEBUG2,"  createOAITuple: datestamp (\"%s\") parsed and decoded.",oai->datestamp);
-
-
-				} else {
-
-
-					slot->tts_isnull[col->id] = true;
-					slot->tts_values[col->id] = (Datum) NULL;
-					elog(WARNING,"  createOAITuple: could not decode datestamp: %s", oai->datestamp);
-
-				}
-
-
-			} else {
-
-
-				slot->tts_isnull[col->id] = true;
-				slot->tts_values[col->id] = (Datum) NULL;
-
-				elog(WARNING,"  createOAITuple: could not parse datestamp: %s", oai->datestamp);
-
-			}
-		}
-
-		//elog(DEBUG2,"  createOAITuple: column %d option '%s'",col->id,col->oaiNode);
-
-	}
-*/
-
-
 	for (int i = 0; i < state->numcols; i++) {
 
-		//List * options = GetForeignColumnOptions(state->foreigntableid, i+1);
 		List * options = GetForeignColumnOptions(state->foreigntableid, i+1);
 		ListCell *lc;
 
@@ -2314,17 +2094,17 @@ void CreateOAITuple(TupleTableSlot *slot, oai_fdw_state *state, oai_Record *oai)
 
 
 	state->rowcount++;
-	elog(DEBUG1,"  %s finished (rowcount: %d)",__func__,state->rowcount);
+	elog(DEBUG1,"%s => finished (rowcount: %d)",__func__,state->rowcount);
 
 }
 
-TupleTableSlot *oai_fdw_IterateForeignScan(ForeignScanState *node) {
+static TupleTableSlot *OAIFdwIterateForeignScan(ForeignScanState *node) {
 
 	TupleTableSlot *slot = node->ss.ss_ScanTupleSlot;
-	oai_fdw_state *state = node->fdw_state;
-	oai_Record *oai = (oai_Record *)palloc0(sizeof(oai_Record));
+	OAIFdwState *state = node->fdw_state;
+	OAIRecord *record = (OAIRecord *)palloc0(sizeof(OAIRecord));
 
-	elog(DEBUG1,"oai_fdw_IterateForeignScan called");
+	elog(DEBUG1,"%s called.",__func__);
 
 	ExecClearTuple(slot);
 
@@ -2333,54 +2113,124 @@ TupleTableSlot *oai_fdw_IterateForeignScan(ForeignScanState *node) {
 
 	if(state->rowcount == 0 || state->resumptionToken) {
 
-		elog(DEBUG2,"  oai_fdw_IterateForeignScan: loading OAI records (token: \"%s\")", state->resumptionToken);
+		elog(DEBUG2,"  %s: loading OAI records (token: \"%s\")",__func__,state->resumptionToken);
 
 		LoadOAIRecords(state);
 		state->current_identifier = NULL;
-		elog(DEBUG1,"completeListSize: %s (rowcount: %d)",state->completeListSize,state->rowcount);
+		elog(DEBUG2,"  %s: completeListSize > %s (rowcount: %d)",__func__,state->completeListSize,state->rowcount);
 
 	}
 
-	// FIXME: slot parameter isn't used in function fetchNextRecord
-	oai = FetchNextOAIRecord(slot, state);
+	record = FetchNextOAIRecord(state);
 
-	if(oai) {
+	if(record) {
 
-		CreateOAITuple(slot, state, oai);
-		elog(DEBUG2,"  oai_fdw_IterateForeignScan: OAI tuple created");
+		CreateOAITuple(slot, state, record);
+		elog(DEBUG2,"  %s: OAI tuple created",__func__);
 
 		ExecStoreVirtualTuple(slot);
-		elog(DEBUG2,"  oai_fdw_IterateForeignScan: virtual tuple stored");
+		elog(DEBUG2,"  %s: virtual tuple stored",__func__);
 
 	}
 
-	elog(DEBUG1,"  => oai_fdw_IterateForeignScan: returning tuple (rowcount: %d)", state->rowcount);
+	elog(DEBUG1,"%s => returning tuple (rowcount: %d)",__func__,state->rowcount);
 
 	return slot;
 
 }
 
-int LoadOAIRecords(oai_fdw_state *state) {
+static void LoadOAIRecords(OAIFdwState *state) {
 
-	elog(DEBUG1,"loadOAIRecords called: current_row > %d",state->current_row);
+	struct string xmlStream;
+	int oaiExecuteResponse;
+
+	elog(DEBUG1,"%s called: current_row > %d",__func__,state->current_row);
+
+	oaiExecuteResponse = ExecuteOAIRequest(state,&xmlStream);
+
+	if(oaiExecuteResponse == OAI_SUCCESS) {
+
+		xmlDocPtr xmldoc;
+		xmlNodePtr recordsList;
+		xmlNodePtr record;
+
+		xmlInitParser();
+
+		xmldoc = xmlReadMemory(xmlStream.ptr, strlen(xmlStream.ptr), NULL, NULL, XML_PARSE_SAX1);
+
+		if (!xmldoc || (state->xmlroot = xmlDocGetRootElement(xmldoc)) == NULL) {
+
+			xmlFreeDoc(xmldoc);
+			xmlCleanupParser();
+
+			ereport(ERROR,
+					(errcode(ERRCODE_FDW_UNABLE_TO_CREATE_EXECUTION),
+					(errmsg("Invalid XML response for URL '%s'",state->url))));
+
+		}
+
+		for (recordsList = state->xmlroot->children; recordsList != NULL; recordsList = recordsList->next) {
+
+			if (recordsList->type != XML_ELEMENT_NODE) continue;
+
+			if (xmlStrcmp(recordsList->name, (xmlChar*)state->requestType)==0) {
+
+				if (!xmldoc || (state->xmlroot = xmlDocGetRootElement(xmldoc)) == NULL) {
+
+					xmlFreeDoc(xmldoc);
+					xmlCleanupParser();
+
+				}
+
+				for (record = recordsList->children; record!= NULL; record = record->next) {
+
+					if (record->type != XML_ELEMENT_NODE) continue;
+
+					if (xmlStrcmp(record->name, (xmlChar*)"resumptionToken")==0){
+
+						if(xmlGetProp(record, (xmlChar*) "completeListSize")) {
+
+							state->completeListSize = (char*) xmlGetProp(record, (xmlChar*) "completeListSize");
+
+						}
+
+					}
+
+				}
+
+			} else if (xmlStrcmp(recordsList->name, (xmlChar*)"error")==0) {
+
+				char *errorMessage = (char*)xmlNodeGetContent(recordsList);
+				char *errorCode = (char*) xmlGetProp(recordsList, (xmlChar*) "code");
+
+				if(strcmp(errorCode,OAI_ERROR_ID_DOES_NOT_EXIST)==0 ||
+						strcmp(errorCode,OAI_ERROR_NO_RECORD_MATCH)==0) {
+
+					state->xmlroot = NULL;
+					ereport(WARNING,
+							(errcode(ERRCODE_NO_DATA_FOUND),
+									errmsg("OAI %s: %s",errorCode,errorMessage)));
+
+				} else {
+
+					ereport(ERROR,
+							(errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
+									errmsg("OAI %s: %s",errorCode,errorMessage)));
+
+				}
 
 
-	if(state->resumptionToken || state->rowcount == 0) {
+			}
 
-		elog(DEBUG2,"  loadOAIRecords: loading page ...");
-		listRecordsRequest(state);
+		}
 
-	} else {
-
-		return 0;
 	}
 
-
-	return 1;
+	elog(DEBUG1,"%s => finished: current_row > %d",__func__,state->current_row);
 
 }
 
-void appendTextArray(ArrayType **array, char* text_element) {
+static void appendTextArray(ArrayType **array, char* text_element) {
 
 	/* Array build variables */
 	size_t arr_nelems = 0;
@@ -2391,7 +2241,7 @@ void appendTextArray(ArrayType **array, char* text_element) {
 	char elem_align;
 	Datum *arr_elems = palloc0(arr_elems_size*sizeof(Datum));
 
-	elog(DEBUG2,"appendTextArray called with element > %s",text_element);
+	elog(DEBUG2,"  %s called with element > %s",__func__,text_element);
 
 	get_typlenbyvalalign(elem_type, &elem_len, &elem_byval, &elem_align);
 
@@ -2399,7 +2249,7 @@ void appendTextArray(ArrayType **array, char* text_element) {
 
 		/*Array has no elements */
 		arr_elems[arr_nelems] = CStringGetTextDatum(text_element);
-		elog(DEBUG2,"  array empty! adding value at arr_elems[%ld]",arr_nelems);
+		elog(DEBUG3,"    %s: array empty! adding value at arr_elems[%ld]",__func__,arr_nelems);
 		arr_nelems++;
 
 	} else {
@@ -2407,7 +2257,7 @@ void appendTextArray(ArrayType **array, char* text_element) {
 		bool isnull;
 		Datum value;
 		ArrayIterator iterator = array_create_iterator(*array,0,NULL);
-		elog(DEBUG2,"  current array size: %d",ArrayGetNItems(ARR_NDIM(*array), ARR_DIMS(*array)));
+		elog(DEBUG3,"    %s: current array size: %d",__func__,ArrayGetNItems(ARR_NDIM(*array), ARR_DIMS(*array)));
 
 		arr_elems_size *= ArrayGetNItems(ARR_NDIM(*array), ARR_DIMS(*array))+1;
 		arr_elems = repalloc(arr_elems, arr_elems_size*sizeof(Datum));
@@ -2416,7 +2266,7 @@ void appendTextArray(ArrayType **array, char* text_element) {
 
 			if (isnull) continue;
 
-			elog(DEBUG2,"  re-adding element: arr_elems[%ld]. arr_elems_size > %ld",arr_nelems,arr_elems_size);
+			elog(DEBUG3,"    %s: re-adding element: arr_elems[%ld]. arr_elems_size > %ld",__func__,arr_nelems,arr_elems_size);
 
 			arr_elems[arr_nelems] = value;
 			arr_nelems++;
@@ -2424,29 +2274,29 @@ void appendTextArray(ArrayType **array, char* text_element) {
 		}
 		array_free_iterator(iterator);
 
-		elog(DEBUG2,"  adding new element: arr_elems[%ld]. arr_elems_size > %ld",arr_nelems,arr_elems_size);
+		elog(DEBUG3,"   %s: adding new element: arr_elems[%ld]. arr_elems_size > %ld",__func__,arr_nelems,arr_elems_size);
 		arr_elems[arr_nelems++] = CStringGetTextDatum(text_element);
 
 	}
 
-	elog(DEBUG2,"  => construct_array called: arr_nelems > %ld arr_elems_size %ld",arr_nelems,arr_elems_size);
+	elog(DEBUG2,"  %s => construct_array called: arr_nelems > %ld arr_elems_size %ld",__func__,arr_nelems,arr_elems_size);
 
 	*array = construct_array(arr_elems, arr_nelems, elem_type, elem_len, elem_byval, elem_align);
 
 }
 
-void oai_fdw_ReScanForeignScan(ForeignScanState *node) {
+static void OAIFdwReScanForeignScan(ForeignScanState *node) {
 
-	oai_fdw_state *state = node->fdw_state;
+	OAIFdwState *state = node->fdw_state;
 	state->current_row = 0;
 
 }
 
-void oai_fdw_EndForeignScan(ForeignScanState *node) {
+static void OAIFdwEndForeignScan(ForeignScanState *node) {
 
 }
 
-static List* oai_fdw_ImportForeignSchema(ImportForeignSchemaStmt* stmt, Oid serverOid) {
+static List* OAIFdwImportForeignSchema(ImportForeignSchemaStmt* stmt, Oid serverOid) {
 
 	ForeignServer* server;
 	ListCell   *cell;
@@ -2586,7 +2436,7 @@ static List* oai_fdw_ImportForeignSchema(ImportForeignSchemaStmt* stmt, Oid serv
 
 			sql_commands = lappend(sql_commands, pstrdup(buffer.data));
 
-			elog(DEBUG1,"IMPORT FOREIGN SCHEMA (%s): \n%s",stmt->remote_schema,buffer.data);
+			elog(DEBUG1,"%s: IMPORT FOREIGN SCHEMA (%s): \n%s",__func__,stmt->remote_schema,buffer.data);
 
 		}
 
@@ -2608,7 +2458,7 @@ static List* oai_fdw_ImportForeignSchema(ImportForeignSchemaStmt* stmt, Oid serv
 
 		sql_commands = lappend(sql_commands, pstrdup(buffer.data));
 
-		elog(DEBUG1,"IMPORT FOREIGN SCHEMA: \n%s",buffer.data);
+		elog(DEBUG1,"%s: IMPORT FOREIGN SCHEMA: \n%s",__func__,buffer.data);
 
 	} else {
 

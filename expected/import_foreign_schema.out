@@ -95,19 +95,39 @@ SELECT * FROM dnb_schema."dnb:reiheC"
 WHERE id = 'oai:dnb.de/dnb:reiheC/1253187622';
                 id                |                                             xmldoc                                             |     sets     |        updatedate        |   format   | status 
 ----------------------------------+------------------------------------------------------------------------------------------------+--------------+--------------------------+------------+--------
- oai:dnb.de/dnb:reiheC/1253187622 | <record xmlns="http://www.loc.gov/MARC21/slim" type="Bibliographic">                          +| {dnb:reiheC} | Tue Mar 29 19:31:49 2022 | MARC21-xml | f
+ oai:dnb.de/dnb:reiheC/1253187622 | <record xmlns="http://www.loc.gov/MARC21/slim" type="Bibliographic">                          +| {dnb:reiheC} | Tue Apr 12 20:30:31 2022 | MARC21-xml | f
                                   |     <leader>00000nem a2200000 cb4500</leader>                                                 +|              |                          |            | 
                                   |     <controlfield tag="001">1253187622</controlfield>                                         +|              |                          |            | 
                                   |     <controlfield tag="003">DE-101</controlfield>                                             +|              |                          |            | 
-                                  |     <controlfield tag="005">20220329213149.0</controlfield>                                   +|              |                          |            | 
+                                  |     <controlfield tag="005">20220412223031.0</controlfield>                                   +|              |                          |            | 
                                   |     <controlfield tag="007">a|||||||</controlfield>                                           +|              |                          |            | 
                                   |     <controlfield tag="008">220309s2022    gw |||||||a||   ||||ger  </controlfield>           +|              |                          |            | 
+                                  |     <datafield tag="015" ind1=" " ind2=" ">                                                   +|              |                          |            | 
+                                  |       <subfield code="a">22,C02</subfield>                                                    +|              |                          |            | 
+                                  |       <subfield code="2">dnb</subfield>                                                       +|              |                          |            | 
+                                  |     </datafield>                                                                              +|              |                          |            | 
                                   |     <datafield tag="016" ind1="7" ind2=" ">                                                   +|              |                          |            | 
                                   |       <subfield code="2">DE-101</subfield>                                                    +|              |                          |            | 
                                   |       <subfield code="a">1253187622</subfield>                                                +|              |                          |            | 
                                   |     </datafield>                                                                              +|              |                          |            | 
                                   |     <datafield tag="020" ind1=" " ind2=" ">                                                   +|              |                          |            | 
                                   |       <subfield code="c">keine Bindung</subfield>                                             +|              |                          |            | 
+                                  |     </datafield>                                                                              +|              |                          |            | 
+                                  |     <datafield tag="034" ind1="0" ind2=" ">                                                   +|              |                          |            | 
+                                  |       <subfield code="a">a</subfield>                                                         +|              |                          |            | 
+                                  |       <subfield code="d">E 010 24 56</subfield>                                               +|              |                          |            | 
+                                  |       <subfield code="e">E 010 29 55</subfield>                                               +|              |                          |            | 
+                                  |       <subfield code="f">N 050 41 56</subfield>                                               +|              |                          |            | 
+                                  |       <subfield code="g">N 050 38 56</subfield>                                               +|              |                          |            | 
+                                  |       <subfield code="9">A:agx</subfield>                                                     +|              |                          |            | 
+                                  |     </datafield>                                                                              +|              |                          |            | 
+                                  |     <datafield tag="034" ind1="0" ind2=" ">                                                   +|              |                          |            | 
+                                  |       <subfield code="a">a</subfield>                                                         +|              |                          |            | 
+                                  |       <subfield code="d">E010.415555</subfield>                                               +|              |                          |            | 
+                                  |       <subfield code="e">E010.498611</subfield>                                               +|              |                          |            | 
+                                  |       <subfield code="f">N050.698888</subfield>                                               +|              |                          |            | 
+                                  |       <subfield code="g">N050.648888</subfield>                                               +|              |                          |            | 
+                                  |       <subfield code="9">A:dgx</subfield>                                                     +|              |                          |            | 
                                   |     </datafield>                                                                              +|              |                          |            | 
                                   |     <datafield tag="035" ind1=" " ind2=" ">                                                   +|              |                          |            | 
                                   |       <subfield code="a">(DE-599)DNB1253187622</subfield>                                     +|              |                          |            | 
@@ -124,6 +144,13 @@ WHERE id = 'oai:dnb.de/dnb:reiheC/1253187622';
                                   |     </datafield>                                                                              +|              |                          |            | 
                                   |     <datafield tag="044" ind1=" " ind2=" ">                                                   +|              |                          |            | 
                                   |       <subfield code="c">XA-DE</subfield>                                                     +|              |                          |            | 
+                                  |     </datafield>                                                                              +|              |                          |            | 
+                                  |     <datafield tag="082" ind1="7" ind2="4">                                                   +|              |                          |            | 
+                                  |       <subfield code="8">2\p</subfield>                                                       +|              |                          |            | 
+                                  |       <subfield code="a">910</subfield>                                                       +|              |                          |            | 
+                                  |       <subfield code="a">914.3</subfield>                                                     +|              |                          |            | 
+                                  |       <subfield code="q">DE-101</subfield>                                                    +|              |                          |            | 
+                                  |       <subfield code="2">23sdnb</subfield>                                                    +|              |                          |            | 
                                   |     </datafield>                                                                              +|              |                          |            | 
                                   |     <datafield tag="110" ind1="2" ind2=" ">                                                   +|              |                          |            | 
                                   |       <subfield code="8">1\p</subfield>                                                       +|              |                          |            | 
@@ -175,6 +202,77 @@ WHERE id = 'oai:dnb.de/dnb:reiheC/1253187622';
                                   |       <subfield code="a">Topographische Karte 1:10 000</subfield>                             +|              |                          |            | 
                                   |       <subfield code="v">5328-NO</subfield>                                                   +|              |                          |            | 
                                   |     </datafield>                                                                              +|              |                          |            | 
+                                  |     <datafield tag="650" ind1=" " ind2="7">                                                   +|              |                          |            | 
+                                  |       <subfield code="0">(DE-588)4133697-5</subfield>                                         +|              |                          |            | 
+                                  |       <subfield code="0">https://d-nb.info/gnd/4133697-5</subfield>                           +|              |                          |            | 
+                                  |       <subfield code="0">(DE-101)041336976</subfield>                                         +|              |                          |            | 
+                                  |       <subfield code="a">Topografie</subfield>                                                +|              |                          |            | 
+                                  |       <subfield code="9">rswk-swf</subfield>                                                  +|              |                          |            | 
+                                  |       <subfield code="2">gnd</subfield>                                                       +|              |                          |            | 
+                                  |     </datafield>                                                                              +|              |                          |            | 
+                                  |     <datafield tag="651" ind1=" " ind2="7">                                                   +|              |                          |            | 
+                                  |       <subfield code="0">(DE-588)1063313759</subfield>                                        +|              |                          |            | 
+                                  |       <subfield code="0">https://d-nb.info/gnd/1063313759</subfield>                          +|              |                          |            | 
+                                  |       <subfield code="0">(DE-101)1063313759</subfield>                                        +|              |                          |            | 
+                                  |       <subfield code="a">Schmalkalden-Grumbach</subfield>                                     +|              |                          |            | 
+                                  |       <subfield code="9">rswk-swf</subfield>                                                  +|              |                          |            | 
+                                  |       <subfield code="2">gnd</subfield>                                                       +|              |                          |            | 
+                                  |     </datafield>                                                                              +|              |                          |            | 
+                                  |     <datafield tag="651" ind1=" " ind2="7">                                                   +|              |                          |            | 
+                                  |       <subfield code="0">(DE-588)1063310814</subfield>                                        +|              |                          |            | 
+                                  |       <subfield code="0">https://d-nb.info/gnd/1063310814</subfield>                          +|              |                          |            | 
+                                  |       <subfield code="0">(DE-101)1063310814</subfield>                                        +|              |                          |            | 
+                                  |       <subfield code="a">Schmalkalden-Breitenbach</subfield>                                  +|              |                          |            | 
+                                  |       <subfield code="9">rswk-swf</subfield>                                                  +|              |                          |            | 
+                                  |       <subfield code="2">gnd</subfield>                                                       +|              |                          |            | 
+                                  |     </datafield>                                                                              +|              |                          |            | 
+                                  |     <datafield tag="651" ind1=" " ind2="7">                                                   +|              |                          |            | 
+                                  |       <subfield code="0">(DE-588)7596251-2</subfield>                                         +|              |                          |            | 
+                                  |       <subfield code="0">https://d-nb.info/gnd/7596251-2</subfield>                           +|              |                          |            | 
+                                  |       <subfield code="0">(DE-101)987079514</subfield>                                         +|              |                          |            | 
+                                  |       <subfield code="a">Christes</subfield>                                                  +|              |                          |            | 
+                                  |       <subfield code="9">rswk-swf</subfield>                                                  +|              |                          |            | 
+                                  |       <subfield code="2">gnd</subfield>                                                       +|              |                          |            | 
+                                  |     </datafield>                                                                              +|              |                          |            | 
+                                  |     <datafield tag="655" ind1=" " ind2="7">                                                   +|              |                          |            | 
+                                  |       <subfield code="0">(DE-588)4029783-4</subfield>                                         +|              |                          |            | 
+                                  |       <subfield code="0">https://d-nb.info/gnd/4029783-4</subfield>                           +|              |                          |            | 
+                                  |       <subfield code="0">(DE-101)040297837</subfield>                                         +|              |                          |            | 
+                                  |       <subfield code="a">Karte</subfield>                                                     +|              |                          |            | 
+                                  |       <subfield code="2">gnd-content</subfield>                                               +|              |                          |            | 
+                                  |     </datafield>                                                                              +|              |                          |            | 
+                                  |     <datafield tag="689" ind1="0" ind2="0">                                                   +|              |                          |            | 
+                                  |       <subfield code="0">(DE-588)1063313759</subfield>                                        +|              |                          |            | 
+                                  |       <subfield code="0">https://d-nb.info/gnd/1063313759</subfield>                          +|              |                          |            | 
+                                  |       <subfield code="0">(DE-101)1063313759</subfield>                                        +|              |                          |            | 
+                                  |       <subfield code="D">g</subfield>                                                         +|              |                          |            | 
+                                  |       <subfield code="a">Schmalkalden-Grumbach</subfield>                                     +|              |                          |            | 
+                                  |     </datafield>                                                                              +|              |                          |            | 
+                                  |     <datafield tag="689" ind1="0" ind2="1">                                                   +|              |                          |            | 
+                                  |       <subfield code="0">(DE-588)1063310814</subfield>                                        +|              |                          |            | 
+                                  |       <subfield code="0">https://d-nb.info/gnd/1063310814</subfield>                          +|              |                          |            | 
+                                  |       <subfield code="0">(DE-101)1063310814</subfield>                                        +|              |                          |            | 
+                                  |       <subfield code="D">g</subfield>                                                         +|              |                          |            | 
+                                  |       <subfield code="a">Schmalkalden-Breitenbach</subfield>                                  +|              |                          |            | 
+                                  |     </datafield>                                                                              +|              |                          |            | 
+                                  |     <datafield tag="689" ind1="0" ind2="2">                                                   +|              |                          |            | 
+                                  |       <subfield code="0">(DE-588)7596251-2</subfield>                                         +|              |                          |            | 
+                                  |       <subfield code="0">https://d-nb.info/gnd/7596251-2</subfield>                           +|              |                          |            | 
+                                  |       <subfield code="0">(DE-101)987079514</subfield>                                         +|              |                          |            | 
+                                  |       <subfield code="D">g</subfield>                                                         +|              |                          |            | 
+                                  |       <subfield code="a">Christes</subfield>                                                  +|              |                          |            | 
+                                  |     </datafield>                                                                              +|              |                          |            | 
+                                  |     <datafield tag="689" ind1="0" ind2="3">                                                   +|              |                          |            | 
+                                  |       <subfield code="0">(DE-588)4133697-5</subfield>                                         +|              |                          |            | 
+                                  |       <subfield code="0">https://d-nb.info/gnd/4133697-5</subfield>                           +|              |                          |            | 
+                                  |       <subfield code="0">(DE-101)041336976</subfield>                                         +|              |                          |            | 
+                                  |       <subfield code="D">s</subfield>                                                         +|              |                          |            | 
+                                  |       <subfield code="a">Topografie</subfield>                                                +|              |                          |            | 
+                                  |     </datafield>                                                                              +|              |                          |            | 
+                                  |     <datafield tag="689" ind1="0" ind2=" ">                                                   +|              |                          |            | 
+                                  |       <subfield code="5">DE-101</subfield>                                                    +|              |                          |            | 
+                                  |       <subfield code="5">DE-101</subfield>                                                    +|              |                          |            | 
+                                  |     </datafield>                                                                              +|              |                          |            | 
                                   |     <datafield tag="810" ind1="2" ind2=" ">                                                   +|              |                          |            | 
                                   |       <subfield code="a">Thüringer Landesamt für Bodenmanagement und Geoinformation</subfield>+|              |                          |            | 
                                   |       <subfield code="4">aut</subfield>                                                       +|              |                          |            | 
@@ -195,11 +293,15 @@ WHERE id = 'oai:dnb.de/dnb:reiheC/1253187622';
                                   |       <subfield code="q">DE-101</subfield>                                                    +|              |                          |            | 
                                   |       <subfield code="u">https://d-nb.info/provenance/plan#dnb</subfield>                     +|              |                          |            | 
                                   |     </datafield>                                                                              +|              |                          |            | 
+                                  |     <datafield tag="883" ind1="2" ind2=" ">                                                   +|              |                          |            | 
+                                  |       <subfield code="8">2\p</subfield>                                                       +|              |                          |            | 
+                                  |       <subfield code="a">dnb</subfield>                                                       +|              |                          |            | 
+                                  |       <subfield code="d">20220412</subfield>                                                  +|              |                          |            | 
+                                  |       <subfield code="q">DE-101</subfield>                                                    +|              |                          |            | 
+                                  |       <subfield code="u">https://d-nb.info/provenance/plan#dnb</subfield>                     +|              |                          |            | 
+                                  |     </datafield>                                                                              +|              |                          |            | 
                                   |     <datafield tag="925" ind1="r" ind2=" ">                                                   +|              |                          |            | 
                                   |       <subfield code="a">rc</subfield>                                                        +|              |                          |            | 
-                                  |     </datafield>                                                                              +|              |                          |            | 
-                                  |     <datafield tag="925" ind1="w" ind2=" ">                                                   +|              |                          |            | 
-                                  |       <subfield code="a">b</subfield>                                                         +|              |                          |            | 
                                   |     </datafield>                                                                              +|              |                          |            | 
                                   |   </record>                                                                                    |              |                          |            | 
 (1 row)
