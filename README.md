@@ -6,8 +6,6 @@ A PostgreSQL Foreign Data Wrapper to access OAI-PMH repositories (Open Archives 
 
 ![CI](https://github.com/jimjonesbr/oai_fdw/actions/workflows/ci.yml/badge.svg)
 
-**Note**: This software is still unstable and under constant development, and therefore still **NOT** production ready.
-
 ## Index
 
 - [Requirements](#requirements)
@@ -22,6 +20,7 @@ A PostgreSQL Foreign Data Wrapper to access OAI-PMH repositories (Open Archives 
   - [OAI_ListMetadataFormats](#oai_listmetadataformats)
   - [OAI_ListSets](#oai_listsets)  
   - [OAI_Version](#oai_version)
+- [Limitations](#limitations)
    
 ## [Requirements](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#requirements)
 
@@ -56,7 +55,7 @@ To run the predefined regression tests run `make installcheck` with the user `po
 $ make PGUSER=postgres installcheck
 ```
 
-## Usage
+## [Usage](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#usage)
 
 To use the OAI-PMH Foreign Data Wrapper you must first create a `SERVER` to connect to an OAI-PMH repository. After that, you can either automatically generate foreign tables using `IMPORT FOREIGN SCHEMA` or create them manually using `CREATE FOREIGN TABLE`.
 
@@ -79,7 +78,7 @@ OPTIONS (url 'https://sammlungen.ulb.uni-muenster.de/oai');
 
 ### [IMPORT FOREIGN SCHEMA](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#import-foreign-schema)
 
-The [IMPORT FOREIGN SCHEMA](https://www.postgresql.org/docs/current/sql-importforeignschema.html) command creates `FOREIGN TABLES` that represent [sets](http://www.openarchives.org/OAI/openarchivesprotocol.html#Set) existing on an OAI foreign server. The OAI Foreign Data Wrapper offers the following `FOREIGN SCHEMAS` to automatically gernate `FOREIGN TABLES`:
+The [IMPORT FOREIGN SCHEMA](https://www.postgresql.org/docs/current/sql-importforeignschema.html) command creates `FOREIGN TABLES` that represent [sets](http://www.openarchives.org/OAI/openarchivesprotocol.html#Set) existing on an OAI foreign server. The OAI Foreign Data Wrapper offers the following `FOREIGN SCHEMAS` to automatically generate `FOREIGN TABLES`:
 
  | Foreign Schema | Description          |
 |---------------|--------------------------|
@@ -481,3 +480,22 @@ SELECT OAI_Version();
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  oai fdw = 1.0.0dev, libxml = 2.9.10, libcurl = libcurl/7.74.0 NSS/3.61 zlib/1.2.11 brotli/1.0.9 libidn2/2.3.0 libpsl/0.21.0 (+libidn2/2.3.0) libssh2/1.9.0 nghttp2/1.43.0 librtmp/2.3
 ```
+
+## [Limitations](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#limitations)
+
+* **PostgreSQL**: The OAI Foreign Data Wrapper currently supports only PostgreSQL 11 or higher.
+* **Aggregate and Join Push-down**: Aggregate functions and joins are not pushed down to the OAI repository, as such features are not foreseen by the OAI-PMH protocol. This means that aggregate and join operations will pull all necessary data from the server and then will perform the operations on the client side. The same applies for [Aggregate Expressions](https://www.postgresql.org/docs/14/sql-expressions.html#SYNTAX-AGGREGATES) and [Window Functions](https://www.postgresql.org/docs/current/tutorial-window.html).
+* **Data from OAI Requests are always pulled entirely**: The OAI Foreign Data Wrapper sort of translates SQL Queries to standard OAI-PMH HTTP requests in order access the data sets, which is basically limited to [ListRecords](http://www.openarchives.org/OAI/openarchivesprotocol.html#ListRecords) or [ListIdentifiers](http://www.openarchives.org/OAI/openarchivesprotocol.html#ListIdentifiers) requests (in case the node `content` isn't listed in the `SELECT` clause). These OAI requests cannot be altered to only partially retrieve information, so the requests result sets will always be downloaded entirely - even if not used in the `SELECT` clause. 
+* **Operators**: The OAI-PMH supports [selective harvesting](http://www.openarchives.org/OAI/openarchivesprotocol.html#SelectiveHarvesting) with only a few attributes and operators. The only operators supported by the requests are listed below:
+
+
+| oai_node     | operator                     |
+|--------------|------------------------------|
+| `datestamp`  | `>`,`>=`,`<`,`<=`, `BETWEEN` |
+| `setspec`    | `<@`,`@>`                    |
+| `identifier` | `=`                          |
+| `meta`       | `=`                          |
+|              |                              |
+
+
+Note that all operators supported at PostgreSQL can be used to filter the result set, but only the supported operators listed above will be considered in the OAI-PMH requests. In other words, the filter will be performed locally in the client.
