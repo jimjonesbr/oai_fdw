@@ -346,6 +346,7 @@ SELECT * FROM OAI_ListSets('oai_server_kbnl');
  GGC:Tijdschriften:MMCMC03   | GGC:Tijdschriften:MMCMC03
  GGC:Tijdschriften:MMCMC05   | GGC:Tijdschriften:MMCMC05
  GGC:Tijdschriften:MMCSS01   | GGC:Tijdschriften:MMCSS01
+ GGC:Tijdschriften:MMDA04    | GGC:Tijdschriften:MMDA04
  GGC:Tijdschriften:MMEGG01   | GGC:Tijdschriften:MMEGG01
  GGC:Tijdschriften:MMENLK02  | GGC:Tijdschriften:MMENLK02
  GGC:Tijdschriften:MMENLK03  | GGC:Tijdschriften:MMENLK03
@@ -366,12 +367,14 @@ SELECT * FROM OAI_ListSets('oai_server_kbnl');
  GGC:Tijdschriften:MMIISG13  | GGC:Tijdschriften:MMIISG13
  GGC:Tijdschriften:MMIISG15  | GGC:Tijdschriften:MMIISG15
  GGC:Tijdschriften:MMIISG17  | GGC:Tijdschriften:MMIISG17
+ GGC:Tijdschriften:MMIISG20  | GGC:Tijdschriften:MMIISG20
  GGC:Tijdschriften:MMKB07    | GGC:Tijdschriften:MMKB07
  GGC:Tijdschriften:MMKB10    | GGC:Tijdschriften:MMKB10
  GGC:Tijdschriften:MMKB13    | GGC:Tijdschriften:MMKB13
  GGC:Tijdschriften:MMKB14    | GGC:Tijdschriften:MMKB14
  GGC:Tijdschriften:MMKB16    | GGC:Tijdschriften:MMKB16
  GGC:Tijdschriften:MMKB26    | GGC:Tijdschriften:MMKB26
+ GGC:Tijdschriften:MMKB30    | GGC:Tijdschriften:MMKB30
  GGC:Tijdschriften:MMKDC03   | GGC:Tijdschriften:MMKDC03
  GGC:Tijdschriften:MMKDC04   | GGC:Tijdschriften:MMKDC04
  GGC:Tijdschriften:MMKDC05   | GGC:Tijdschriften:MMKDC05
@@ -392,6 +395,9 @@ SELECT * FROM OAI_ListSets('oai_server_kbnl');
  GGC:Tijdschriften:MMKWG02   | GGC:Tijdschriften:MMKWG02
  GGC:Tijdschriften:MMLIND01  | GGC:Tijdschriften:MMLIND01
  GGC:Tijdschriften:MMMHW01   | GGC:Tijdschriften:MMMHW01
+ GGC:Tijdschriften:MMMI02    | GGC:Tijdschriften:MMMI02
+ GGC:Tijdschriften:MMNA12    | GGC:Tijdschriften:MMNA12
+ GGC:Tijdschriften:MMNAT03   | GGC:Tijdschriften:MMNAT03
  GGC:Tijdschriften:MMNDR01   | GGC:Tijdschriften:MMNDR01
  GGC:Tijdschriften:MMNFM01   | GGC:Tijdschriften:MMNFM01
  GGC:Tijdschriften:MMNIBG01  | GGC:Tijdschriften:MMNIBG01
@@ -413,6 +419,7 @@ SELECT * FROM OAI_ListSets('oai_server_kbnl');
  GGC:Tijdschriften:MMSAVL01  | GGC:Tijdschriften:MMSAVL01
  GGC:Tijdschriften:MMSHCL02  | GGC:Tijdschriften:MMSHCL02
  GGC:Tijdschriften:MMSPOM01  | GGC:Tijdschriften:MMSPOM01
+ GGC:Tijdschriften:MMTEY01   | GGC:Tijdschriften:MMTEY01
  GGC:Tijdschriften:MMTUK02   | GGC:Tijdschriften:MMTUK02
  GGC:Tijdschriften:MMTUK03   | GGC:Tijdschriften:MMTUK03
  GGC:Tijdschriften:MMUBA10   | GGC:Tijdschriften:MMUBA10
@@ -426,6 +433,7 @@ SELECT * FROM OAI_ListSets('oai_server_kbnl');
  GGC:Tijdschriften:MMUBTB01  | GGC:Tijdschriften:MMUBTB01
  GGC:Tijdschriften:MMUBTB02  | GGC:Tijdschriften:MMUBTB02
  GGC:Tijdschriften:MMUBTB03  | GGC:Tijdschriften:MMUBTB03
+ GGC:Tijdschriften:MMUBU02   | GGC:Tijdschriften:MMUBU02
  GGC:Tijdschriften:MMUBVU04  | GGC:Tijdschriften:MMUBVU04
  GGC:Tijdschriften:MMUBVU06  | GGC:Tijdschriften:MMUBVU06
  GGC:Tijdschriften:MMUBVU07  | GGC:Tijdschriften:MMUBVU07
@@ -433,6 +441,7 @@ SELECT * FROM OAI_ListSets('oai_server_kbnl');
  GGC:Tijdschriften:MMUBWA02  | GGC:Tijdschriften:MMUBWA02
  GGC:Tijdschriften:MMUBWA03  | GGC:Tijdschriften:MMUBWA03
  GGC:Tijdschriften:MMUBWA04  | GGC:Tijdschriften:MMUBWA04
+ GGC:Tijdschriften:MMUBWA05  | GGC:Tijdschriften:MMUBWA05
  GGC:Tijdschriften:MMUTRA01  | GGC:Tijdschriften:MMUTRA01
  GGC:Tijdschriften:MMUTRA03  | GGC:Tijdschriften:MMUTRA03
  GGC:Tijdschriften:MMVRED01  | GGC:Tijdschriften:MMVRED01
@@ -538,6 +547,7 @@ SELECT * FROM OAI_ListSets('oai_server_kbnl');
  TIJDSCHRIFTEN:MMCMC03       | TIJDSCHRIFTEN:MMCMC03
  TIJDSCHRIFTEN:MMCMC05       | TIJDSCHRIFTEN:MMCMC05
  TIJDSCHRIFTEN:MMCSS01       | TIJDSCHRIFTEN:MMCSS01
+ TIJDSCHRIFTEN:MMDA04        | TIJDSCHRIFTEN:MMDA04
  TIJDSCHRIFTEN:MMENLK02      | TIJDSCHRIFTEN:MMENLK02
  TIJDSCHRIFTEN:MMENLK03      | TIJDSCHRIFTEN:MMENLK03
  TIJDSCHRIFTEN:MMENLK04      | TIJDSCHRIFTEN:MMENLK04
@@ -582,6 +592,7 @@ SELECT * FROM OAI_ListSets('oai_server_kbnl');
  TIJDSCHRIFTEN:MMKVLO02      | TIJDSCHRIFTEN:MMKVLO02
  TIJDSCHRIFTEN:MMKWG01       | TIJDSCHRIFTEN:MMKWG01
  TIJDSCHRIFTEN:MMLIND01      | TIJDSCHRIFTEN:MMLIND01
+ TIJDSCHRIFTEN:MMNA12        | TIJDSCHRIFTEN:MMNA12
  TIJDSCHRIFTEN:MMNDR01       | TIJDSCHRIFTEN:MMNDR01
  TIJDSCHRIFTEN:MMNFM01       | TIJDSCHRIFTEN:MMNFM01
  TIJDSCHRIFTEN:MMNIBG01      | TIJDSCHRIFTEN:MMNIBG01
@@ -633,7 +644,7 @@ SELECT * FROM OAI_ListSets('oai_server_kbnl');
  TIJDSCHRIFTEN:NIOD07        | TIJDSCHRIFTEN:NIOD07
  TIJDSCHRIFTEN:NIOD09        | TIJDSCHRIFTEN:NIOD09
  TIJDSCHRIFTEN:OBA01         | TIJDSCHRIFTEN:OBA01
-(510 rows)
+(521 rows)
 
 SELECT * FROM OAI_Identify('oai_server_ulb');
        name        |                             description                              
