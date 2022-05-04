@@ -486,7 +486,7 @@ SELECT OAI_Version();
 * **PostgreSQL**: The OAI Foreign Data Wrapper currently supports only PostgreSQL 11 or higher.
 * **Aggregate and Join Push-down**: Aggregate functions and joins are not pushed down to the OAI repository, as such features are not foreseen by the OAI-PMH protocol. This means that aggregate and join operations will pull all necessary data from the server and then will perform the operations on the client side. The same applies for [Aggregate Expressions](https://www.postgresql.org/docs/14/sql-expressions.html#SYNTAX-AGGREGATES) and [Window Functions](https://www.postgresql.org/docs/current/tutorial-window.html).
 * **Data from OAI Requests are always pulled entirely**: The OAI Foreign Data Wrapper sort of translates SQL Queries to standard OAI-PMH HTTP requests in order access the data sets, which is basically limited to [ListRecords](http://www.openarchives.org/OAI/openarchivesprotocol.html#ListRecords) or [ListIdentifiers](http://www.openarchives.org/OAI/openarchivesprotocol.html#ListIdentifiers) requests (in case the node `content` isn't listed in the `SELECT` clause). These OAI requests cannot be altered to only partially retrieve information, so the requests result sets will always be downloaded entirely - even if not used in the `SELECT` clause. 
-* **Operators**: The OAI-PMH supports [selective harvesting](http://www.openarchives.org/OAI/openarchivesprotocol.html#SelectiveHarvesting) with only a few attributes and operators. The only operators supported by the requests are listed below:
+* **Operators**: The OAI-PMH supports [selective harvesting](http://www.openarchives.org/OAI/openarchivesprotocol.html#SelectiveHarvesting) with only a few attributes and operators and `oai_nodes`:
 
 
 | oai_node     | operator                     |
@@ -494,8 +494,8 @@ SELECT OAI_Version();
 | `datestamp`  | `>`,`>=`,`<`,`<=`, `BETWEEN` |
 | `setspec`    | `<@`,`@>`                    |
 | `identifier` | `=`                          |
-| `meta`       | `=`                          |
+| `metadataprefix`       | `=`                          |
 |              |                              |
 
 
-Note that all operators supported at PostgreSQL can be used to filter the result set, but only the supported operators listed above will be considered in the OAI-PMH requests. In other words, the filter will be performed locally in the client.
+Note that all operators supported in PostgreSQL can be used to filter result sets, but only the supported operators listed above will be used in the OAI-PMH requests. In other words, non supported filters will be performed **locally** in the client.
