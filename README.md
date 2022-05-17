@@ -491,7 +491,7 @@ SELECT OAI_Version();
 
 | oai_node     | operator                     |
 |--------------|------------------------------|
-| `datestamp`  | `>`,`>=`,`<`,`<=`, `BETWEEN` |
+| `datestamp`  | `=`,`>`,`>=`,`<`,`<=`, `BETWEEN` |
 | `setspec`    | `<@`,`@>`                    |
 | `identifier` | `=`                          |
 | `metadataprefix`       | `=`                          |
