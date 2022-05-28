@@ -1,0 +1,52 @@
+{
+   "name": "oai_fdw",
+   "abstract": "OAI-PMH foreign data wrapper",
+   "description": "A PostgreSQL Foreign Data Wrapper to access OAI-PMH repositories (Open Archives Initiative Protocol for Metadata Harvesting).",
+   "version": "1.0.0",
+   "maintainer": [
+      "Jim Jones <jim.jones@uni-muenster.de>"
+   ],
+   "license": {
+      "mit": "http://en.wikipedia.org/wiki/MIT_License"
+   },
+   "prereqs": {
+      "runtime": {
+         "requires": {
+            "PostgreSQL": "11"
+         },
+         "recommends": {
+            "PostgreSQL": "14"
+         }
+      }
+   },
+   "provides": {
+     "ogr_fdw": {
+       "file": "oai_fdw--1.0.sql",
+       "docfile": "README.md",
+       "version": "1.0.0",
+       "abstract": "OAI FDW wrapper"
+     }
+   },
+   "resources": {
+      "homepage": "https://github.com/jimjonesbr/oai_fdw",
+      "bugtracker": {
+         "web": "https://github.com/jimjonesbr/oai_fdw/issues"
+      },
+      "repository": {
+        "url":  "https://github.com/jimjonesbr/oai_fdw.git",
+        "web":  "https://github.com/jimjonesbr/oai_fdw",
+        "type": "git"
+      }
+   },
+   "generated_by": "Jim Jones",
+   "meta-spec": {
+      "version": "1.0.0",
+      "url": "http://pgxn.org/meta/spec.txt"
+   },
+   "tags": [
+      "oai-pmh",
+      "libraries",
+      "metadata",
+      "fdw"
+   ]
+}
