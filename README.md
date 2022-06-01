@@ -20,6 +20,7 @@ A PostgreSQL Foreign Data Wrapper to access OAI-PMH repositories (Open Archives 
   - [OAI_ListMetadataFormats](#oai_listmetadataformats)
   - [OAI_ListSets](#oai_listsets)  
   - [OAI_Version](#oai_version)
+- [Deploy with Docker](#deploy-with-docker) 
 - [Limitations](#limitations)
    
 ## [Requirements](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#requirements)
@@ -234,19 +235,23 @@ FROM information_schema.foreign_tables;
 
 Foreign Tables from the OAI Foreign Data Wrapper work as a proxy between PostgreSQL clients and OAI-PMH Repositories. Each `FOREIGN TABLE` column must be mapped to an `oai_node`, so that PostgreSQL knows where to display the OAI documents and header data. It is mandatory to set a `metadataprefix` to the `SERVER` clause of the `CREATE FOREIGN TABLE` statement, so that the OAI-PMH repository knows which XML format is supposed to be returned (see [OAI_ListMetadataFormats](#oai_listmetadataformats)). Optionally, it is possible to constraint a `FOREIGN TABLE` to specific OAI sets using the `setspec` option from the `SERVER` clause - omitting this option means that every SQL query will harvest *all sets* in the OAI repository.
 
-The following example creates a `FOREIGN TABLE` connected to the `SERVER` created in the previous section. Queries executed against this table will harvest the set `dnb:reiheC` and will return the documents encoded as `oai_dc`. Each column is set with an `oai_node` in the `OPTION` clause:
+The following example creates a `FOREIGN TABLE` connected to the server `oai_server_dnb`. Queries executed against this table will harvest the set `dnb:reiheC` and will return the documents encoded as `oai_dc`. Each column is set with an `oai_node` in the `OPTION` clause:
 
 
 ```sql
-CREATE FOREIGN TABLE dnb_maps_marc21 (
+
+CREATE SERVER oai_server_dnb FOREIGN DATA WRAPPER oai_fdw
+OPTIONS (url 'https://services.dnb.de/oai/repository');
+
+CREATE FOREIGN TABLE dnb_maps (
   id text              OPTIONS (oai_node 'identifier'),
   content text         OPTIONS (oai_node 'content'),
   setspec text[]       OPTIONS (oai_node 'setspec'),
   datestamp timestamp  OPTIONS (oai_node 'datestamp'),
   meta text            OPTIONS (oai_node 'metadataprefix')
 )
-  SERVER oai_server OPTIONS (setspec 'dnb:reiheC',
-                             metadataprefix 'oai_dc');
+  SERVER oai_server_dnb OPTIONS (setspec 'dnb:reiheC',
+                                 metadataprefix 'oai_dc');
 ```
 
 **Column Options**:
@@ -285,6 +290,21 @@ CREATE FOREIGN TABLE ulb_oai_dc (
   format text            OPTIONS (oai_node 'metadataprefix')
  ) SERVER oai_server_ulb OPTIONS (metadataprefix 'oai_dc');
  
+                   id                    |                                                           xmldoc                                                            |       sets        |     updatedate      | format 
+-----------------------------------------+-----------------------------------------------------------------------------------------------------------------------------+-------------------+---------------------+--------
+ oai:digital.ulb.uni-muenster.de:4849615 | <oai_dc:dc xsi:schemaLocation="http://www.openarchives.org/OAI/2.0/oai_dc/ http://www.openarchives.org/OAI/2.0/oai_dc.xsd">+| {ulbmshd,article} | 2017-11-15 12:39:37 | oai_dc
+                                         |   <dc:title>Karaktertrekken.</dc:title>                                                                                    +|                   |                     | 
+                                         |   <dc:creator>Voght, P.F. de</dc:creator>                                                                                  +|                   |                     | 
+                                         |   <dc:publisher>Univ.- und Landesbibliothek</dc:publisher>                                                                 +|                   |                     | 
+                                         |   <dc:date>2017</dc:date>                                                                                                  +|                   |                     | 
+                                         |   <dc:type>Text</dc:type>                                                                                                  +|                   |                     | 
+                                         |   <dc:type>Article</dc:type>                                                                                               +|                   |                     | 
+                                         |   <dc:format>3 Seiten</dc:format>                                                                                          +|                   |                     | 
+                                         |   <dc:relation>urn:nbn:de:hbz:6:1-375650</dc:relation>                                                                     +|                   |                     | 
+                                         |   <dc:rights>pdm</dc:rights>                                                                                               +|                   |                     | 
+                                         | </oai_dc:dc>                                                                                                                |                   |                     | 
+
+(...) 
 ```
 
 2. Create a `SERVER` and a `FOREIGN TABLE` to harvest the [OAI-PMH repository](https://sammlungen.ulb.uni-muenster.de/oai) of the Münster University Library with records encoded as `oai_dc` in the set `ulbmsuo`:
@@ -303,6 +323,38 @@ CREATE FOREIGN TABLE ulb_ulbmsuo_oai_dc (
                                   setspec 'ulbmsuo');
                                   
 SELECT * FROM ulb_ulbmsuo_oai_dc;
+
+                   id                    |                                                                        xmldoc                                                                         |      sets      |     updatedate      | format 
+-----------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------+----------------+---------------------+--------
+ oai:digital.ulb.uni-muenster.de:1188819 | <oai_dc:dc xsi:schemaLocation="http://www.openarchives.org/OAI/2.0/oai_dc/ http://www.openarchives.org/OAI/2.0/oai_dc.xsd">                          +| {ulbmsuo,book} | 2012-08-08 08:03:33 | oai_dc
+                                         |   <dc:title>Die Lütticher Revolution im Jahr 1789 und das Benehmen Sr. Königl. Majestät von Preussen bey derselben</dc:title>                        +|                |                     | 
+                                         |   <dc:creator>Dohm, Christian Conrad Wilhelm von</dc:creator>                                                                                        +|                |                     | 
+                                         |   <dc:subject>Intervention</dc:subject>                                                                                                              +|                |                     | 
+                                         |   <dc:subject>Lüttich / Revolution &lt;1789&gt;</dc:subject>                                                                                         +|                |                     | 
+                                         |   <dc:subject>Friedrich Wilhelm &lt;II., Preußen, König&gt;</dc:subject>                                                                             +|                |                     | 
+                                         |   <dc:subject>Heiliges Römisches Reich / Reichskammergericht</dc:subject>                                                                            +|                |                     | 
+                                         |   <dc:description>dargestellt von ... Ihrem Clevischen Geheimen Kreiß-Directorialrath ... Christian Wilhelm von Dohm</dc:description>                +|                |                     | 
+                                         |   <dc:description>Vorlageform des Erscheinungsvermerks: gedruckt bey George Jacob Decker und Sohn, Königl. Geh. Ober-Hofbuchdruckern</dc:description>+|                |                     | 
+                                         |   <dc:publisher>Decker</dc:publisher>                                                                                                                +|                |                     | 
+                                         |   <dc:publisher>Univ.- und Landesbibliothek</dc:publisher>                                                                                           +|                |                     | 
+                                         |   <dc:date>1790</dc:date>                                                                                                                            +|                |                     | 
+                                         |   <dc:type>Text</dc:type>                                                                                                                            +|                |                     | 
+                                         |   <dc:type>Book</dc:type>                                                                                                                            +|                |                     | 
+                                         |   <dc:format>186 S., [1] Bl. ; 8</dc:format>                                                                                                         +|                |                     | 
+                                         |   <dc:identifier>eki:HBZHT000092708</dc:identifier>                                                                                                  +|                |                     | 
+                                         |   <dc:identifier>hbz-idn:CT005003896</dc:identifier>                                                                                                 +|                |                     | 
+                                         |   <dc:identifier>urn:nbn:de:hbz:6-85659547872</dc:identifier>                                                                                        +|                |                     | 
+                                         |   <dc:identifier>https://nbn-resolving.org/urn:nbn:de:hbz:6-85659547872</dc:identifier>                                                              +|                |                     | 
+                                         |   <dc:identifier>system:HT000092708</dc:identifier>                                                                                                  +|                |                     | 
+                                         |   <dc:relation>vignette : http://sammlungen.ulb.uni-muenster.de/titlepage/urn/urn:nbn:de:hbz:6-85659547872/128</dc:relation>                         +|                |                     | 
+                                         |   <dc:language>ger</dc:language>                                                                                                                     +|                |                     | 
+                                         |   <dc:coverage>Fürstentum Lüttich</dc:coverage>                                                                                                      +|                |                     | 
+                                         |   <dc:coverage>Geschichte 1789</dc:coverage>                                                                                                         +|                |                     | 
+                                         |   <dc:coverage>Berlin</dc:coverage>                                                                                                                  +|                |                     | 
+                                         |   <dc:rights>reserved</dc:rights>                                                                                                                    +|                |                     | 
+                                         | </oai_dc:dc>                                                                                                                                          |                |                     | 
+
+(...)
 
 ```
 
@@ -325,6 +377,21 @@ CREATE FOREIGN TABLE dnb_zdb_oai_dc (
                                   until '2022-02-01');
 
 SELECT * FROM dnb_zdb_oai_dc;
+
+            id             |                                                                      content                                                                       | setspec |      datestamp      |  meta  
+---------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------+---------+---------------------+--------
+ oai:dnb.de/zdb/1250800153 | <dc xmlns:dnb="http://d-nb.de/standards/dnbterms" xmlns="http://www.openarchives.org/OAI/2.0/oai_dc/" xmlns:dc="http://purl.org/dc/elements/1.1/">+| {zdb}   | 2022-02-01 15:39:05 | oai_dc
+                           |   <dc:title>Jahrbuch Deutsch als Fremdsprache</dc:title>                                                                                          +|         |                     | 
+                           |   <dc:publisher>München : Iudicium Verlag</dc:publisher>                                                                                          +|         |                     | 
+                           |   <dc:date>2022</dc:date>                                                                                                                         +|         |                     | 
+                           |   <dc:language>ger</dc:language>                                                                                                                  +|         |                     | 
+                           |   <dc:identifier xsi:type="dnb:IDN">1250800153</dc:identifier>                                                                                    +|         |                     | 
+                           |   <dc:identifier xsi:type="dnb:ZDBID">3108310-9</dc:identifier>                                                                                   +|         |                     | 
+                           |   <dc:type>Online-Ressource</dc:type>                                                                                                             +|         |                     | 
+                           |   <dc:relation>http://d-nb.info/011071060</dc:relation>                                                                                           +|         |                     | 
+                           | </dc>                                                                                                                                              |         |                     | 
+
+(...)
 
 ```
 
@@ -350,6 +417,62 @@ WHERE
   meta = 'MARC21-xml' AND
   datestamp BETWEEN '2022-03-01' AND '2022-03-02' AND
   setspec <@ ARRAY['dnb:reiheC'];
+  
+                id                |                                                                        content                                                                         |   setspec    |      datestamp      |    meta    
+----------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------+--------------+---------------------+------------
+ oai:dnb.de/dnb:reiheC/1131642694 | <record xmlns="http://www.loc.gov/MARC21/slim" type="Bibliographic">                                                                                  +| {dnb:reiheC} | 2022-03-01 13:54:09 | MARC21-xml
+                                  |     <leader>00000pem a2200000 c 4500</leader>                                                                                                         +|              |                     | 
+                                  |     <controlfield tag="001">1131642694</controlfield>                                                                                                 +|              |                     | 
+                                  |     <controlfield tag="003">DE-101</controlfield>                                                                                                     +|              |                     | 
+                                  |     <controlfield tag="005">20220301145409.0</controlfield>                                                                                           +|              |                     | 
+                                  |     <controlfield tag="007">a|||||||</controlfield>                                                                                                   +|              |                     | 
+                                  |     <controlfield tag="008">170509s2017    au |||||||a||   ||||ger  </controlfield>                                                                   +|              |                     | 
+                                  |     <datafield tag="015" ind1=" " ind2=" ">                                                                                                           +|              |                     | 
+                                  |       <subfield code="a">17,C04</subfield>                                                                                                            +|              |                     | 
+                                  |       <subfield code="z">17,N20</subfield>                                                                                                            +|              |                     | 
+                                  |       <subfield code="2">dnb</subfield>                                                                                                               +|              |                     | 
+                                  |     </datafield>                                                                                                                                      +|              |                     | 
+                                  |     <datafield tag="016" ind1="7" ind2=" ">                                                                                                           +|              |                     | 
+                                  |       <subfield code="2">DE-101</subfield>                                                                                                            +|              |                     | 
+                                  |       <subfield code="a">1131642694</subfield>                                                                                                        +|              |                     | 
+                                  |     </datafield>                                                                                                                                      +|              |                     | 
+                                  |     <datafield tag="020" ind1=" " ind2=" ">                                                                                                           +|              |                     | 
+                                  |       <subfield code="a">9783990442807</subfield>                                                                                                     +|              |                     | 
+                                  |       <subfield code="c">: EUR 11.99 (DE), EUR 11.99 (AT), CHF 18.50 (freier Preis)</subfield>                                                        +|              |                     | 
+                                  |       <subfield code="9">978-3-99044-280-7</subfield>                                                                                                 +|              |                     | 
+                                  |     </datafield>                                                                                                                                      +|              |                     | 
+                                  |     <datafield tag="020" ind1=" " ind2=" ">                                                                                                           +|              |                     | 
+                                  |       <subfield code="a">3990442805</subfield>                                                                                                        +|              |                     | 
+                                  |       <subfield code="9">3-99044-280-5</subfield>                                                                                                     +|              |                     | 
+                                  |     </datafield>                                                                                                                                      +|              |                     | 
+                                  |     <datafield tag="024" ind1="3" ind2=" ">                                                                                                           +|              |                     | 
+                                  |       <subfield code="a">9783990442807</subfield>                                                                                                     +|              |                     | 
+                                  |     </datafield>                                                                                                                                      +|              |                     | 
+                                  |     <datafield tag="034" ind1="0" ind2=" ">                                                                                                           +|              |                     | 
+                                  |       <subfield code="a">a</subfield>                                                                                                                 +|              |                     | 
+                                  |       <subfield code="d">E 010 08 09</subfield>                                                                                                       +|              |                     | 
+                                  |       <subfield code="e">E 010 49 02</subfield>                                                                                                       +|              |                     | 
+                                  |       <subfield code="f">N 047 25 32</subfield>                                                                                                       +|              |                     | 
+                                  |       <subfield code="g">N 047 06 15</subfield>                                                                                                       +|              |                     | 
+                                  |       <subfield code="9">A:acx</subfield>                                                                                                             +|              |                     | 
+                                  |     </datafield>                                                                                                                                      +|              |                     | 
+                                  |     <datafield tag="034" ind1="0" ind2=" ">                                                                                                           +|              |                     | 
+                                  |       <subfield code="a">a</subfield>                                                                                                                 +|              |                     | 
+                                  |       <subfield code="d">E010.135833</subfield>                                                                                                       +|              |                     | 
+                                  |       <subfield code="e">E010.817222</subfield>                                                                                                       +|              |                     | 
+                                  |       <subfield code="f">N047.425555</subfield>                                                                                                       +|              |                     | 
+                                  |       <subfield code="g">N047.104166</subfield>                                                                                                       +|              |                     | 
+                                  |       <subfield code="9">A:dcx</subfield>                                                                                                             +|              |                     | 
+                                  |     </datafield>                                                                                                       
+(...)
+                                  |     <datafield tag="926" ind1="2" ind2=" ">                                                                                                           +|              |                     | 
+                                  |       <subfield code="a">1DZ</subfield>                                                                                                               +|              |                     | 
+                                  |       <subfield code="o">94</subfield>                                                                                                                +|              |                     | 
+                                  |       <subfield code="q">Publisher</subfield>                                                                                                         +|              |                     | 
+                                  |       <subfield code="v">1.2</subfield>                                                                                                               +|              |                     | 
+                                  |       <subfield code="x">Europa, physisch</subfield>                                                                                                  +|              |                     | 
+                                  |     </datafield>                                                                                                                                      +|              |                     | 
+                                  |   </record>  
   
 ```
 
@@ -478,7 +601,42 @@ SELECT OAI_Version();
                                                                                       oai_version                                                                                    
   
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- oai fdw = 1.0.0dev, libxml = 2.9.10, libcurl = libcurl/7.74.0 NSS/3.61 zlib/1.2.11 brotli/1.0.9 libidn2/2.3.0 libpsl/0.21.0 (+libidn2/2.3.0) libssh2/1.9.0 nghttp2/1.43.0 librtmp/2.3
+ oai fdw = 1.0.0-alpha.1, libxml = 2.9.10, libcurl = libcurl/7.74.0 NSS/3.61 zlib/1.2.11 brotli/1.0.9 libidn2/2.3.0 libpsl/0.21.0 (+libidn2/2.3.0) libssh2/1.9.0 nghttp2/1.43.0 librtmp/2.3
+```
+
+## [Deploy with Docker](#deploy-with-docker)
+
+To deploy the oai_fdw with docker just pick one of the supported PostgreSQL versions (preferably 14), install the [requirements](#requirements) and [compile](#build-and-install) the source code. For instance, a oai_fdw `Dockerfile` for PostgreSQL 14 should look like this:
+
+```docker
+FROM postgres:14
+
+RUN apt-get update && \
+    apt-get install -y git make gcc postgresql-server-dev-14 libxml2-dev libcurl4-gnutls-dev && \
+    git clone https://github.com/jimjonesbr/oai_fdw.git
+
+WORKDIR /oai_fdw
+
+RUN make install
+```
+
+To build the image save it in a `Dockerfile` and  run the following command in the root directory - this will create an image called `oai_fdw_image`.:
+ 
+```bash
+ $ docker build -t oai_fdw_image .
+```
+
+
+After successfully building the image you're ready ro `run` or `create` the container (minimal example)..
+ 
+```bash
+$ docker run --name my_oai_container -e POSTGRES_HOST_AUTH_METHOD=trust oai_fdw_image
+```
+
+.. and then finally you're able to create and use the extension!
+
+```bash
+$ docker exec -u postgres my_oai_container psql -c "CREATE EXTENSION oai_fdw"
 ```
 
 ## [Limitations](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#limitations)
