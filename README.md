@@ -94,7 +94,7 @@ OAI-PMH repositories publish data sets in many different customizable data forma
 |---------------|--------------------------|--------------------------------------------------------------------------------------------------------------------|
 | `metadataprefix`  | mandatory        | A string that specifies the metadata format in OAI-PMH requests issued to the repository.  
 
-#### Examples
+#### IMPORT FOREIGN SCHEMA Examples
 
 1. Import a single foreign table to access all available OAI Sets using the schema `oai_repository`
 
@@ -474,6 +474,47 @@ WHERE
                                   |     </datafield>                                                                                                                                      +|              |                     | 
                                   |   </record>  
   
+```
+
+5. Create a `SERVER` and a `FOREIGN TABLE` to harvest the [OAI-PMH repository](https://services.dnb.de/oai/repository) of the German National Library with records encoded as `oai_dc` in the set `zdb` created between `2022-01-31` and `2022-02-01` (YYYY-MM-DD), and parse `title` and `date` from the XML document using XPATH.
+
+```
+CREATE SERVER oai_server_dnb FOREIGN DATA WRAPPER oai_fdw
+OPTIONS (url 'https://services.dnb.de/oai/repository');
+
+CREATE FOREIGN TABLE dnb_zdb_oai_dc (
+  id text             OPTIONS (oai_node 'identifier'), 
+  content xml        OPTIONS (oai_node 'content'), 
+  setspec text[]      OPTIONS (oai_node 'setspec'), 
+  datestamp timestamp OPTIONS (oai_node 'datestamp'),
+  meta text           OPTIONS (oai_node 'metadataprefix')
+ ) SERVER oai_server_dnb OPTIONS (setspec 'zdb', 
+                                  metadataprefix 'oai_dc',
+                                  from '2022-01-31', 
+                                  until '2022-02-01');
+                                  
+
+SELECT  
+  (xpath('//dc:title/text()',content::xml,ARRAY[ARRAY['dc','http://purl.org/dc/elements/1.1/']]))[1] AS title,
+  (xpath('//dc:date/text()',content::xml,ARRAY[ARRAY['dc','http://purl.org/dc/elements/1.1/']]))[1] AS date
+FROM dnb_zdb_oai_dc;
+
+
+                                               title                                                | date 
+----------------------------------------------------------------------------------------------------+------
+ Jahrbuch Deutsch als Fremdsprache                                                                  | 2022
+ Jahrbuch Noßwitz                                                                                   | 2022
+ [Lokalanzeiger] ; Lokalanzeiger : mein Südhessen                                                   | 2022
+ Südstadtgemeinde aktuell / Herausgeber: Der Kirchenvorstand der Ev.-luth. Südstadt-Kirchengemeinde | 2022
+ Nomos eLibrary; Sportwissenschaft; [E-Journals]                                                    | 2022
+ Nomos eLibrary; Geschichte; [E-Journals]                                                           | 2022
+ Nomos eLibrary; Mediation; [E-Journals]                                                            | 2022
+ Psychology of human-animal intergroup relations : PHAIR                                            | 2022
+ Global environmental psychology                                                                    | 2022
+ Journal of integrative and complementary medicine                                                  | 2022
+(...)
+
+                                  
 ```
 
 ## Support Functions
