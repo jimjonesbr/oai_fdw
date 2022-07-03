@@ -598,10 +598,10 @@ Shows the version of the installed OAI FDW and its main libraries.
 
 ```sql
 SELECT OAI_Version();
-                                                                                      oai_version                                                                                    
-  
--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- oai fdw = 1.0.0-alpha.1, libxml = 2.9.10, libcurl = libcurl/7.74.0 NSS/3.61 zlib/1.2.11 brotli/1.0.9 libidn2/2.3.0 libpsl/0.21.0 (+libidn2/2.3.0) libssh2/1.9.0 nghttp2/1.43.0 librtmp/2.3
+                                                                                                                                                                            oai_version                                                                                       
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ oai fdw = 1.0.0, libxml = 2.9.10, libcurl = libcurl/7.74.0 GnuTLS/3.7.1 zlib/1.2.11 brotli/1.0.9 libidn2/2.3.0 libpsl/0.21.0 (+libidn2/2.3.0) libssh2/1.9.0 nghttp2/1.43.0 librtmp/2.3
+(1 row)
 ```
 
 ## [Deploy with Docker](#deploy-with-docker)
