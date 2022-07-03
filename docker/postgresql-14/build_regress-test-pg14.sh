@@ -12,7 +12,7 @@ docker restart $CONTAINER_NAME
 docker exec -u postgres $CONTAINER_NAME psql -d db -c "CREATE EXTENSION oai_fdw;" 
 docker exec -u postgres $CONTAINER_NAME psql -d db -c "SELECT OAI_Version();" -c "SELECT Version();"
 
-#docker exec -u postgres $CONTAINER_NAME psql -d db -f /home/postgres/oai_fdw_test.sql
+# docker exec -u postgres $CONTAINER_NAME psql -d db -f /home/postgres/oai_fdw_test.sql
 
 ##psql -h 172.18.0.101 -d db -f oai_fdw_test.sql -U postgres
 
