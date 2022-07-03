@@ -68,7 +68,7 @@
 #include "access/reloptions.h"
 #include "catalog/pg_namespace.h"
 
-#define OAI_FDW_VERSION "1.0.0dev"
+#define OAI_FDW_VERSION "1.0.0-beta.1"
 #define OAI_REQUEST_LISTRECORDS "ListRecords"
 #define OAI_REQUEST_LISTIDENTIFIERS "ListIdentifiers"
 #define OAI_REQUEST_IDENTIFY "Identify"
@@ -1899,9 +1899,8 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 					if (xmlStrcmp(metadata->name, (xmlChar*) "metadata") == 0) {
 
 						xmlDocPtr xmldoc = NULL; //??
-						xmlNodePtr oai_xml_document = metadata->children;
 						xmlBufferPtr buffer = xmlBufferCreate();
-						size_t content_size = (size_t) xmlNodeDump(buffer, xmldoc, oai_xml_document, 0, 1);
+						size_t content_size = (size_t) xmlNodeDump(buffer, xmldoc, xmlCopyNode(metadata->children,1), 0, 1);
 
 						elog(DEBUG2,"  %s: (%s) XML Buffer size: %ld",__func__,state->requestType,content_size);
 
