@@ -57,3 +57,5 @@ results
 regression.out
 regression.diffs
 
+# Script for deploying and testing the extension in multiple postgres versions
+docker/
