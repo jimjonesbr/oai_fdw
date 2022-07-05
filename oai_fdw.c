@@ -68,7 +68,7 @@
 #include "access/reloptions.h"
 #include "catalog/pg_namespace.h"
 
-#define OAI_FDW_VERSION "1.0.0-beta.1"
+#define OAI_FDW_VERSION "1.0.0beta1"
 #define OAI_REQUEST_LISTRECORDS "ListRecords"
 #define OAI_REQUEST_LISTIDENTIFIERS "ListIdentifiers"
 #define OAI_REQUEST_IDENTIFY "Identify"
@@ -1894,6 +1894,8 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 
 				for (metadata = rec->children; metadata != NULL; metadata = metadata->next) {
 
+
+
 					if (metadata->type != XML_ELEMENT_NODE) continue;
 
 					if (xmlStrcmp(metadata->name, (xmlChar*) "metadata") == 0) {
@@ -1905,6 +1907,7 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 						elog(DEBUG2,"  %s: (%s) XML Buffer size: %ld",__func__,state->requestType,content_size);
 
 						oai->content = (char*) buffer->content;
+						//oai->content = strdup((char*)xmlBufferContent(buffer));
 						oai->setsArray = NULL;
 
 						for (header = rec->children; header != NULL; header = header->next) {
@@ -2155,7 +2158,8 @@ static void LoadOAIRecords(OAIFdwState *state) {
 
 		xmlInitParser();
 
-		xmldoc = xmlReadMemory(xmlStream.ptr, strlen(xmlStream.ptr), NULL, NULL, XML_PARSE_SAX1);
+		//xmldoc = xmlReadMemory(xmlStream.ptr, strlen(xmlStream.ptr), NULL, NULL, XML_PARSE_SAX1);
+		xmldoc = xmlReadMemory(xmlStream.ptr, strlen(xmlStream.ptr), NULL, NULL, XML_PARSE_NOBLANKS);
 
 		if (!xmldoc || (state->xmlroot = xmlDocGetRootElement(xmldoc)) == NULL) {
 
