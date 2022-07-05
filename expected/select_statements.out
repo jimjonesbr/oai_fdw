@@ -8613,3 +8613,12 @@ WHERE id = 'oai:dnb.de/zdb/1250800153';
                            | </dc>                                                                                                                                                                                                    |         |                          | 
 (1 row)
 
+-- ListIdentifiers request
+SELECT id,datestamp,meta,setspec 
+FROM dnb_zdb_oai_dc
+WHERE datestamp BETWEEN '2021-01-01' AND '2021-01-03';
+            id             |        datestamp         |  meta  | setspec 
+---------------------------+--------------------------+--------+---------
+ oai:dnb.de/zdb/1019023287 | Sat Jan 02 18:36:42 2021 | oai_dc | {zdb}
+(1 row)
+

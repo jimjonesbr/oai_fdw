@@ -35,3 +35,9 @@ WHERE
 -- GetRecord request
 SELECT * FROM dnb_zdb_oai_dc
 WHERE id = 'oai:dnb.de/zdb/1250800153';
+
+
+-- ListIdentifiers request
+SELECT id,datestamp,meta,setspec 
+FROM dnb_zdb_oai_dc
+WHERE datestamp BETWEEN '2021-01-01' AND '2021-01-03';
