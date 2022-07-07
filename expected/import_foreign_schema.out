@@ -95,11 +95,11 @@ SELECT * FROM dnb_schema."dnb:reiheC"
 WHERE id = 'oai:dnb.de/dnb:reiheC/1253187622';
                 id                |                                            xmldoc                                            |     sets     |        updatedate        |   format   | status 
 ----------------------------------+----------------------------------------------------------------------------------------------+--------------+--------------------------+------------+--------
- oai:dnb.de/dnb:reiheC/1253187622 | <record xmlns="http://www.loc.gov/MARC21/slim" type="Bibliographic">                        +| {dnb:reiheC} | Tue Apr 12 20:30:31 2022 | MARC21-xml | f
+ oai:dnb.de/dnb:reiheC/1253187622 | <record xmlns="http://www.loc.gov/MARC21/slim" type="Bibliographic">                        +| {dnb:reiheC} | Wed Jul 06 20:40:38 2022 | MARC21-xml | f
                                   |   <leader>00000nem a2200000 cb4500</leader>                                                 +|              |                          |            | 
                                   |   <controlfield tag="001">1253187622</controlfield>                                         +|              |                          |            | 
                                   |   <controlfield tag="003">DE-101</controlfield>                                             +|              |                          |            | 
-                                  |   <controlfield tag="005">20220412223031.0</controlfield>                                   +|              |                          |            | 
+                                  |   <controlfield tag="005">20220706224038.0</controlfield>                                   +|              |                          |            | 
                                   |   <controlfield tag="007">a|||||||</controlfield>                                           +|              |                          |            | 
                                   |   <controlfield tag="008">220309s2022    gw |||||||a||   ||||ger  </controlfield>           +|              |                          |            | 
                                   |   <datafield tag="015" ind1=" " ind2=" ">                                                   +|              |                          |            | 
@@ -131,6 +131,9 @@ WHERE id = 'oai:dnb.de/dnb:reiheC/1253187622';
                                   |   </datafield>                                                                              +|              |                          |            | 
                                   |   <datafield tag="035" ind1=" " ind2=" ">                                                   +|              |                          |            | 
                                   |     <subfield code="a">(DE-599)DNB1253187622</subfield>                                     +|              |                          |            | 
+                                  |   </datafield>                                                                              +|              |                          |            | 
+                                  |   <datafield tag="035" ind1=" " ind2=" ">                                                   +|              |                          |            | 
+                                  |     <subfield code="a">(OCoLC)1334593450</subfield>                                         +|              |                          |            | 
                                   |   </datafield>                                                                              +|              |                          |            | 
                                   |   <datafield tag="040" ind1=" " ind2=" ">                                                   +|              |                          |            | 
                                   |     <subfield code="a">1180</subfield>                                                      +|              |                          |            | 

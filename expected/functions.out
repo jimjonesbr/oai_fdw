@@ -75,6 +75,12 @@ SELECT * FROM OAI_ListMetadataFormats('oai_server_kbnl');
  rdf            |        | 
 (15 rows)
 
+SELECT * FROM OAI_ListMetadataFormats('oai_server_davidrumsey');
+ metadataprefix |                     schema                     |              metadatanamespace              
+----------------+------------------------------------------------+---------------------------------------------
+ oai_dc         | http://www.openarchives.org/OAI/2.0/oai_dc.xsd | http://www.openarchives.org/OAI/2.0/oai_dc/
+(1 row)
+
 SELECT * FROM OAI_ListSets('oai_server_ulb');
      setspec      |                            setname                            
 ------------------+---------------------------------------------------------------
@@ -650,6 +656,12 @@ SELECT * FROM OAI_ListSets('oai_server_kbnl');
  TIJDSCHRIFTEN:OBA01         | TIJDSCHRIFTEN:OBA01
 (525 rows)
 
+SELECT * FROM OAI_ListSets('oai_server_davidrumsey');
+  setspec   |                setname                 
+------------+----------------------------------------
+ RUMSEY~8~1 | David Rumsey Historical Map Collection
+(1 row)
+
 SELECT * FROM OAI_Identify('oai_server_ulb');
        name        |                             description                              
 -------------------+----------------------------------------------------------------------
@@ -675,8 +687,8 @@ SELECT * FROM OAI_Identify('oai_server_dnb');
 (7 rows)
 
 SELECT * FROM OAI_Identify('oai_server_bioj');
-       name        |                            description                            
--------------------+-------------------------------------------------------------------
+       name        |                                          description                                           
+-------------------+------------------------------------------------------------------------------------------------
  repositoryName    | British and Irish Orthoptic Journal
  baseURL           | https://www.bioj-online.com/jms/index.php/up/oai/
  protocolVersion   | 2.0
@@ -686,30 +698,13 @@ SELECT * FROM OAI_Identify('oai_server_bioj');
  granularity       | YYYY-MM-DDThh:mm:ssZ
  compression       | gzip
  compression       | deflate
- description       |                                                                  +
-                   |                                                                  +
-                   |                                 oai                              +
-                   |                                 ojs.bioj-online.com              +
-                   |                                 :                                +
-                   |                                 oai:ojs.bioj-online.com:article/1+
-                   |                                                                  +
-                   |                 
- description       |                                                                  +
-                   |                                                                  +
-                   |                                 Open Journal Systems             +
-                   |                                                                  +
-                   |                                         Public Knowledge Project +
-                   |                                         pkp.contact@gmail.com    +
-                   |                                                                  +
-                   |                                 2.4.3.0                          +
-                   |                                 http://pkp.sfu.ca/ojs/           +
-                   |                                                                  +
-                   |                 
+ description       | oaiojs.bioj-online.com:oai:ojs.bioj-online.com:article/1
+ description       | Open Journal SystemsPublic Knowledge Projectpkp.contact@gmail.com2.4.3.0http://pkp.sfu.ca/ojs/
 (11 rows)
 
 SELECT * FROM OAI_Identify('oai_server_bjihs');
-       name        |                               description                               
--------------------+-------------------------------------------------------------------------
+       name        |                                          description                                           
+-------------------+------------------------------------------------------------------------------------------------
  repositoryName    | Brazilian Journal of Implantology and Health Sciences  
  baseURL           | https://bjihs.emnuvens.com.br/bjihs/oai
  protocolVersion   | 2.0
@@ -719,25 +714,8 @@ SELECT * FROM OAI_Identify('oai_server_bjihs');
  granularity       | YYYY-MM-DDThh:mm:ssZ
  compression       | gzip
  compression       | deflate
- description       |                                                                        +
-                   |                                                                        +
-                   |                                 oai                                    +
-                   |                                 ojs.bjihs.emnuvens.com.br              +
-                   |                                 :                                      +
-                   |                                 oai:ojs.bjihs.emnuvens.com.br:article/1+
-                   |                                                                        +
-                   |                 
- description       |                                                                        +
-                   |                                                                        +
-                   |                                 Open Journal Systems                   +
-                   |                                                                        +
-                   |                                         Public Knowledge Project       +
-                   |                                         pkp.contact@gmail.com          +
-                   |                                                                        +
-                   |                                 3.2.1.1                                +
-                   |                                 http://pkp.sfu.ca/ojs/                 +
-                   |                                                                        +
-                   |                 
+ description       | oaiojs.bjihs.emnuvens.com.br:oai:ojs.bjihs.emnuvens.com.br:article/1
+ description       | Open Journal SystemsPublic Knowledge Projectpkp.contact@gmail.com3.2.1.1http://pkp.sfu.ca/ojs/
 (11 rows)
 
 SELECT * FROM OAI_Identify('oai_server_kbnl');
@@ -749,6 +727,18 @@ SELECT * FROM OAI_Identify('oai_server_kbnl');
  adminEmail        | dataservices@kb.nl
  earliestDatestamp | 1970-01-01T00:00:00Z
  deletedRecord     | transient
+ granularity       | YYYY-MM-DDThh:mm:ssZ
+(7 rows)
+
+SELECT * FROM OAI_Identify('oai_server_davidrumsey');
+       name        |                 description                 
+-------------------+---------------------------------------------
+ repositoryName    | David Rumsey Historical Maps
+ baseURL           | http://www.davidrumsey.com/luna/servlet/oai
+ protocolVersion   | 2.0
+ adminEmail        | carto@davidrumsey.com
+ earliestDatestamp | 1979-01-01T00:00:00Z
+ deletedRecord     | no
  granularity       | YYYY-MM-DDThh:mm:ssZ
 (7 rows)
 
