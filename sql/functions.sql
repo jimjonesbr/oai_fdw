@@ -4,13 +4,17 @@ SELECT * FROM OAI_ListMetadataFormats('oai_server_dnb');
 SELECT * FROM OAI_ListMetadataFormats('oai_server_bioj');
 SELECT * FROM OAI_ListMetadataFormats('oai_server_bjihs');
 SELECT * FROM OAI_ListMetadataFormats('oai_server_kbnl');
+SELECT * FROM OAI_ListMetadataFormats('oai_server_davidrumsey');
 SELECT * FROM OAI_ListSets('oai_server_ulb');
 -- SELECT * FROM OAI_ListSets('oai_server_dnb');
 SELECT * FROM OAI_ListSets('oai_server_bioj');
 SELECT * FROM OAI_ListSets('oai_server_bjihs');
 SELECT * FROM OAI_ListSets('oai_server_kbnl');
+SELECT * FROM OAI_ListSets('oai_server_davidrumsey');
 SELECT * FROM OAI_Identify('oai_server_ulb');
 SELECT * FROM OAI_Identify('oai_server_dnb');
 SELECT * FROM OAI_Identify('oai_server_bioj');
 SELECT * FROM OAI_Identify('oai_server_bjihs');
 SELECT * FROM OAI_Identify('oai_server_kbnl');
+SELECT * FROM OAI_Identify('oai_server_davidrumsey');
+

@@ -24,4 +24,12 @@ CREATE FOREIGN TABLE foreign_table_without_oai_option2 (
  ) SERVER oai_server_ulb OPTIONS (metadataPrefix 'oai_dc');
  
 SELECT * FROM foreign_table_without_oai_option2;
- 
+
+
+CREATE FOREIGN TABLE davidrumsey_oai_dc (
+  id text                OPTIONS (oai_node 'identifier'), 
+  xmldoc xml             OPTIONS (oai_node 'content'), 
+  sets text[]            OPTIONS (oai_node 'setspec'), 
+  updatedate timestamp   OPTIONS (oai_node 'datestamp'),
+  format text            OPTIONS (oai_node 'metadataprefix')
+ ) SERVER oai_server_davidrumsey OPTIONS (metadataprefix 'oai_dc');

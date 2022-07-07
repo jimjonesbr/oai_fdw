@@ -41,3 +41,7 @@ WHERE id = 'oai:dnb.de/zdb/1250800153';
 SELECT id,datestamp,meta,setspec 
 FROM dnb_zdb_oai_dc
 WHERE datestamp BETWEEN '2021-01-01' AND '2021-01-03';
+
+-- SELECT using timestamps hh24:mm:ss hh24:mi:ss
+SELECT * FROM davidrumsey_oai_dc 
+WHERE updatedate BETWEEN '2022-07-04 03:23:24' AND '2022-07-04 03:23:25';
