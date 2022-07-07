@@ -707,7 +707,7 @@ static List *GetIdentity(char *url) {
 		xmlNodePtr oai_root;
 		xmlNodePtr Identity;
 
-		xmldoc = xmlReadMemory(xmlStream.ptr, strlen(xmlStream.ptr), NULL, NULL, XML_PARSE_SAX1);
+		xmldoc = xmlReadMemory(xmlStream.ptr, strlen(xmlStream.ptr), NULL, NULL, XML_PARSE_NOBLANKS);
 
 		if (!xmldoc || (xmlroot = xmlDocGetRootElement(xmldoc)) == NULL) {
 			xmlFreeDoc(xmldoc);
@@ -766,7 +766,7 @@ static List *GetSets(char *url) {
 		xmlNodePtr ListSets;
 		xmlNodePtr SetElement;
 
-		xmldoc = xmlReadMemory(xmlStream.ptr, strlen(xmlStream.ptr), NULL, NULL, XML_PARSE_SAX1);
+		xmldoc = xmlReadMemory(xmlStream.ptr, strlen(xmlStream.ptr), NULL, NULL, XML_PARSE_NOBLANKS);
 
 		if (!xmldoc || (xmlroot = xmlDocGetRootElement(xmldoc)) == NULL) {
 			xmlFreeDoc(xmldoc);
@@ -839,7 +839,7 @@ static List *GetMetadataFormats(char *url) {
 		xmlNodePtr ListMetadataFormats;
 		xmlNodePtr MetadataElement;
 
-		xmldoc = xmlReadMemory(xmlStream.ptr, strlen(xmlStream.ptr), NULL, NULL, XML_PARSE_SAX1);
+		xmldoc = xmlReadMemory(xmlStream.ptr, strlen(xmlStream.ptr), NULL, NULL, XML_PARSE_NOBLANKS);
 
 		if (!xmldoc || (xmlroot = xmlDocGetRootElement(xmldoc)) == NULL) {
 			xmlFreeDoc(xmldoc);
@@ -2158,7 +2158,8 @@ static void LoadOAIRecords(OAIFdwState *state) {
 
 		xmlInitParser();
 
-		//xmldoc = xmlReadMemory(xmlStream.ptr, strlen(xmlStream.ptr), NULL, NULL, XML_PARSE_SAX1);
+		elog(DEBUG3,"  %s: current xmlstream > %s",__func__,xmlStream.ptr);
+
 		xmldoc = xmlReadMemory(xmlStream.ptr, strlen(xmlStream.ptr), NULL, NULL, XML_PARSE_NOBLANKS);
 
 		if (!xmldoc || (state->xmlroot = xmlDocGetRootElement(xmldoc)) == NULL) {
@@ -2176,7 +2177,10 @@ static void LoadOAIRecords(OAIFdwState *state) {
 
 			if (recordsList->type != XML_ELEMENT_NODE) continue;
 
+			elog(DEBUG3,"  %s: XML root parsed and it has valid children (XML_ELEMENT_NODE) -> '%s'",__func__,recordsList->name);
+
 			if (xmlStrcmp(recordsList->name, (xmlChar*)state->requestType)==0) {
+
 
 				if (!xmldoc || (state->xmlroot = xmlDocGetRootElement(xmldoc)) == NULL) {
 
