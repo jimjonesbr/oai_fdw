@@ -600,7 +600,9 @@ SELECT * FROM OAI_ListSets('oai_server_kbnl');
  TIJDSCHRIFTEN:MMKVLO02      | TIJDSCHRIFTEN:MMKVLO02
  TIJDSCHRIFTEN:MMKWG01       | TIJDSCHRIFTEN:MMKWG01
  TIJDSCHRIFTEN:MMLIND01      | TIJDSCHRIFTEN:MMLIND01
+ TIJDSCHRIFTEN:MMMI02        | TIJDSCHRIFTEN:MMMI02
  TIJDSCHRIFTEN:MMNA12        | TIJDSCHRIFTEN:MMNA12
+ TIJDSCHRIFTEN:MMNAT03       | TIJDSCHRIFTEN:MMNAT03
  TIJDSCHRIFTEN:MMNDR01       | TIJDSCHRIFTEN:MMNDR01
  TIJDSCHRIFTEN:MMNFM01       | TIJDSCHRIFTEN:MMNFM01
  TIJDSCHRIFTEN:MMNIBG01      | TIJDSCHRIFTEN:MMNIBG01
@@ -636,6 +638,7 @@ SELECT * FROM OAI_ListSets('oai_server_kbnl');
  TIJDSCHRIFTEN:MMUBTB01      | TIJDSCHRIFTEN:MMUBTB01
  TIJDSCHRIFTEN:MMUBTB02      | TIJDSCHRIFTEN:MMUBTB02
  TIJDSCHRIFTEN:MMUBTB03      | TIJDSCHRIFTEN:MMUBTB03
+ TIJDSCHRIFTEN:MMUBU02       | TIJDSCHRIFTEN:MMUBU02
  TIJDSCHRIFTEN:MMUBVU04      | TIJDSCHRIFTEN:MMUBVU04
  TIJDSCHRIFTEN:MMUBVU06      | TIJDSCHRIFTEN:MMUBVU06
  TIJDSCHRIFTEN:MMUBVU07      | TIJDSCHRIFTEN:MMUBVU07
@@ -654,7 +657,7 @@ SELECT * FROM OAI_ListSets('oai_server_kbnl');
  TIJDSCHRIFTEN:NIOD07        | TIJDSCHRIFTEN:NIOD07
  TIJDSCHRIFTEN:NIOD09        | TIJDSCHRIFTEN:NIOD09
  TIJDSCHRIFTEN:OBA01         | TIJDSCHRIFTEN:OBA01
-(525 rows)
+(528 rows)
 
 SELECT * FROM OAI_ListSets('oai_server_davidrumsey');
   setspec   |                setname                 
@@ -677,7 +680,7 @@ SELECT * FROM OAI_Identify('oai_server_ulb');
 SELECT * FROM OAI_Identify('oai_server_dnb');
        name        |                     description                      
 -------------------+------------------------------------------------------
- repositoryName    | OAI-Repository of the German National Library V2.0.7
+ repositoryName    | OAI-Repository of the German National Library V2.0.9
  baseURL           | https://services.dnb.de/oai/repository
  protocolVersion   | 2.0
  adminEmail        | oai-repository@dnb.de
@@ -708,7 +711,7 @@ SELECT * FROM OAI_Identify('oai_server_bjihs');
  repositoryName    | Brazilian Journal of Implantology and Health Sciences  
  baseURL           | https://bjihs.emnuvens.com.br/bjihs/oai
  protocolVersion   | 2.0
- adminEmail        | journal.bjihs@periodicosbrasil.com.br
+ adminEmail        | journalbjihs@gmail.com
  earliestDatestamp | 2020-04-18T03:05:46Z
  deletedRecord     | persistent
  granularity       | YYYY-MM-DDThh:mm:ssZ

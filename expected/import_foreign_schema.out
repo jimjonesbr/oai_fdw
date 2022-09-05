@@ -89,7 +89,7 @@ IMPORT FOREIGN SCHEMA oai_sets
 FROM SERVER oai_server_dnb 
 INTO dnb_schema 
   OPTIONS (metadataprefix 'MARC21-xml');
-NOTICE:  Foreign tables to be created in schema 'dnb_schema': 4241
+NOTICE:  Foreign tables to be created in schema 'dnb_schema': 4826
  
 SELECT * FROM dnb_schema."dnb:reiheC" 
 WHERE id = 'oai:dnb.de/dnb:reiheC/1253187622';
