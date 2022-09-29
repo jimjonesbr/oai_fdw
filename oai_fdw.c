@@ -24,7 +24,6 @@
 #include "optimizer/optimizer.h"
 #endif
 
-//#include "access/table.h"
 #include "access/htup_details.h"
 #include "access/sysattr.h"
 #include "access/reloptions.h"
@@ -76,6 +75,7 @@
 #define OAI_REQUEST_GETRECORD "GetRecord"
 #define OAI_REQUEST_LISTMETADATAFORMATS "ListMetadataFormats"
 #define OAI_REQUEST_LISTSETS "ListSets"
+#define OAI_REQUEST_CONNECTTIMEOUT 300
 
 #define OAI_XML_ROOT_ELEMENT "OAI-PMH"
 #define OAI_NODE_IDENTIFIER "identifier"
@@ -84,6 +84,7 @@
 #define OAI_NODE_HTTPS_PROXY "https_proxy"
 #define OAI_NODE_PROXY_USER "proxy_user"
 #define OAI_NODE_PROXY_USER_PASSWORD "proxy_user_password"
+#define OAI_NODE_CONNECTTIMEOUT "connect_timeout"
 #define OAI_NODE_CONTENT "content"
 #define OAI_NODE_DATESTAMP "datestamp"
 #define OAI_NODE_SETSPEC "setspec"
@@ -110,6 +111,7 @@ typedef struct OAIFdwState {
 	int 	numcols;
 	int 	numfdwcols;
 	int		rowcount;
+	long connectTimeout;
 	char	*completeListSize;
 	char	*identifier;
 	char 	*document;
@@ -159,6 +161,7 @@ typedef struct OAIFdwTableOptions {
 	Oid foreigntableid;
 	int numcols;
 	int numfdwcols;
+	long connectTimeout;
 	char *metadataPrefix;
 	char *from;
 	char *until;
@@ -217,6 +220,7 @@ static struct OAIFdwOption valid_options[] =
 	{OAI_NODE_HTTPS_PROXY, ForeignServerRelationId, false, false},
 	{OAI_NODE_PROXY_USER, ForeignServerRelationId, false, false},
 	{OAI_NODE_PROXY_USER_PASSWORD, ForeignServerRelationId, false, false},
+	{OAI_NODE_CONNECTTIMEOUT, ForeignServerRelationId, false, false},
 
 	{OAI_NODE_IDENTIFIER, ForeignTableRelationId, false, false},
 	{OAI_NODE_METADATAPREFIX, ForeignTableRelationId, true, false},
@@ -636,11 +640,27 @@ Datum oai_fdw_validator(PG_FUNCTION_ARGS) {
 					if(CheckURL(defGetString(def))!=CURLE_OK) {
 
 						ereport(ERROR,
-								(errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
+							(errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
 							 errmsg("invalid %s: '%s'",OAI_NODE_URL, defGetString(def))));
 
 					}
 
+				}
+
+				if(strcmp(opt->optname, OAI_NODE_CONNECTTIMEOUT)==0){
+
+					char *endptr;
+					char *timeout_str =  defGetString(def);
+					long timeout_val = strtol(timeout_str, &endptr, 0);
+
+					if (timeout_str[0] == '\0' || *endptr != '\0' || timeout_val < 0) {
+
+						ereport(ERROR,
+								(errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
+									errmsg("invalid %s: %s", def->defname,timeout_str),
+						       		errhint("Expected values are positive integers (timeout in seconds).")));
+
+					}
 				}
 
 				if (strcmp(opt->optname, OAI_NODE_OPTION) == 0) {
@@ -667,9 +687,6 @@ Datum oai_fdw_validator(PG_FUNCTION_ARGS) {
 					}
 
 				}
-
-//				opt->optfound = true;
-//				optfound = true;
 
 				break;
 			}
@@ -1102,13 +1119,26 @@ static int ExecuteOAIRequest(OAIFdwState *state, struct string *xmlResponse) {
 		curl_easy_setopt(curl, CURLOPT_URL, state->url);
 		curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, errbuf);
 
-		// Proxy support: added in version 1.1.0
+		elog(DEBUG1, "  %s (%s) timeout: %ld",__func__,state->requestType,state->connectTimeout);
+
+		if(state->connectTimeout != 0) {
+
+			curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, state->connectTimeout);
+
+		} else {
+
+			curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, OAI_REQUEST_CONNECTTIMEOUT);
+
+		}
+
+
+		/* Proxy support: added in version 1.1.0 */
 		if(state->proxy) {
 
 			elog(DEBUG1, "  %s (%s) proxy URL: '%s'",__func__,state->requestType,state->proxy);
 
 			curl_easy_setopt(curl, CURLOPT_PROXY, state->proxy);
-			curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, false);
+			//curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, false);
 
 			if(strcmp(state->proxyType,OAI_NODE_HTTP_PROXY)==0) {
 
@@ -1124,14 +1154,14 @@ static int ExecuteOAIRequest(OAIFdwState *state, struct string *xmlResponse) {
 
 			if(state->proxyUser) {
 
-				elog(DEBUG1, "  %s (%s) proxy user: '%s'",__func__,state->requestType,state->proxyUser);
+				elog(DEBUG1, "  %s (%s) entering proxy user ('%s').",__func__,state->requestType,state->proxyUser);
 				curl_easy_setopt(curl, CURLOPT_PROXYUSERNAME, state->proxyUser);
 
 			}
 
 			if(state->proxyUserPassword) {
 
-				elog(DEBUG1, "  %s (%s) proxy user password: '************'",__func__,state->requestType);
+				elog(DEBUG1, "  %s (%s) entering proxy user's password.",__func__,state->requestType);
 				curl_easy_setopt(curl, CURLOPT_PROXYUSERPWD, state->proxyUserPassword);
 
 			}
@@ -1729,11 +1759,18 @@ static void OAIFdwGetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid 
 
 			opts->proxyUser = defGetString(def);
 
-
 		} else if (strcmp(OAI_NODE_PROXY_USER_PASSWORD, def->defname) == 0) {
 
 			opts->proxyUserPassword = defGetString(def);
 
+		} else if (strcmp(OAI_NODE_CONNECTTIMEOUT, def->defname) == 0) {
+
+			char *tailpt;
+			char *timeout_str =  defGetString(def);
+
+			opts->connectTimeout = strtol(timeout_str, &tailpt, 0);
+
+			elog(DEBUG1,"  %s parsing node '%s': %ld",__func__,def->defname,opts->connectTimeout);
 
 		} else {
 
@@ -1797,6 +1834,7 @@ static ForeignScan *OAIFdwGetForeignPlan(PlannerInfo *root, RelOptInfo *baserel,
 	state->proxyType = opts->proxyType;
 	state->proxyUser = opts->proxyUser;
 	state->proxyUserPassword = opts->proxyUserPassword;
+	state->connectTimeout = opts->connectTimeout;
 	state->set = opts->set;
 	state->from = opts->from;
 	state->until = opts->until;
@@ -1856,9 +1894,7 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 	xmlInitParser(); //????????????????
 
 
-	/*
-	 * Fetches next record from OAI ListIdentifiers request
-	 */
+	/* Fetches next record from OAI ListIdentifiers request */
 	if(strcmp(state->requestType,OAI_REQUEST_LISTIDENTIFIERS)==0) {
 
 		for (rootNode = state->xmlroot->children; rootNode!= NULL; rootNode = rootNode->next) {
@@ -1952,9 +1988,7 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 	}
 
 
-	/*
-	 * Fetches next record from OAI ListRecord or GetRecord requests.
-	 */
+	/* Fetches next record from OAI ListRecord or GetRecord requests. */
 	if(strcmp(state->requestType,OAI_REQUEST_LISTRECORDS)==0 || strcmp(state->requestType,OAI_REQUEST_GETRECORD)==0) {
 
 		for (rootNode = state->xmlroot->children; rootNode!= NULL; rootNode = rootNode->next) {
@@ -2001,7 +2035,6 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 						elog(DEBUG2,"  %s: (%s) XML Buffer size: %ld",__func__,state->requestType,content_size);
 
 						oai->content = (char*) buffer->content;
-						//oai->content = strdup((char*)xmlBufferContent(buffer));
 						oai->setsArray = NULL;
 
 						for (header = rec->children; header != NULL; header = header->next) {

@@ -2,12 +2,15 @@ oai_fdw 1.1.0
 yyyy-mmdd
 
  * New Features *
-   - Proxy support for HTTP requests
- 
+   - Proxy support for HTTP requests (CREATE SERVER).
+   - Connection timeout option for HTTP requests (CREATE SERVER).
+     
  * Bug Fixes *
    - cURL exception handling: Adds missing cURL error message and response code in case of failed http 
     requests. In previous versions these values were never fetched.
-
+ 
+ * Enhancements *
+  
 oai_fdw 1.0.0
 2022-09-05
 
