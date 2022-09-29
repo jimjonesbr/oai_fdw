@@ -68,7 +68,7 @@
 #include "access/reloptions.h"
 #include "catalog/pg_namespace.h"
 
-#define OAI_FDW_VERSION "1.0.0"
+#define OAI_FDW_VERSION "1.1.0"
 #define OAI_REQUEST_LISTRECORDS "ListRecords"
 #define OAI_REQUEST_LISTIDENTIFIERS "ListIdentifiers"
 #define OAI_REQUEST_IDENTIFY "Identify"
@@ -79,11 +79,15 @@
 
 #define OAI_XML_ROOT_ELEMENT "OAI-PMH"
 #define OAI_NODE_IDENTIFIER "identifier"
+#define OAI_NODE_URL "url"
+#define OAI_NODE_HTTP_PROXY "http_proxy"
+#define OAI_NODE_HTTPS_PROXY "https_proxy"
+#define OAI_NODE_PROXY_USER "proxy_user"
+#define OAI_NODE_PROXY_USER_PASSWORD "proxy_user_password"
 #define OAI_NODE_CONTENT "content"
 #define OAI_NODE_DATESTAMP "datestamp"
 #define OAI_NODE_SETSPEC "setspec"
 #define OAI_NODE_METADATAPREFIX "metadataprefix"
-#define OAI_NODE_URL "url"
 #define OAI_NODE_FROM "from"
 #define OAI_NODE_UNTIL "until"
 #define OAI_NODE_STATUS "status"
@@ -112,6 +116,10 @@ typedef struct OAIFdwState {
 	char 	*date;
 	char 	*set;
 	char 	*url;
+	char    *proxy;
+	char    *proxyType;
+	char    *proxyUser;
+	char    *proxyUserPassword;
 	char 	*from;
 	char 	*until;
 	char 	*metadataPrefix;
@@ -155,9 +163,13 @@ typedef struct OAIFdwTableOptions {
 	char *from;
 	char *until;
 	char *url;
+	char *proxy;
+	char *proxyType;
+	char *proxyUser;
+	char *proxyUserPassword;
 	char *set;
-	char* identifier;
-	char* requestType;
+	char *identifier;
+	char *requestType;
 
 } OAIFdwTableOptions;
 
@@ -201,6 +213,10 @@ static struct OAIFdwOption valid_options[] =
 
 	{OAI_NODE_URL, ForeignServerRelationId, true, false},
 	{OAI_NODE_METADATAPREFIX, ForeignServerRelationId, false, false},
+	{OAI_NODE_HTTP_PROXY, ForeignServerRelationId, false, false},
+	{OAI_NODE_HTTPS_PROXY, ForeignServerRelationId, false, false},
+	{OAI_NODE_PROXY_USER, ForeignServerRelationId, false, false},
+	{OAI_NODE_PROXY_USER_PASSWORD, ForeignServerRelationId, false, false},
 
 	{OAI_NODE_IDENTIFIER, ForeignTableRelationId, false, false},
 	{OAI_NODE_METADATAPREFIX, ForeignTableRelationId, true, false},
@@ -929,6 +945,7 @@ static int CheckURL(char *url) {
     curl = curl_easy_init();
 
     if(curl) {
+
         curl_easy_setopt(curl, CURLOPT_URL, url);
 
         /* don't write output to stdout */
@@ -937,7 +954,6 @@ static int CheckURL(char *url) {
         /* Perform the request */
         response = curl_easy_perform(curl);
 
-        /* always cleanup */
         curl_easy_cleanup(curl);
 
     } else {
@@ -954,6 +970,8 @@ static int ExecuteOAIRequest(OAIFdwState *state, struct string *xmlResponse) {
 	CURL *curl;
 	CURLcode res;
 	StringInfoData url_bufffer;
+	char errbuf[CURL_ERROR_SIZE];
+
 	initStringInfo(&url_bufffer);
 
 	elog(DEBUG1,"%s called: url > %s ",__func__,state->url);
@@ -1072,15 +1090,54 @@ static int ExecuteOAIRequest(OAIFdwState *state, struct string *xmlResponse) {
 	}
 
 
-	elog(DEBUG1,"  %s (%s): url build > %s?%s",__func__,state->requestType,state->url,url_bufffer.data);
+	elog(DEBUG1,"  %s (%s) url build: %s?%s",__func__,state->requestType,state->url,url_bufffer.data);
 
 	curl = curl_easy_init();
 
 	if(curl) {
 
 		InitCURLString(xmlResponse);
+		errbuf[0] = 0;
 
 		curl_easy_setopt(curl, CURLOPT_URL, state->url);
+		curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, errbuf);
+
+		// Proxy support: added in version 1.1.0
+		if(state->proxy) {
+
+			elog(DEBUG1, "  %s (%s) proxy URL: '%s'",__func__,state->requestType,state->proxy);
+
+			curl_easy_setopt(curl, CURLOPT_PROXY, state->proxy);
+			curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, false);
+
+			if(strcmp(state->proxyType,OAI_NODE_HTTP_PROXY)==0) {
+
+				elog(DEBUG1, "  %s (%s) proxy protocol: 'HTTP'",__func__,state->requestType);
+				curl_easy_setopt(curl, CURLOPT_PROXYTYPE, CURLPROXY_HTTP);
+
+			} else if(strcmp(state->proxyType,OAI_NODE_HTTPS_PROXY)==0) {
+
+				elog(DEBUG1, "  %s (%s) proxy protocol: 'HTTPS'",__func__,state->requestType);
+				curl_easy_setopt(curl, CURLOPT_PROXYTYPE, CURLPROXY_HTTPS);
+
+			}
+
+			if(state->proxyUser) {
+
+				elog(DEBUG1, "  %s (%s) proxy user: '%s'",__func__,state->requestType,state->proxyUser);
+				curl_easy_setopt(curl, CURLOPT_PROXYUSERNAME, state->proxyUser);
+
+			}
+
+			if(state->proxyUserPassword) {
+
+				elog(DEBUG1, "  %s (%s) proxy user password: '************'",__func__,state->requestType);
+				curl_easy_setopt(curl, CURLOPT_PROXYUSERPWD, state->proxyUserPassword);
+
+			}
+
+		}
+
 		curl_easy_setopt(curl, CURLOPT_POSTFIELDS, url_bufffer.data);
 		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCURLFunc);
 		curl_easy_setopt(curl, CURLOPT_WRITEDATA, xmlResponse);
@@ -1088,28 +1145,41 @@ static int ExecuteOAIRequest(OAIFdwState *state, struct string *xmlResponse) {
 
 		res = curl_easy_perform(curl);
 
+		elog(DEBUG1, "  %s (%s) cURL response code : %u",__func__,state->requestType,res);
+
 		if (res != CURLE_OK) {
 
-			long http_code = 0;
-			curl_easy_getinfo (curl, CURLINFO_RESPONSE_CODE, &http_code);
+			size_t len = strlen(errbuf);
+			fprintf(stderr, "\nlibcurl: (%d) ", res);
+
 			curl_easy_cleanup(curl);
 
-			ereport(ERROR,
-				   (errcode(ERRCODE_FDW_UNABLE_TO_ESTABLISH_CONNECTION),
-					errmsg("OAI %s request failed. The HTTP request '%s?%s' returned an error: %ld",state->requestType,state->url,url_bufffer.data,http_code)));
+			if(len) {
+
+				ereport(ERROR,
+						(errcode(ERRCODE_FDW_UNABLE_TO_ESTABLISH_CONNECTION),
+								errmsg("%s => (%u) %s%s",__func__, res, errbuf,
+										((errbuf[len - 1] != '\n') ? "\n" : ""))));
+			}  else {
+
+				ereport(ERROR,
+						(errcode(ERRCODE_FDW_UNABLE_TO_ESTABLISH_CONNECTION),
+								errmsg("%s => (%u) '%s'\n",__func__, res, curl_easy_strerror(res))));
+			}
+
+
+		} else {
+
+			long response_code;
+			curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
+
+			elog(DEBUG1, "%s (%s) => http response code: %ld",__func__,state->requestType,response_code);
 
 		}
-
-	} else {
-
-		elog(DEBUG1, "  %s (%s) => curl failed",__func__,state->requestType);
-		return OAI_FAIL;
 
 	}
 
 	curl_easy_cleanup(curl);
-
-	elog(DEBUG1, "%s (%s) => curl http_return > '%d'",__func__,state->requestType, res);
 
 	return OAI_SUCCESS;
 
@@ -1637,13 +1707,33 @@ static void OAIFdwGetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid 
 
 		DefElem *def = lfirst_node(DefElem, cell);
 
-		if (strcmp("url", def->defname) == 0) {
+		if (strcmp(OAI_NODE_URL, def->defname) == 0) {
 
 			opts->url = defGetString(def);
 
-		} else if (strcmp("metadataprefix", def->defname) == 0) {
+		} else if (strcmp(OAI_NODE_METADATAPREFIX, def->defname) == 0) {
 
 			opts->metadataPrefix = defGetString(def);
+
+		} else if (strcmp(OAI_NODE_HTTP_PROXY, def->defname) == 0) {
+
+			opts->proxy = defGetString(def);
+			opts->proxyType = OAI_NODE_HTTP_PROXY;
+
+		} else if (strcmp(OAI_NODE_HTTPS_PROXY, def->defname) == 0) {
+
+			opts->proxy = defGetString(def);
+			opts->proxyType = OAI_NODE_HTTPS_PROXY;
+
+		} else if (strcmp(OAI_NODE_PROXY_USER, def->defname) == 0) {
+
+			opts->proxyUser = defGetString(def);
+
+
+		} else if (strcmp(OAI_NODE_PROXY_USER_PASSWORD, def->defname) == 0) {
+
+			opts->proxyUserPassword = defGetString(def);
+
 
 		} else {
 
@@ -1703,6 +1793,10 @@ static ForeignScan *OAIFdwGetForeignPlan(PlannerInfo *root, RelOptInfo *baserel,
 	OAIFdwState *state = (OAIFdwState *) palloc0(sizeof(OAIFdwState));
 
 	state->url = opts->url;
+	state->proxy = opts->proxy;
+	state->proxyType = opts->proxyType;
+	state->proxyUser = opts->proxyUser;
+	state->proxyUserPassword = opts->proxyUserPassword;
 	state->set = opts->set;
 	state->from = opts->from;
 	state->until = opts->until;
