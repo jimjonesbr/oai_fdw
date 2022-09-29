@@ -635,13 +635,13 @@ Datum oai_fdw_validator(PG_FUNCTION_ARGS) {
 
 				}
 
-				if(strcmp(opt->optname, OAI_NODE_URL)==0){
+				if(strcmp(opt->optname, OAI_NODE_URL)==0 || strcmp(opt->optname, OAI_NODE_HTTP_PROXY)==0 || strcmp(opt->optname, OAI_NODE_HTTPS_PROXY)==0){
 
 					if(CheckURL(defGetString(def))!=CURLE_OK) {
 
 						ereport(ERROR,
 							(errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
-							 errmsg("invalid %s: '%s'",OAI_NODE_URL, defGetString(def))));
+							 errmsg("invalid %s: '%s'",opt->optname, defGetString(def))));
 
 					}
 
