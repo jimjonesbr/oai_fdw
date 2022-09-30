@@ -73,9 +73,14 @@ OPTIONS (url 'https://sammlungen.ulb.uni-muenster.de/oai');
 
 **Server Options**:
 
-| Server Option | Requirement          | Description                                                                                                        |
-|---------------|--------------------------|--------------------------------------------------------------------------------------------------------------------|
-| `url`  | mandatory        | URL address of the OAI-PMH repository.  
+| Server Option | Type          | Description                                                                                                        |
+|---------------|----------------------|--------------------------------------------------------------------------------------------------------------------|
+| `url`         | **required**            | URL address of the OAI-PMH repository.  
+| `http_proxy` | optional            | Proxy for HTTP requests.  
+| `proxy_user` | optional            | User for proxy server authentication.  
+| `proxy_user_password` | optional            | Password for proxy server authentication.
+| `connect_timeout`         | optional            | Connection timeout for HTTP requests in seconds (default 300 seconds). 
+ 
 
 ### [IMPORT FOREIGN SCHEMA](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#import-foreign-schema)
 
@@ -90,9 +95,9 @@ OAI-PMH repositories publish data sets in many different customizable data forma
 
 **Foreign Schema Options**:
 
-| Server Option | Requirement          | Description                                                                                                        |
+| Server Option | Type          | Description                                                                                                        |
 |---------------|--------------------------|--------------------------------------------------------------------------------------------------------------------|
-| `metadataprefix`  | mandatory        | A string that specifies the metadata format in OAI-PMH requests issued to the repository.  
+| `metadataprefix`  | **required**        | A string that specifies the metadata format in OAI-PMH requests issued to the repository.  
 
 #### IMPORT FOREIGN SCHEMA Examples
 
@@ -267,9 +272,9 @@ CREATE FOREIGN TABLE dnb_maps (
 
 **Server Options**
 
-| Server Option | Requirement          | Description                                                                                                        |
+| Server Option | Type          | Description                                                                                                        |
 |---------------|--------------------------|--------------------------------------------------------------------------------------------------------------------|
-| `metadataprefix`  | mandatory        | an argument that specifies the metadataPrefix of the format that should be included in the metadata part of the returned records. Records should be included only for items from which the metadata format matching the metadataPrefix can be disseminated. The metadata formats supported by a repository and for a particular item can be retrieved using the [ListMetadataFormats](http://www.openarchives.org/OAI/openarchivesprotocol.html#ListMetadataFormats) request.  
+| `metadataprefix`  | **required**        | an argument that specifies the metadataPrefix of the format that should be included in the metadata part of the returned records. Records should be included only for items from which the metadata format matching the metadataPrefix can be disseminated. The metadata formats supported by a repository and for a particular item can be retrieved using the [ListMetadataFormats](http://www.openarchives.org/OAI/openarchivesprotocol.html#ListMetadataFormats) request.  
 | `from`  | optional        | an argument with a UTCdatetime value, which specifies a lower bound for datestamp-based selective harvesting.  
 | `until`  | optional        | an argument with a UTCdatetime value, which specifies a upper bound for datestamp-based selective harvesting.  
 | `setspec`  | optional        | an argument with a setSpec value , which specifies set criteria for selective harvesting. 
@@ -639,9 +644,8 @@ Shows the version of the installed OAI FDW and its main libraries.
 
 ```sql
 SELECT OAI_Version();
-                                                                                                                                                                            oai_version                                                                                       
-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- oai fdw = 1.0.0, libxml = 2.9.10, libcurl = libcurl/7.74.0 GnuTLS/3.7.1 zlib/1.2.11 brotli/1.0.9 libidn2/2.3.0 libpsl/0.21.0 (+libidn2/2.3.0) libssh2/1.9.0 nghttp2/1.43.0 librtmp/2.3
+                                                                                                                                                           
+oai fdw = 1.1.0, libxml = 2.9.10, libcurl = libcurl/7.74.0 OpenSSL/1.1.1n zlib/1.2.11 brotli/1.0.9 libidn2/2.3.0 libpsl/0.21.0 (+libidn2/2.3.0) libssh2/1.9.0 nghttp2/1.43.0 librtmp/2.3
 (1 row)
 ```
 
@@ -653,7 +657,7 @@ To deploy the oai_fdw with docker just pick one of the supported PostgreSQL vers
 FROM postgres:14
 
 RUN apt-get update && \
-    apt-get install -y git make gcc postgresql-server-dev-14 libxml2-dev libcurl4-gnutls-dev && \
+    apt-get install -y git make gcc postgresql-server-dev-14 libxml2-dev libcurl4-openssl-dev && \
     git clone https://github.com/jimjonesbr/oai_fdw.git
 
 WORKDIR /oai_fdw
