@@ -18,18 +18,72 @@ ERROR:  invalid oai_fdw option "foo"
 CREATE SERVER oai_server_err5 FOREIGN DATA WRAPPER oai_fdw 
 OPTIONS (url 'a_very_wrong_url',
          metadataprefix 'oai_dc'); 
-ERROR:  invalid url: 'a_very_wrong_url'
--- Empty metadataprefix
+ERROR:  malformed URL in option 'url' (3): 'a_very_wrong_url'
+HINT:  make sure the given URL is valid and contains supported protocol (http:// or  https://).
+-- Wrong proxy URL
 CREATE SERVER oai_server_err6 FOREIGN DATA WRAPPER oai_fdw 
 OPTIONS (url 'https://services.dnb.de/oai/repository',
+         metadataprefix 'oai_dc',
+         http_proxy 'a_very_wrong_url'); 
+ERROR:  malformed URL in option 'http_proxy' (3): 'a_very_wrong_url'
+HINT:  make sure the given URL is valid and contains supported protocol (http:// or  https://).
+-- Empty timeout
+CREATE SERVER oai_server_err7 FOREIGN DATA WRAPPER oai_fdw
+OPTIONS (url 'https://services.dnb.de/oai/repository',
+         metadataprefix 'oai_dc',
+         connect_timeout '');  
+ERROR:  empty value in option 'connect_timeout'
+-- Nevative timeout
+CREATE SERVER oai_server_err8 FOREIGN DATA WRAPPER oai_fdw
+OPTIONS (url 'https://services.dnb.de/oai/repository',
+         metadataprefix 'oai_dc',
+         connect_timeout '-1');
+ERROR:  invalid connect_timeout: -1
+HINT:  expected values are positive integers (timeout in seconds).
+         
+-- Invalid timeout
+CREATE SERVER oai_server_err9 FOREIGN DATA WRAPPER oai_fdw
+OPTIONS (url 'https://services.dnb.de/oai/repository',
+         metadataprefix 'oai_dc',
+         connect_timeout 'foo');         
+ERROR:  invalid connect_timeout: foo
+HINT:  expected values are positive integers (timeout in seconds).
+         
+-- Empty metadataprefix
+CREATE SERVER oai_server_err10 FOREIGN DATA WRAPPER oai_fdw 
+OPTIONS (url 'https://services.dnb.de/oai/repository',
          metadataprefix '');  
-ERROR:  empty value for option 'metadataprefix'
+ERROR:  empty value in option 'metadataprefix'
          
 -- Empty URL
-CREATE SERVER oai_server_err7 FOREIGN DATA WRAPPER oai_fdw 
+CREATE SERVER oai_server_err11 FOREIGN DATA WRAPPER oai_fdw 
 OPTIONS (url '',
          metadataprefix 'oai_dc');  
-ERROR:  empty value for option 'url'
+ERROR:  empty value in option 'url'
+-- URL without protocol
+CREATE SERVER oai_server_err12 FOREIGN DATA WRAPPER oai_fdw 
+OPTIONS (url 'services.dnb.de/oai/repository',
+         metadataprefix 'oai_dc');  
+ERROR:  malformed URL in option 'url' (3): 'services.dnb.de/oai/repository'
+HINT:  make sure the given URL is valid and contains supported protocol (http:// or  https://).
+-- URL with an unsupported protocol
+CREATE SERVER oai_server_err13 FOREIGN DATA WRAPPER oai_fdw 
+OPTIONS (url 'ftp://services.dnb.de/oai/repository',
+         metadataprefix 'oai_dc');  
+CREATE FOREIGN TABLE oai_table_err13 (
+  status boolean         OPTIONS (oai_node 'status')
+) 
+SERVER oai_server_err13 OPTIONS (metadataPrefix 'oai_dc');
+SELECT * FROM oai_table_err13 LIMIT 1;
+ERROR:  ExecuteOAIRequest => (1) Protocol "ftp" not supported or disabled in libcurl
+
+-- URL with an invalid protocol
+CREATE SERVER oai_server_err14 FOREIGN DATA WRAPPER oai_fdw 
+OPTIONS (url 'foo://services.dnb.de/oai/repository',
+         metadataprefix 'oai_dc'); 
+ERROR:  invalid url: 'foo://services.dnb.de/oai/repository'
+      
+            
 -- Unknown COLUMN OPTION value
 CREATE FOREIGN TABLE oai_table_err1 (
   id text                OPTIONS (oai_node 'foo'),
@@ -49,7 +103,7 @@ CREATE FOREIGN TABLE oai_table_err2 (
  ) 
  SERVER oai_server_ulb OPTIONS (setspec 'ulbmsuo',
                                 metadataPrefix 'oai_dc');
-ERROR:  empty value for option 'oai_node'
+ERROR:  empty value in option 'oai_node'
  
 -- Empty SERVER OPTION value
 CREATE FOREIGN TABLE oai_table_err3 (
@@ -58,7 +112,7 @@ CREATE FOREIGN TABLE oai_table_err3 (
  ) 
  SERVER oai_server_ulb OPTIONS (setspec '',
                                 metadataPrefix 'oai_dc');
-ERROR:  empty value for option 'setspec'
+ERROR:  empty value in option 'setspec'
  
  -- Empty SERVER OPTION value
 CREATE FOREIGN TABLE oai_table_err4 (
@@ -67,7 +121,8 @@ CREATE FOREIGN TABLE oai_table_err4 (
  ) 
  SERVER oai_server_ulb OPTIONS (setspec 'ulbmsuo',
                                 metadataPrefix '');
-ERROR:  empty value for option 'metadataprefix'
+ERROR:  empty value in option 'metadataprefix'
+                                       
 -- No record found: noRecordsMatch: The value of argument 'until' lies before argument 'from'
 SELECT * FROM dnb_zdb_oai_dc
 WHERE datestamp BETWEEN '2022-02-01' AND '2021-02-02';

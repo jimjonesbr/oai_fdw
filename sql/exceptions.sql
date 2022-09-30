@@ -20,16 +20,63 @@ CREATE SERVER oai_server_err5 FOREIGN DATA WRAPPER oai_fdw
 OPTIONS (url 'a_very_wrong_url',
          metadataprefix 'oai_dc'); 
 
--- Empty metadataprefix
+-- Wrong proxy URL
 CREATE SERVER oai_server_err6 FOREIGN DATA WRAPPER oai_fdw 
+OPTIONS (url 'https://services.dnb.de/oai/repository',
+         metadataprefix 'oai_dc',
+         http_proxy 'a_very_wrong_url'); 
+
+-- Empty timeout
+CREATE SERVER oai_server_err7 FOREIGN DATA WRAPPER oai_fdw
+OPTIONS (url 'https://services.dnb.de/oai/repository',
+         metadataprefix 'oai_dc',
+         connect_timeout '');  
+
+-- Nevative timeout
+CREATE SERVER oai_server_err8 FOREIGN DATA WRAPPER oai_fdw
+OPTIONS (url 'https://services.dnb.de/oai/repository',
+         metadataprefix 'oai_dc',
+         connect_timeout '-1');
+         
+-- Invalid timeout
+CREATE SERVER oai_server_err9 FOREIGN DATA WRAPPER oai_fdw
+OPTIONS (url 'https://services.dnb.de/oai/repository',
+         metadataprefix 'oai_dc',
+         connect_timeout 'foo');         
+         
+-- Empty metadataprefix
+CREATE SERVER oai_server_err10 FOREIGN DATA WRAPPER oai_fdw 
 OPTIONS (url 'https://services.dnb.de/oai/repository',
          metadataprefix '');  
          
 -- Empty URL
-CREATE SERVER oai_server_err7 FOREIGN DATA WRAPPER oai_fdw 
+CREATE SERVER oai_server_err11 FOREIGN DATA WRAPPER oai_fdw 
 OPTIONS (url '',
          metadataprefix 'oai_dc');  
 
+-- URL without protocol
+CREATE SERVER oai_server_err12 FOREIGN DATA WRAPPER oai_fdw 
+OPTIONS (url 'services.dnb.de/oai/repository',
+         metadataprefix 'oai_dc');  
+
+-- URL with an unsupported protocol
+CREATE SERVER oai_server_err13 FOREIGN DATA WRAPPER oai_fdw 
+OPTIONS (url 'ftp://services.dnb.de/oai/repository',
+         metadataprefix 'oai_dc');  
+
+CREATE FOREIGN TABLE oai_table_err13 (
+  status boolean         OPTIONS (oai_node 'status')
+) 
+SERVER oai_server_err13 OPTIONS (metadataPrefix 'oai_dc');
+
+SELECT * FROM oai_table_err13 LIMIT 1;
+
+-- URL with an invalid protocol
+CREATE SERVER oai_server_err14 FOREIGN DATA WRAPPER oai_fdw 
+OPTIONS (url 'foo://services.dnb.de/oai/repository',
+         metadataprefix 'oai_dc'); 
+      
+            
 -- Unknown COLUMN OPTION value
 CREATE FOREIGN TABLE oai_table_err1 (
   id text                OPTIONS (oai_node 'foo'),
@@ -61,6 +108,7 @@ CREATE FOREIGN TABLE oai_table_err4 (
  ) 
  SERVER oai_server_ulb OPTIONS (setspec 'ulbmsuo',
                                 metadataPrefix '');
+                                       
 
 -- No record found: noRecordsMatch: The value of argument 'until' lies before argument 'from'
 SELECT * FROM dnb_zdb_oai_dc

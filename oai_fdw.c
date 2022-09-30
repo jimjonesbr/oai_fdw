@@ -100,6 +100,7 @@
 
 #define OAI_SUCCESS 0
 #define OAI_FAIL 1
+#define OAI_MALFORMED_URL 3
 #define OAI_UNKNOWN_REQUEST 2
 #define ERROR_CODE_MISSING_PREFIX 1
 
@@ -631,17 +632,31 @@ Datum oai_fdw_validator(PG_FUNCTION_ARGS) {
 
 					ereport(ERROR,
 						(errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
-						 errmsg("empty value for option '%s'",opt->optname)));
+						 errmsg("empty value in option '%s'",opt->optname)));
 
 				}
 
 				if(strcmp(opt->optname, OAI_NODE_URL)==0 || strcmp(opt->optname, OAI_NODE_HTTP_PROXY)==0 || strcmp(opt->optname, OAI_NODE_HTTPS_PROXY)==0){
 
-					if(CheckURL(defGetString(def))!=CURLE_OK) {
+					int return_code = CheckURL(defGetString(def));
 
-						ereport(ERROR,
-							(errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
-							 errmsg("invalid %s: '%s'",opt->optname, defGetString(def))));
+					if(return_code !=OAI_SUCCESS ) {
+
+						if(return_code == OAI_MALFORMED_URL) {
+
+							ereport(ERROR,
+								(errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
+								 errmsg("malformed URL in option '%s' (%d): '%s'",opt->optname,return_code, defGetString(def)),
+								 errhint("make sure the given URL is valid and contains supported protocol (http:// or  https://).")));
+
+						} else {
+
+							ereport(ERROR,
+								(errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
+								 errmsg("invalid %s: '%s'",opt->optname, defGetString(def))));
+
+						}
+
 
 					}
 
@@ -658,7 +673,7 @@ Datum oai_fdw_validator(PG_FUNCTION_ARGS) {
 						ereport(ERROR,
 								(errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
 									errmsg("invalid %s: %s", def->defname,timeout_str),
-						       		errhint("Expected values are positive integers (timeout in seconds).")));
+						       		errhint("expected values are positive integers (timeout in seconds).")));
 
 					}
 				}
@@ -956,29 +971,26 @@ static size_t WriteCURLFunc(void *ptr, size_t size, size_t nmemb, struct string 
 
 static int CheckURL(char *url) {
 
-    CURL *curl;
-    CURLcode response;
+	CURLUcode code;
+	CURLU *handler = curl_url();
 
-    curl = curl_easy_init();
+	elog(DEBUG1,"%s called > '%s'",__func__,url);
 
-    if(curl) {
+	code = curl_url_set(handler, CURLUPART_URL,url, 0);
 
-        curl_easy_setopt(curl, CURLOPT_URL, url);
+	curl_url_cleanup(handler);
 
-        /* don't write output to stdout */
-        curl_easy_setopt(curl, CURLOPT_NOBODY, 1);
+	elog(DEBUG1,"  %s handler return code: %u",__func__,code);
 
-        /* Perform the request */
-        response = curl_easy_perform(curl);
+	if(code != 0) {
 
-        curl_easy_cleanup(curl);
+		elog(DEBUG1,"%s: invalid URL (%u) > '%s'",__func__,code,url);
 
-    } else {
+		return code;
 
-    	return CURLE_FAILED_INIT;
-    }
+	}
 
-    return response;
+	return OAI_SUCCESS;
 
 }
 
@@ -1117,13 +1129,14 @@ static int ExecuteOAIRequest(OAIFdwState *state, struct string *xmlResponse) {
 		errbuf[0] = 0;
 
 		curl_easy_setopt(curl, CURLOPT_URL, state->url);
+		curl_easy_setopt(curl, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
 		curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, errbuf);
 
-		elog(DEBUG1, "  %s (%s) timeout: %ld",__func__,state->requestType,state->connectTimeout);
 
 		if(state->connectTimeout != 0) {
 
 			curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, state->connectTimeout);
+			elog(DEBUG1, "  %s (%s) timeout: %ld",__func__,state->requestType,state->connectTimeout);
 
 		} else {
 
@@ -1138,7 +1151,6 @@ static int ExecuteOAIRequest(OAIFdwState *state, struct string *xmlResponse) {
 			elog(DEBUG1, "  %s (%s) proxy URL: '%s'",__func__,state->requestType,state->proxy);
 
 			curl_easy_setopt(curl, CURLOPT_PROXY, state->proxy);
-			//curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, false);
 
 			if(strcmp(state->proxyType,OAI_NODE_HTTP_PROXY)==0) {
 
@@ -1188,13 +1200,13 @@ static int ExecuteOAIRequest(OAIFdwState *state, struct string *xmlResponse) {
 
 				ereport(ERROR,
 						(errcode(ERRCODE_FDW_UNABLE_TO_ESTABLISH_CONNECTION),
-								errmsg("%s => (%u) %s%s",__func__, res, errbuf,
+						 errmsg("%s => (%u) %s%s",__func__, res, errbuf,
 										((errbuf[len - 1] != '\n') ? "\n" : ""))));
 			}  else {
 
 				ereport(ERROR,
 						(errcode(ERRCODE_FDW_UNABLE_TO_ESTABLISH_CONNECTION),
-								errmsg("%s => (%u) '%s'\n",__func__, res, curl_easy_strerror(res))));
+						 errmsg("%s => (%u) '%s'\n",__func__, res, curl_easy_strerror(res))));
 			}
 
 
@@ -1891,7 +1903,7 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 
 	elog(DEBUG1,"%s called: RequestType > '%s'",__func__,state->requestType);
 
-	xmlInitParser(); //????????????????
+	xmlInitParser(); //?
 
 
 	/* Fetches next record from OAI ListIdentifiers request */

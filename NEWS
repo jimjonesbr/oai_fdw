@@ -10,6 +10,9 @@ yyyy-mmdd
     requests. In previous versions these values were never fetched.
  
  * Enhancements *
+   - URL validator no longer chekcs if the URL is reachable. It now only checks the URL's syntax.
+   - URls with protocols other than http and https are now rejected before execution, as other
+     protocols are not supported in the OAI-PMH Standard. 
   
 oai_fdw 1.0.0
 2022-09-05
