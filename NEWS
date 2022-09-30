@@ -1,5 +1,5 @@
 oai_fdw 1.1.0
-yyyy-mmdd
+2022-10-01
 
  * New Features *
    - Proxy support for HTTP requests (CREATE SERVER).
