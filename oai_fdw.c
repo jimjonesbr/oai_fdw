@@ -280,9 +280,10 @@ static void deparseSelectColumns(OAIFdwTableOptions *opts, List* exprs);
 static void OAIRequestPlanner(OAIFdwTableOptions *opts, ForeignTable *ft, RelOptInfo *baserel);
 static char *deparseTimestamp(Datum datum);
 static int CheckURL(char *url);
-static List *GetMetadataFormats(char *url);
-static List *GetIdentity(char *url);
-static List *GetSets(char *url);
+static OAIFdwState *GetServerInfo(const char *srvname);
+static List *GetMetadataFormats(OAIFdwState *state);
+static List *GetIdentity(OAIFdwState *state);
+static List *GetSets(OAIFdwState *state);
 
 Datum oai_fdw_handler(PG_FUNCTION_ARGS) {
 
@@ -316,11 +317,77 @@ Datum oai_fdw_version(PG_FUNCTION_ARGS) {
     PG_RETURN_TEXT_P(cstring_to_text(buffer.data));
 }
 
+OAIFdwState *GetServerInfo(const char *srvname) {
+
+	OAIFdwState *state = (OAIFdwState *) palloc0(sizeof(OAIFdwState));
+	ForeignServer *server = GetForeignServerByName(srvname, true);
+
+	elog(DEBUG1,"%s called: '%s'",__func__,srvname);
+
+	if(server) {
+
+		ListCell   *cell;
+
+		foreach(cell, server->options) {
+
+			DefElem *def = lfirst_node(DefElem, cell);
+
+			elog(DEBUG1,"  %s parsing node '%s': %s",__func__,def->defname,defGetString(def));
+
+			if(strcmp(def->defname,OAI_NODE_URL)==0) {
+
+				state->url = defGetString(def);
+
+			}
+
+			if(strcmp(def->defname,OAI_NODE_HTTP_PROXY)==0) {
+
+				state->proxy = defGetString(def);
+				state->proxyType = OAI_NODE_HTTP_PROXY;
+
+			}
+
+			if(strcmp(def->defname,OAI_NODE_PROXY_USER)==0) {
+
+				state->proxyUser = defGetString(def);
+
+			}
+
+			if(strcmp(def->defname,OAI_NODE_PROXY_USER_PASSWORD)==0) {
+
+				state->proxy = defGetString(def);
+
+			}
+
+			if(strcmp(def->defname,OAI_NODE_CONNECTTIMEOUT)==0) {
+
+				char *tailpt;
+				char *timeout_str =  defGetString(def);
+
+				state->connectTimeout = strtol(timeout_str, &tailpt, 0);
+
+			}
+
+		}
+
+	} else {
+
+		ereport(ERROR,
+				(errcode(ERRCODE_CONNECTION_DOES_NOT_EXIST),
+						errmsg("FOREIGN SERVER does not exist: '%s'",srvname)));
+
+
+
+	}
+
+	return state;
+}
+
 Datum oai_fdw_identity(PG_FUNCTION_ARGS) {
 
-	ForeignServer *server;
 	text *srvname_text = PG_GETARG_TEXT_P(0);
 	const char * srvname = text_to_cstring(srvname_text);
+	OAIFdwState *state = GetServerInfo(srvname);
 
 	FuncCallContext     *funcctx;
 	AttInMetadata       *attinmeta;
@@ -332,33 +399,9 @@ Datum oai_fdw_identity(PG_FUNCTION_ARGS) {
 
 	if (SRF_IS_FIRSTCALL())	{
 
-		char *url = NULL;
 		funcctx = SRF_FIRSTCALL_INIT();
 		oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
-		server = GetForeignServerByName(srvname, true);
-
-		if(server) {
-
-			ListCell   *cell;
-
-			foreach(cell, server->options) {
-
-				DefElem *def = lfirst_node(DefElem, cell);
-				if(strcmp(def->defname,"url")==0) url = defGetString(def);
-
-			}
-
-		} else {
-
-			ereport(ERROR,
-			  (errcode(ERRCODE_CONNECTION_DOES_NOT_EXIST),
-			   errmsg("FOREIGN SERVER does not exist: '%s'",srvname)));
-
-
-
-		}
-
-		identity = GetIdentity(url);
+		identity = GetIdentity(state);
 		funcctx->user_fctx = identity;
 
 		if(identity) funcctx->max_calls = identity->length;
@@ -411,9 +454,11 @@ Datum oai_fdw_identity(PG_FUNCTION_ARGS) {
 
 Datum oai_fdw_listSets(PG_FUNCTION_ARGS) {
 
-	ForeignServer *server;
+	//ForeignServer *server;
 	text *srvname_text = PG_GETARG_TEXT_P(0);
 	char *srvname = text_to_cstring(srvname_text);
+	OAIFdwState *state = GetServerInfo(srvname);
+
 	MemoryContext   oldcontext;
 	FuncCallContext     *funcctx;
 	AttInMetadata       *attinmeta;
@@ -424,11 +469,11 @@ Datum oai_fdw_listSets(PG_FUNCTION_ARGS) {
 	if (SRF_IS_FIRSTCALL())	{
 
 		List *sets;
-		char *url = NULL;
-		server = GetForeignServerByName(srvname, true);
+		//char *url = NULL;
+		//server = GetForeignServerByName(srvname, true);
 		funcctx = SRF_FIRSTCALL_INIT();
 		oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
-
+		/*
 		if(server) {
 
 			ListCell   *cell;
@@ -446,8 +491,8 @@ Datum oai_fdw_listSets(PG_FUNCTION_ARGS) {
 					       errmsg("FOREIGN SERVER does not exist: '%s'",srvname)));
 
 		}
-
-		sets = GetSets(url);
+		*/
+		sets = GetSets(state);
 
 		funcctx->user_fctx = sets;
 
@@ -503,9 +548,10 @@ Datum oai_fdw_listSets(PG_FUNCTION_ARGS) {
 
 Datum oai_fdw_listMetadataFormats(PG_FUNCTION_ARGS) {
 
-	ForeignServer *server;
+	//ForeignServer *server;
 	text *srvname_text = PG_GETARG_TEXT_P(0);
 	const char * srvname = text_to_cstring(srvname_text);
+	OAIFdwState *state = GetServerInfo(srvname);
 
 	FuncCallContext     *funcctx;
 	int                  call_cntr;
@@ -518,11 +564,12 @@ Datum oai_fdw_listMetadataFormats(PG_FUNCTION_ARGS) {
 	if (SRF_IS_FIRSTCALL())
 	{
 
-		char *url = NULL;
+		//char *url = NULL;
 		List *formats;
 		funcctx = SRF_FIRSTCALL_INIT();
 		oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
 
+		/*
 		server = GetForeignServerByName(srvname, true);
 
 		if(server) {
@@ -545,7 +592,8 @@ Datum oai_fdw_listMetadataFormats(PG_FUNCTION_ARGS) {
 
 		}
 
-		formats = GetMetadataFormats(url);
+		*/
+		formats = GetMetadataFormats(state);
 		funcctx->user_fctx = formats;
 
 		if(formats)	funcctx->max_calls = formats->length;
@@ -734,16 +782,16 @@ Datum oai_fdw_validator(PG_FUNCTION_ARGS) {
 	PG_RETURN_VOID();
 }
 
-static List *GetIdentity(char *url) {
+static List *GetIdentity(OAIFdwState *state) {
 
 	struct string xmlStream;
 	int oaiExecuteResponse;
-	OAIFdwState *state = (OAIFdwState *) palloc0(sizeof(OAIFdwState));
+	//OAIFdwState *state = (OAIFdwState *) palloc0(sizeof(OAIFdwState));
 	List *result = NIL;
 
-	elog(DEBUG1, "  %s called",__func__);
+	elog(DEBUG1, "%s called",__func__);
 
-	state->url = url;
+	//state->url = url;
 	state->requestType = OAI_REQUEST_IDENTIFY;
 
 	oaiExecuteResponse = ExecuteOAIRequest(state,&xmlStream);
@@ -767,7 +815,7 @@ static List *GetIdentity(char *url) {
 
 			if (oai_root->type != XML_ELEMENT_NODE) continue;
 
-			if (xmlStrcmp(oai_root->name, (xmlChar*) "Identify") != 0) continue;
+			if (xmlStrcmp(oai_root->name, (xmlChar*) OAI_REQUEST_IDENTIFY) != 0) continue;
 
 			for (Identity = oai_root->children; Identity != NULL; Identity = Identity->next) {
 
@@ -792,16 +840,16 @@ static List *GetIdentity(char *url) {
 
 }
 
-static List *GetSets(char *url) {
+static List *GetSets(OAIFdwState *state) {
 
 	struct string xmlStream;
 	int oaiExecuteResponse;
-	OAIFdwState *state = (OAIFdwState *) palloc0(sizeof(OAIFdwState));
+	//OAIFdwState *state = (OAIFdwState *) palloc0(sizeof(OAIFdwState));
 	List *result = NIL;
 
-	elog(DEBUG1, "  %s called",__func__);
+	elog(DEBUG1, "%s called",__func__);
 
-	state->url = url;
+	//state->url = url;
 	state->requestType = OAI_REQUEST_LISTSETS;
 
 	oaiExecuteResponse = ExecuteOAIRequest(state,&xmlStream);
@@ -826,7 +874,7 @@ static List *GetSets(char *url) {
 
 			if (oai_root->type != XML_ELEMENT_NODE) continue;
 
-			if (xmlStrcmp(oai_root->name, (xmlChar*) "ListSets") != 0) continue;
+			if (xmlStrcmp(oai_root->name, (xmlChar*) OAI_REQUEST_LISTSETS) != 0) continue;
 
 			for (ListSets = oai_root->children; ListSets != NULL; ListSets = ListSets->next) {
 
@@ -860,21 +908,21 @@ static List *GetSets(char *url) {
 
 	}
 
-	elog(DEBUG1, "  %s => finished",__func__);
+	elog(DEBUG1, "%s => finished",__func__);
 
 	return result;
 }
 
-static List *GetMetadataFormats(char *url) {
+static List *GetMetadataFormats(OAIFdwState *state) {
 
 	struct string xmlStream;
 	int oaiExecuteResponse;
-	OAIFdwState *state = (OAIFdwState *) palloc0(sizeof(OAIFdwState));
+	//OAIFdwState *state = (OAIFdwState *) palloc0(sizeof(OAIFdwState));
 	List *result = NIL;
 
 	elog(DEBUG1, "  %s called",__func__);
 
-	state->url = url;
+	//state->url = url;
 	state->requestType = OAI_REQUEST_LISTMETADATAFORMATS;
 
 	oaiExecuteResponse = ExecuteOAIRequest(state,&xmlStream);
@@ -899,7 +947,7 @@ static List *GetMetadataFormats(char *url) {
 
 			if (oai_root->type != XML_ELEMENT_NODE) continue;
 
-			if (xmlStrcmp(oai_root->name, (xmlChar*) "ListMetadataFormats") != 0) continue;
+			if (xmlStrcmp(oai_root->name, (xmlChar*) OAI_REQUEST_LISTMETADATAFORMATS) != 0) continue;
 
 			for (ListMetadataFormats = oai_root->children; ListMetadataFormats != NULL; ListMetadataFormats = ListMetadataFormats->next) {
 
@@ -1003,7 +1051,7 @@ static int ExecuteOAIRequest(OAIFdwState *state, struct string *xmlResponse) {
 
 	initStringInfo(&url_bufffer);
 
-	elog(DEBUG1,"%s called: url > %s ",__func__,state->url);
+	elog(DEBUG1,"%s called: url > '%s' ",__func__,state->url);
 
 	appendStringInfo(&url_bufffer,"verb=%s",state->requestType);
 
@@ -2444,16 +2492,27 @@ static void OAIFdwEndForeignScan(ForeignScanState *node) {
 
 static List* OAIFdwImportForeignSchema(ImportForeignSchemaStmt* stmt, Oid serverOid) {
 
-	ForeignServer* server;
 	ListCell   *cell;
 	List *sql_commands = NIL;
 	List *all_sets = NIL;
 	char *format = "oai_dc";
-	char *url = NULL;
+	//char *url = NULL;
 	bool format_set = false;
+	OAIFdwState *state ;
+	ForeignServer *server = GetForeignServer(serverOid);
 
-	server = GetForeignServer(serverOid);
+	elog(DEBUG1,"%s called: '%s'",__func__,server->servername);
+	state = GetServerInfo(server->servername);
 
+
+	//const char * srvname = server->servername;
+
+
+
+	//elog(DEBUG1,"%s: ",__func__,stmt->remote_schema,buffer.data);
+
+	all_sets = GetSets(state);
+/*
 	foreach(cell, server->options) {
 
 		DefElem *def = lfirst_node(DefElem, cell);
@@ -2464,16 +2523,18 @@ static List* OAIFdwImportForeignSchema(ImportForeignSchemaStmt* stmt, Oid server
 
 	}
 
+*/
+	elog(DEBUG1,"  %s: parsing statements",__func__);
 
 	foreach(cell, stmt->options) {
 
 		DefElem *def = lfirst_node(DefElem, cell);
-		if(strcmp(def->defname,"metadataprefix")==0) {
+		if(strcmp(def->defname,OAI_NODE_METADATAPREFIX)==0) {
 
 			ListCell *cell_formats;
 			List *formats = NIL;
 			bool found = false;
-			formats = GetMetadataFormats(url);
+			formats = GetMetadataFormats(state);
 
 			foreach(cell_formats, formats) {
 
