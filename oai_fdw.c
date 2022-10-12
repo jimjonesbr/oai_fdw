@@ -132,7 +132,7 @@ typedef struct OAIFdwState {
 
 	Oid 		foreigntableid;
 	xmlNodePtr 	xmlroot;
-	xmlDocPtr	xmldoc;
+	//xmlDocPtr	xmldoc;
 
 } OAIFdwState;
 
@@ -272,7 +272,7 @@ static TupleTableSlot *OAIFdwExecForeignDelete(EState *estate, ResultRelInfo *ri
 static List* OAIFdwImportForeignSchema(ImportForeignSchemaStmt* stmt, Oid serverOid);
 
 static void appendTextArray(ArrayType **array, char* text_element) ;
-static int ExecuteOAIRequest(OAIFdwState *state);
+static int ExecuteOAIRequest(OAIFdwState *state, xmlDocPtr *xmldoc);
 static void CreateOAITuple(TupleTableSlot *slot, OAIFdwState *state, OAIRecord *oai );
 static OAIRecord *FetchNextOAIRecord(OAIFdwState *state);
 static void LoadOAIRecords(OAIFdwState *state);
@@ -737,6 +737,7 @@ Datum oai_fdw_validator(PG_FUNCTION_ARGS) {
 static List *GetIdentity(OAIFdwState *state) {
 
 	//struct string xmlStream;
+	xmlDocPtr xmldoc = NULL;
 	int oaiExecuteResponse;
 	List *result = NIL;
 
@@ -744,13 +745,13 @@ static List *GetIdentity(OAIFdwState *state) {
 
 	state->requestType = OAI_REQUEST_IDENTIFY;
 
-	oaiExecuteResponse = ExecuteOAIRequest(state);
+	oaiExecuteResponse = ExecuteOAIRequest(state,&xmldoc);
 
 	if(oaiExecuteResponse == OAI_SUCCESS) {
 
 		xmlNodePtr oai_root;
 		xmlNodePtr Identity;
-		xmlNodePtr xmlroot = xmlDocGetRootElement(state->xmldoc);
+		xmlNodePtr xmlroot = xmlDocGetRootElement(xmldoc);
 
 		for (oai_root = xmlroot->children; oai_root != NULL; oai_root = oai_root->next) {
 
@@ -788,7 +789,7 @@ static List *GetIdentity(OAIFdwState *state) {
 
 static List *GetSets(OAIFdwState *state) {
 
-	//struct string xmlStream;
+	xmlDocPtr xmldoc = NULL;
 	int oaiExecuteResponse;
 	List *result = NIL;
 
@@ -796,14 +797,14 @@ static List *GetSets(OAIFdwState *state) {
 
 	state->requestType = OAI_REQUEST_LISTSETS;
 
-	oaiExecuteResponse = ExecuteOAIRequest(state);
+	oaiExecuteResponse = ExecuteOAIRequest(state,&xmldoc);
 
 	if(oaiExecuteResponse == OAI_SUCCESS) {
 
 		xmlNodePtr oai_root;
 		xmlNodePtr ListSets;
 		xmlNodePtr SetElement;
-		xmlNodePtr xmlroot = xmlDocGetRootElement(state->xmldoc);
+		xmlNodePtr xmlroot = xmlDocGetRootElement(xmldoc);
 
 		for (oai_root = xmlroot->children; oai_root != NULL; oai_root = oai_root->next) {
 
@@ -850,7 +851,7 @@ static List *GetSets(OAIFdwState *state) {
 
 static List *GetMetadataFormats(OAIFdwState *state) {
 
-	//struct string xmlStream;
+	xmlDocPtr xmldoc = NULL;
 	int oaiExecuteResponse;
 	List *result = NIL;
 
@@ -858,14 +859,14 @@ static List *GetMetadataFormats(OAIFdwState *state) {
 
 	state->requestType = OAI_REQUEST_LISTMETADATAFORMATS;
 
-	oaiExecuteResponse = ExecuteOAIRequest(state);
+	oaiExecuteResponse = ExecuteOAIRequest(state,&xmldoc);
 
 	if(oaiExecuteResponse == OAI_SUCCESS) {
 
 		xmlNodePtr oai_root;
 		xmlNodePtr ListMetadataFormats;
 		xmlNodePtr MetadataElement;
-		xmlNodePtr xmlroot = xmlDocGetRootElement(state->xmldoc);
+		xmlNodePtr xmlroot = xmlDocGetRootElement(xmldoc);
 
 		for (oai_root = xmlroot->children; oai_root != NULL; oai_root = oai_root->next) {
 
@@ -989,7 +990,7 @@ static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, voi
   return realsize;
 }
 
-static int ExecuteOAIRequest(OAIFdwState *state) {
+static int ExecuteOAIRequest(OAIFdwState *state, xmlDocPtr *xmldoc) {
 
 	CURL *curl;
 	CURLcode res;
@@ -1214,18 +1215,14 @@ static int ExecuteOAIRequest(OAIFdwState *state) {
 
 			long response_code;
 			curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
+			*xmldoc = xmlReadMemory(chunk.memory, chunk.size, NULL, NULL, XML_PARSE_NOBLANKS);
 
-			elog(DEBUG1, "  %s (%s) => http response code: %ld",__func__,state->requestType,response_code);
-			elog(DEBUG1, "  %s (%s) => http response size: %ld",__func__,state->requestType,chunk.size);
-
-			state->xmldoc = xmlReadMemory(chunk.memory, chunk.size, NULL, NULL, XML_PARSE_NOBLANKS);
-
-
+			elog(DEBUG1, "%s (%s) => http response code: %ld",__func__,state->requestType,response_code);
+			elog(DEBUG1, "%s (%s) => http response size: %ld",__func__,state->requestType,chunk.size);
 		}
 
 	}
 
-	xmlCleanupParser();
 	curl_easy_cleanup(curl);
 	curl_global_cleanup();
 
@@ -1859,36 +1856,41 @@ static void OAIFdwBeginForeignScan(ForeignScanState *node, int eflags) {
 
 static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 
-	OAIRecord *oai = (OAIRecord*) palloc0(sizeof(OAIRecord));
+
+	xmlNodePtr rootNode;
+	xmlNodePtr header;
+	xmlNodePtr headerElements;
+
+	xmlNodePtr oaipmh;
+	xmlNodePtr ListRecordsRequest;
+	xmlNodePtr record;
+
 	bool getNext = false;
     bool emptyToken = false;
 
     if(!state->xmlroot) return NULL;
 
-	oai->metadataPrefix = state->metadataPrefix;
-	oai->isDeleted = false;
+
 
 	elog(DEBUG1,"%s called: RequestType > '%s'",__func__,state->requestType);
 
-	xmlInitParser(); //?
+	//xmlInitParser(); //?
 
 
 	/* Fetches next record from OAI ListIdentifiers request */
 	if(strcmp(state->requestType,OAI_REQUEST_LISTIDENTIFIERS)==0) {
 
-		xmlNodePtr rootNode;
-
 		for (rootNode = state->xmlroot->children; rootNode!= NULL; rootNode = rootNode->next) {
 
-			xmlNodePtr header;
+			OAIRecord *oai = (OAIRecord*) palloc0(sizeof(OAIRecord));
+
+			oai->metadataPrefix = state->metadataPrefix;
+			oai->isDeleted = false;
 
 			if (rootNode->type != XML_ELEMENT_NODE) continue;
 			if (xmlStrcmp(rootNode->name, (xmlChar*)state->requestType)!=0) continue;
 
-
 			for (header = rootNode->children; header != NULL; header = header->next) {
-
-				xmlNodePtr headerElements;
 
 				if (header->type != XML_ELEMENT_NODE) continue;
 
@@ -1978,15 +1980,16 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 	/* Fetches next record from OAI ListRecord or GetRecord requests. */
 	if(strcmp(state->requestType,OAI_REQUEST_LISTRECORDS)==0 || strcmp(state->requestType,OAI_REQUEST_GETRECORD)==0) {
 
-		xmlNodePtr oaipmh;
+		//oai->identifier = NULL;
 
 		for (oaipmh = state->xmlroot->children; oaipmh!= NULL; oaipmh = oaipmh->next) {
 
-			xmlNodePtr ListRecordsRequest;
+			OAIRecord *oai = (OAIRecord*) palloc0(sizeof(OAIRecord));
 
-			if (oaipmh->type != XML_ELEMENT_NODE) continue;
+			oai->metadataPrefix = state->metadataPrefix;
+			oai->isDeleted = false;
 
-			if (xmlStrcmp(oaipmh->name, (xmlChar*)state->requestType)!=0) continue;
+			if (oaipmh->type != XML_ELEMENT_NODE || xmlStrcmp(oaipmh->name, (xmlChar*)state->requestType)!=0) continue;
 
 			for (ListRecordsRequest = oaipmh->children; ListRecordsRequest != NULL; ListRecordsRequest = ListRecordsRequest->next) {
 
@@ -1996,30 +1999,41 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 
 					if (xmlStrcmp(ListRecordsRequest->next->name, (xmlChar*)OAI_NODE_RESUMPTIONTOKEN)==0) {
 
-						char *token = (char*)xmlNodeGetContent(ListRecordsRequest->next);
+						xmlBufferPtr bufferToken = xmlBufferCreate();
+						size_t content_size = (size_t) xmlNodeDump(bufferToken, ListRecordsRequest->doc, xmlCopyNode(ListRecordsRequest->next->children,1), 0, 0);
 
-						if(strlen(token) != 0) {
+						//char *token = (char*)xmlNodeGetContent(ListRecordsRequest->next);
 
-							state->resumptionToken = token;
-							elog(DEBUG2,"  %s: (%s): Token detected in current page > %s",__func__,state->requestType,token);
+						//char *token = palloc0(sizeof(char)*content_size+1);
+						//snprintf(token,content_size+1,"%s",(char*)bufferToken->content);
+
+						//token = (char*)bufferToken->content;
+
+
+						if(strlen((char*)bufferToken->content) != 0) {
+
+							state->resumptionToken = palloc0(sizeof(char)*content_size+1);
+							snprintf(state->resumptionToken,content_size+1,"%s",(char*)bufferToken->content);
+
+							elog(DEBUG2,"  %s: (%s): Token detected in current page > %s",__func__,state->requestType,(char*)bufferToken->content);
 
 						}
-					}
 
+						xmlBufferDetach(bufferToken);
+						xmlBufferFree(bufferToken);
+					}
 
 				}
 
 				if (xmlStrcmp(ListRecordsRequest->name, (xmlChar*) "record") == 0) {
 
-					xmlNodePtr record;
-					xmlNodePtr header;
+					oai->setsArray = NULL;
 
 					if (ListRecordsRequest->type != XML_ELEMENT_NODE) continue;
 
 					for (record = ListRecordsRequest->children; record != NULL; record = record->next) {
 
 
-						oai->setsArray = NULL;
 						//if (record->type != XML_ELEMENT_NODE) continue;
 
 						if (xmlStrcmp(record->name, (xmlChar*) "metadata") == 0) {
@@ -2040,11 +2054,8 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 						}
 
 
-						for (header = ListRecordsRequest->children; header != NULL; header = header->next) {
 
-							xmlNodePtr headerElements;
-
-							if (xmlStrcmp(header->name, (xmlChar*) "header") != 0) continue;
+						if (xmlStrcmp(record->name, (xmlChar*) "header") == 0) {
 
 							if( xmlGetProp(header, (xmlChar*) OAI_NODE_STATUS)){
 
@@ -2053,24 +2064,37 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 
 							}
 
-							for (headerElements = header->children; headerElements!= NULL; headerElements = headerElements->next) {
+							for (headerElements = record->children; headerElements!= NULL; headerElements = headerElements->next) {
 
 								char *node_content;
 
-								if (headerElements->type != XML_ELEMENT_NODE) continue;
+								//if (headerElements->type != XML_ELEMENT_NODE) continue;
+
+								xmlBufferPtr buffer = xmlBufferCreate();
+								size_t content_size = (size_t) xmlNodeDump(buffer, headerElements->doc, xmlCopyNode(headerElements->children,1), 0, 0);
 
 								node_content = (char*)xmlNodeGetContent(headerElements);
 
 								if (xmlStrcmp(headerElements->name, (xmlChar*) "identifier")==0) {
 
-									//oai->identifier= (char*) palloc0(sizeof(char)*strlen(node_content)+2);
-									//snprintf(oai->identifier,strlen(node_content)+1,"%s",node_content);
+									//oai->identifier = NULL;
+									//oai->identifier = (char*) palloc0(sizeof(char)*content_size+1);
+									//snprintf(oai->identifier,content_size+1,"%s",(char*)buffer->content);
+
 									oai->identifier = node_content;
+
+									elog(DEBUG1,"  %s: (%s) setting identifier to OAI object > '%s'",__func__,state->requestType,oai->identifier);
+
 								}
 
 								if (xmlStrcmp(headerElements->name, (xmlChar*) "setSpec")==0) {
 
-									appendTextArray(&oai->setsArray,node_content);
+									elog(DEBUG1,"  %s: (%s) setting setspec to OAI object > '%s'",__func__,state->requestType,node_content);
+
+									char *array_element = palloc0(sizeof(char)*content_size+1);
+									snprintf(array_element,content_size+1,"%s",(char*)buffer->content);
+
+									appendTextArray(&oai->setsArray,array_element);
 
 								}
 
@@ -2078,54 +2102,88 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 
 									//oai->datestamp = (char*) palloc0(sizeof(char)*strlen(node_content)+1);
 									//snprintf(oai->datestamp,strlen(node_content)+1,"%s",node_content);
-									oai->datestamp= node_content;
+
+									oai->datestamp = (char*) palloc0(sizeof(char)*content_size+1);
+									snprintf(oai->datestamp,content_size+1,"%s",(char*)buffer->content);
+
+									//oai->datestamp= node_content;
+
+									elog(DEBUG1,"  %s: (%s) setting datestamp to OAI object > '%s'",__func__,state->requestType,oai->datestamp);
 
 								}
 
+								xmlBufferDetach(buffer);
+								xmlBufferFree(buffer);
+
 							}
 
-							xmlFreeNode(headerElements);
 						}
 
 					}
 
-					xmlFreeNode(record);
-					xmlFreeNode(header);
+//					xmlFreeNode(record);
+//					xmlFreeNode(header);
 
 				}
 
+				bool ret = false;
 
 				if(!state->current_identifier) {
 
+//					state->current_identifier = palloc0(sizeof(char)*strlen(oai->identifier)+1);
+//					snprintf(state->current_identifier,strlen(oai->identifier)+1,"%s",oai->identifier);
 					state->current_identifier = oai->identifier;
 					elog(DEBUG2,"  %s: (%s) setting first current identifier > %s",__func__,state->requestType,state->current_identifier );
-					return oai;
+//					if(!state->current_identifier) elog(DEBUG2,"  %s: (%s) setting first current identifier > %s",__func__,state->requestType,state->current_identifier );
+//					if(getNext == true) elog(DEBUG2,"  %s: (%s) setting new current identifier > %s",__func__,state->requestType,state->current_identifier);
 
-				}
 
-				if (strcmp(state->current_identifier,oai->identifier)==0){
+					//return oai;
+					ret = true;
 
-					elog(DEBUG2,"  %s: (%s) match > %s",__func__,state->requestType,oai->identifier);
+				} else if (strcmp(state->current_identifier,oai->identifier)==0){
+
+					elog(DEBUG2,"  %s: (%s) ##########  match > %s",__func__,state->requestType,oai->identifier);
+					//oai->identifier = NULL;
 					getNext = true;
 
-				} else if(getNext == true) {
 
+				}
+				else if(getNext == true) {
+
+//					state->current_identifier = palloc0(sizeof(char)*strlen(oai->identifier)+1);
+//					snprintf(state->current_identifier,strlen(oai->identifier)+1,"%s",oai->identifier);
 					state->current_identifier = oai->identifier;
 					elog(DEBUG2,"  %s: (%s) setting new current identifier > %s",__func__,state->requestType,state->current_identifier);
-					return oai;
 
+					ret=true;
+
+				}
+				else if(!ListRecordsRequest->next && !state->resumptionToken) {
+					ret = true;
+					oai = NULL;
+				}
+
+				if(ret) {
+
+//					xmlFreeNode(oaipmh);
+//					xmlFreeNode(ListRecordsRequest);
+//					xmlFreeNode(headerElements);
+//					xmlFreeNode(record);
+//					xmlFreeNode(header);
+					elog(DEBUG2,"%s: (%s) => returning %s",__func__,state->requestType,oai->identifier);
+					return oai;
 				}
 
 
-				if(!ListRecordsRequest->next && !state->resumptionToken) return NULL;
 
 			}
 
-			xmlFreeNode(ListRecordsRequest);
+//
 
 		}
 
-		xmlFreeNode(oaipmh);
+//
 	}
 
 	return NULL;
@@ -2273,6 +2331,8 @@ static TupleTableSlot *OAIFdwIterateForeignScan(ForeignScanState *node) {
 
 		elog(DEBUG2,"  %s: loading OAI records (token: \"%s\")",__func__,state->resumptionToken);
 
+		xmlFreeNode(state->xmlroot);
+
 		LoadOAIRecords(state);
 		state->current_identifier = NULL;
 		elog(DEBUG2,"  %s: completeListSize > %s (rowcount: %d)",__func__,state->completeListSize,state->rowcount);
@@ -2291,8 +2351,8 @@ static TupleTableSlot *OAIFdwIterateForeignScan(ForeignScanState *node) {
 
 	} else {
 
-		xmlFreeDoc(state->xmldoc);
-		//xmlFreeNode(state->xmlroot);
+		//xmlFreeDoc(state->xmldoc);
+		xmlFreeNode(state->xmlroot);
 	}
 
 	elog(DEBUG1,"%s => returning tuple (rowcount: %d)",__func__,state->rowcount);
@@ -2303,20 +2363,24 @@ static TupleTableSlot *OAIFdwIterateForeignScan(ForeignScanState *node) {
 
 static void LoadOAIRecords(OAIFdwState *state) {
 
+	xmlDocPtr xmldoc = NULL;
+	xmlNodePtr recordsList;
+	xmlNodePtr record;
+
+	//LIBXML_TEST_VERSION;
+
 	int oaiExecuteResponse;
 
 	elog(DEBUG1,"%s called: current_row > %d",__func__,state->current_row);
 
-	oaiExecuteResponse = ExecuteOAIRequest(state);
+	oaiExecuteResponse = ExecuteOAIRequest(state, &xmldoc);
 
 	elog(DEBUG1,"  %s: ExecuteOAIRequest response > %d",__func__,oaiExecuteResponse);
 
 
 	if(oaiExecuteResponse == OAI_SUCCESS) {
 
-		xmlNodePtr recordsList;
-		xmlNodePtr record;
-		state->xmlroot = xmlDocGetRootElement(state->xmldoc);
+		state->xmlroot = xmlCopyNode(xmlDocGetRootElement(xmldoc),1);
 
 		for (recordsList = state->xmlroot->children; recordsList != NULL; recordsList = recordsList->next) {
 
@@ -2370,10 +2434,11 @@ static void LoadOAIRecords(OAIFdwState *state) {
 
 		}
 
-
-//		xmlFreeNode(xmlroot);
+		xmlFreeDoc(xmldoc);
 		xmlFreeNode(recordsList);
 		xmlFreeNode(record);
+		xmlCleanupParser();
+		xmlMemoryDump();
 
 	}
 
