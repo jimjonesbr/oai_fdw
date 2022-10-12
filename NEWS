@@ -2,7 +2,7 @@ oai_fdw 1.2.0
 YYYY-MM-DD
 
  * Bug Fixes *
-   - Memory leaks in libxml parser for ListRecords requests 
+   - Fix memory leaks in libxml parser for ListIdentifiers requests 
 
 
 oai_fdw 1.1.0
