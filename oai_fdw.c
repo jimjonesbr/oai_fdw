@@ -1981,6 +1981,7 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 	if(strcmp(state->requestType,OAI_REQUEST_LISTRECORDS)==0 || strcmp(state->requestType,OAI_REQUEST_GETRECORD)==0) {
 
 		//oai->identifier = NULL;
+		bool ret = false;
 
 		for (oaipmh = state->xmlroot->children; oaipmh!= NULL; oaipmh = oaipmh->next) {
 
@@ -2089,9 +2090,8 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 
 								if (xmlStrcmp(headerElements->name, (xmlChar*) "setSpec")==0) {
 
-									elog(DEBUG1,"  %s: (%s) setting setspec to OAI object > '%s'",__func__,state->requestType,node_content);
-
 									char *array_element = palloc0(sizeof(char)*content_size+1);
+									elog(DEBUG1,"  %s: (%s) setting setspec to OAI object > '%s'",__func__,state->requestType,node_content);
 									snprintf(array_element,content_size+1,"%s",(char*)buffer->content);
 
 									appendTextArray(&oai->setsArray,array_element);
@@ -2126,7 +2126,7 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 
 				}
 
-				bool ret = false;
+
 
 				if(!state->current_identifier) {
 
