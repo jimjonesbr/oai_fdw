@@ -997,7 +997,7 @@ static int ExecuteOAIRequest(OAIFdwState *state) {
 	StringInfoData url_buffer;
 	char errbuf[CURL_ERROR_SIZE];
 	struct MemoryStruct chunk;
-	chunk.memory = palloc(1);  /* will be grown as needed by the realloc above */
+	chunk.memory = palloc(1);
 	chunk.size = 0;    /* no data at this point */
 
 	initStringInfo(&url_buffer);
@@ -1195,6 +1195,7 @@ static int ExecuteOAIRequest(OAIFdwState *state) {
 			size_t len = strlen(errbuf);
 			fprintf(stderr, "\nlibcurl: (%d) ", res);
 
+			state->xmldoc = NULL;
 			curl_easy_cleanup(curl);
 
 			if(len) {
@@ -1862,22 +1863,23 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 
 	//xmlNodePtr rootNode;
 	//xmlNodePtr header;
-	xmlNodePtr headerElements;
-
 	xmlNodePtr oaipmh;
+	xmlNodePtr headerElements;
 	xmlNodePtr ListRecordsRequest;
 	xmlNodePtr record;
+
+	xmlNodePtr xmlroot = xmlDocGetRootElement(state->xmldoc);
 
 	bool getNext = false;
     //bool emptyToken = false;
 
 	char *buffer_identifier = NULL;
 
-	xmlNodePtr xmlroot = xmlDocGetRootElement(state->xmldoc);
+
 
 	OAIRecord *oai = (OAIRecord*) palloc(sizeof(OAIRecord));
 
-
+	if(state->xmldoc == NULL ) return NULL;
 
 	LIBXML_TEST_VERSION;
 
@@ -1888,101 +1890,139 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 
 	}
 
-    if(state->xmldoc == NULL ) return NULL;
+
 
 
 	elog(DEBUG1,"%s (%s) called: current_identifier > '%s'",__func__,state->requestType,state->current_identifier);
 
 	//xmlInitParser(); //?
 
-/*
 
 	if(strcmp(state->requestType,OAI_REQUEST_LISTIDENTIFIERS)==0) {
 
-		for (rootNode = state->xmlroot->children; rootNode!= NULL; rootNode = rootNode->next) {
+		bool ret = false;
 
-			OAIRecord *oai = (OAIRecord*) palloc0(sizeof(OAIRecord));
+		for (oaipmh = xmlroot->children; oaipmh!= NULL; oaipmh = oaipmh->next) {
+
+			//OAIRecord *oai = (OAIRecord*) palloc0(sizeof(OAIRecord));
 
 			oai->metadataPrefix = state->metadataPrefix;
 			oai->isDeleted = false;
 
-			if (rootNode->type != XML_ELEMENT_NODE) continue;
-			if (xmlStrcmp(rootNode->name, (xmlChar*)state->requestType)!=0) continue;
+			//if (rootNode->type != XML_ELEMENT_NODE) continue;
 
-			for (header = rootNode->children; header != NULL; header = header->next) {
+			if (xmlStrcmp(oaipmh->name, (xmlChar*)state->requestType)!=0) continue;
 
-				if (header->type != XML_ELEMENT_NODE) continue;
+			for (ListRecordsRequest = oaipmh->children; ListRecordsRequest != NULL; ListRecordsRequest = ListRecordsRequest->next) {
 
-				if(header->next) {
+				//if (header->type != XML_ELEMENT_NODE) continue;
 
-					if (xmlStrcmp(header->next->name, (xmlChar*)"resumptionToken")==0) {
+				if(ListRecordsRequest->next) {
 
-						char *token = (char*)xmlNodeGetContent(header->next);
+					if (xmlStrcmp(ListRecordsRequest->next->name, (xmlChar*)OAI_NODE_RESUMPTIONTOKEN)==0) {
 
-						if(strlen(token) != 0) {
+						xmlBufferPtr bufferToken = xmlBufferCreate();
+						size_t content_size = (size_t) xmlNodeDump(bufferToken, state->xmldoc, ListRecordsRequest->next->children, 0, 0);
 
-							state->resumptionToken = token;
-							elog(DEBUG2,"  %s: (%s) token detected in current page > %s",__func__,state->requestType,token);
+						if(strlen((char*)bufferToken->content) != 0) {
 
-						} else {
+							state->resumptionToken = (char*) palloc0(sizeof(char)*content_size+1);
+							snprintf(state->resumptionToken,content_size+1,"%s",(char*)bufferToken->content);
 
-							elog(DEBUG2,"  %s: empty token in '%s' (EOF)",__func__,state->requestType);
-							emptyToken = true;
+							elog(DEBUG2,"  %s: (%s): Token detected in current page > %s",__func__,state->requestType,(char*)bufferToken->content);
 
 						}
+
+						xmlBufferFree(bufferToken);
+					}
+
+				}
+
+
+				if (xmlStrcmp(ListRecordsRequest->name, (xmlChar*) "header") == 0) {
+
+					oai->setsArray = NULL;
+
+					if( xmlGetProp(ListRecordsRequest, (xmlChar*) OAI_NODE_STATUS)){
+
+						char *status = (char*) xmlGetProp(ListRecordsRequest, (xmlChar*) OAI_NODE_STATUS);
+
+						if (strcmp(status,"deleted")) oai->isDeleted = true;
+
+					}
+
+					for (headerElements = ListRecordsRequest->children; headerElements!= NULL; headerElements = headerElements->next) {
+
+						xmlBufferPtr buffer = xmlBufferCreate();
+						size_t content_size = (size_t) xmlNodeDump(buffer, state->xmldoc, headerElements->children, 0, 0);
+
+						if (xmlStrcmp(headerElements->name, (xmlChar*) "identifier")==0) {
+
+							elog(DEBUG1,"  %s (%s): setting identifier to OAI object > '%s'",__func__,state->requestType,(char*)buffer->content);
+							oai->identifier = (char*) palloc0(sizeof(char)*content_size+1);
+							snprintf(oai->identifier,content_size+1,"%s",(char*)buffer->content);
+
+						} else if (xmlStrcmp(headerElements->name, (xmlChar*) "setSpec")==0) {
+
+							char *array_element = (char*) palloc0(sizeof(char)*content_size+1);
+							elog(DEBUG1,"  %s (%s): setting setspec to OAI object > '%s'",__func__,state->requestType,(char*)buffer->content);
+							snprintf(array_element,content_size+1,"%s",(char*)buffer->content);
+
+							appendTextArray(&oai->setsArray,array_element);
+
+							elog(DEBUG1,"  %s (%s): array appended",__func__,state->requestType);
+
+						} else if (xmlStrcmp(headerElements->name, (xmlChar*) "datestamp")==0)	{
+
+							elog(DEBUG1,"  %s (%s): setting datestamp to OAI object > '%s'",__func__,state->requestType,(char*)buffer->content);
+							oai->datestamp = (char*) palloc0(sizeof(char)*content_size+1);
+							snprintf(oai->datestamp,content_size+1,"%s",(char*)buffer->content);
+
+						}
+
+						elog(DEBUG2,"  %s (%s): freeing header buffer.",__func__,state->requestType);
+						xmlBufferFree(buffer);
 
 					}
 
 				}
 
-				if (xmlStrcmp(header->name, (xmlChar*) "header") != 0) continue;
-
-				if(xmlGetProp(header, (xmlChar*) OAI_NODE_STATUS)){
-					char *status = (char*) xmlGetProp(header, (xmlChar*) OAI_NODE_STATUS);
-					if (strcmp(status,"deleted")) oai->isDeleted = true;
-				}
-
-				for (headerElements = header->children; headerElements!= NULL; headerElements = headerElements->next) {
-
-					char *node_content;
-
-					if (headerElements->type != XML_ELEMENT_NODE) continue;
-
-					node_content = (char*)xmlNodeGetContent(headerElements);
-
-					if (xmlStrcmp(headerElements->name, (xmlChar*) "identifier")==0)  oai->identifier = node_content;
-
-					if (xmlStrcmp(headerElements->name, (xmlChar*) "setSpec")==0) appendTextArray(&oai->setsArray,node_content);
-
-					if (xmlStrcmp(headerElements->name, (xmlChar*) "datestamp")==0)	oai->datestamp= node_content;
-
-				}
 
 
+				elog(DEBUG1,"  %s (%s): starting evaluation > [buffer_identifier = '%s' | oai->identifier = '%s']",__func__,state->requestType,buffer_identifier,oai->identifier);
 
+				if(buffer_identifier == NULL) {
 
-				if(!state->current_identifier) {
+					state->current_identifier = palloc0(sizeof(char)*strlen(oai->identifier)+1);
+					snprintf(state->current_identifier,strlen(oai->identifier)+1,"%s",oai->identifier);
+					elog(DEBUG2,"  %s (%s): setting first current identifier > %s",__func__,state->requestType,state->current_identifier );
 
-					state->current_identifier = oai->identifier;
-					elog(DEBUG2,"  %s: (%s) setting first current identifier > %s",__func__,state->requestType,state->current_identifier );
-					return oai;
+					ret = true;
 
-				} else if (strcmp(state->current_identifier,oai->identifier)==0){
+				} else if (strcmp(buffer_identifier,oai->identifier)==0){
 
-					elog(DEBUG2,"  %s: (%s) there is a match! next iteration will be returned > %s",__func__,state->requestType,oai->identifier);
-					oai->setsArray = NULL;
+					elog(DEBUG2,"  %s (%s): ##########  match > %s",__func__,state->requestType,oai->identifier);
 					getNext = true;
 
-				}  else if(getNext == true) {
+				} else if(getNext == true) {
 
-					state->current_identifier = oai->identifier;
-					elog(DEBUG2,"  %s: (%s) getNext=true > %s",__func__,state->requestType,state->current_identifier);
+					state->current_identifier = palloc0(sizeof(char)*strlen(oai->identifier)+1);
+					snprintf(state->current_identifier,strlen(oai->identifier)+1,"%s",oai->identifier);
+					elog(DEBUG2,"  %s: (%s) setting new current identifier > %s",__func__,state->requestType,state->current_identifier);
+
+					ret=true;
+
+				} else if(!ListRecordsRequest->next && !state->resumptionToken) {
+
+					ret = true;
+					oai = NULL;
+
+				}
+
+				if(ret) {
+
+					elog(DEBUG2,"%s: (%s) => returning %s",__func__,state->requestType,oai->identifier);
 					return oai;
-
-				} else	if((!header->next && !state->resumptionToken) || emptyToken) {
-
-					elog(DEBUG2,"  %s: (%s) wrapping up .. ",__func__,state->requestType);
-					return NULL;
 				}
 
 
@@ -1991,13 +2031,15 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 		}
 
 
-		///free em tudo aqui!
-
 	}
 
 
-	*/
-	xmlInitParser();
+
+
+
+
+
+
 	/* Fetches next record from OAI ListRecord or GetRecord requests. */
 	if(strcmp(state->requestType,OAI_REQUEST_LISTRECORDS)==0 || strcmp(state->requestType,OAI_REQUEST_GETRECORD)==0) {
 
@@ -2005,8 +2047,6 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 		bool ret = false;
 
 		for (oaipmh = xmlroot->children; oaipmh!= NULL; oaipmh = oaipmh->next) {
-
-
 
 			oai->metadataPrefix = (char*)palloc0(sizeof(char)*strlen(state->metadataPrefix)+1);
 			snprintf(oai->metadataPrefix,strlen(state->metadataPrefix)+1,"%s",state->metadataPrefix);
@@ -2044,7 +2084,7 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 
 						}
 
-						xmlBufferDetach(bufferToken);
+						//xmlBufferDetach(bufferToken);
 						xmlBufferFree(bufferToken);
 					}
 
@@ -2063,17 +2103,21 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 
 						if (xmlStrcmp(record->name, (xmlChar*) "metadata") == 0) {
 
-							xmlBufferPtr buffer = xmlBufferCreate();
-							size_t content_size = (size_t) xmlNodeDump(buffer, state->xmldoc, record->children, 0, 1);
+							/*copy necessary to get include the namespaces in the buffer output*/
+							xmlNodePtr copy = xmlCopyNode(record->children, 1);
 
-							elog(DEBUG2,"  %s: (%s) XML Buffer size: %ld",__func__,state->requestType,content_size);
+							xmlBufferPtr buffer = xmlBufferCreate();
+							size_t content_size = (size_t) xmlNodeDump(buffer, state->xmldoc, copy, 0, 1);
+
+							elog(DEBUG2,"  %s (%s): XML Buffer size: %ld",__func__,state->requestType,content_size);
 
 							oai->content = (char*) palloc0(sizeof(char)*content_size+1);
 							snprintf(oai->content,content_size+1,"%s",(char*)buffer->content);
 
-							//oai->content = (char*) buffer->content;
 
-							xmlBufferDetach(buffer);
+							elog(DEBUG2,"  %s (%s): freeing node copy.",__func__,state->requestType);
+							xmlFreeNode(copy);
+							elog(DEBUG2,"  %s (%s): freeing xml content buffer.",__func__,state->requestType);
 							xmlBufferFree(buffer);
 
 						}
@@ -2103,20 +2147,20 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 								if (xmlStrcmp(headerElements->name, (xmlChar*) "identifier")==0) {
 
 									//oai->identifier = NULL;
-									int copyed = 0;
+									//int copyed = 0;
 
 									oai->identifier = (char*) palloc0(sizeof(char)*content_size+1);
-									copyed = snprintf(oai->identifier,content_size+1,"%s",(char*)buffer->content);
+									snprintf(oai->identifier,content_size+1,"%s",(char*)buffer->content);
 
 									//oai->identifier = node_content;
 
-									elog(DEBUG1,"  %s: (%s) setting identifier to OAI object > '%s' > copyed = %d, content_size+1 = %ld",__func__,state->requestType,oai->identifier,copyed,content_size+1);
+									elog(DEBUG1,"  %s (%s): setting identifier to OAI object > '%s'",__func__,state->requestType,oai->identifier);
 
 								} else if (xmlStrcmp(headerElements->name, (xmlChar*) "setSpec")==0) {
 
 								//	elog(DEBUG1,"  ##################### [state->current_identifier = '%s' | oai->identifier = '%s' ] ###########################",state->current_identifier,oai->identifier);
 									char *array_element = (char*) palloc0(sizeof(char)*content_size+1);
-									elog(DEBUG1,"  %s: (%s) setting setspec to OAI object > '%s'",__func__,state->requestType,(char*)buffer->content);
+									elog(DEBUG1,"  %s (%s): setting setspec to OAI object > '%s'",__func__,state->requestType,(char*)buffer->content);
 									snprintf(array_element,content_size+1,"%s",(char*)buffer->content);
 
 									appendTextArray(&oai->setsArray,array_element);
@@ -2131,11 +2175,12 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 
 									//oai->datestamp= node_content;
 
-									elog(DEBUG1,"  %s: (%s) setting datestamp to OAI object > '%s'",__func__,state->requestType,oai->datestamp);
+									elog(DEBUG1,"  %s (%s): setting datestamp to OAI object > '%s'",__func__,state->requestType,oai->datestamp);
 
 								}
 
-								xmlBufferDetach(buffer);
+								//xmlBufferDetach(buffer);
+								elog(DEBUG3,"  %s (%s): freeing header buffer.",__func__,state->requestType);
 								xmlBufferFree(buffer);
 
 							}
@@ -2150,7 +2195,7 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 				}
 
 
-				elog(DEBUG1,"  %s: (%s) starting evaluation > [buffer_identifier = '%s' | oai->identifier = '%s']",__func__,state->requestType,buffer_identifier,oai->identifier);
+				elog(DEBUG1,"  %s (%s): starting evaluation > [buffer_identifier = '%s' | oai->identifier = '%s']",__func__,state->requestType,buffer_identifier,oai->identifier);
 
 				//if(!state->current_identifier) {
 				if(buffer_identifier == NULL) {
@@ -2197,7 +2242,6 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 				if(ret) {
 
 					//xmlFreeNode(oaipmh);
-
 					//xmlFreeNode(headerElements);
 					//xmlFreeNode(header);
 					//xmlFreeNode(record);
@@ -2402,10 +2446,11 @@ static TupleTableSlot *OAIFdwIterateForeignScan(ForeignScanState *node) {
 		//xmlFreeDoc(state->xmldoc);
 		//xmlFreeNode(state->xmlroot);
 		//xmlCleanupParser();
-		//pfree(record);
+
 		elog(DEBUG2,"  %s: (EOF) freeing xml document",__func__);
 		xmlFreeDoc(state->xmldoc);
 		xmlCleanupParser();
+		//pfree(record);
 	}
 
 	elog(DEBUG1,"%s => returning tuple (rowcount: %d)",__func__,state->rowcount);
@@ -2465,9 +2510,10 @@ static void LoadOAIRecords(OAIFdwState *state) {
 				char *errorMessage = (char*)xmlNodeGetContent(recordsList);
 				char *errorCode = (char*) xmlGetProp(recordsList, (xmlChar*) "code");
 
-				if(strcmp(errorCode,OAI_ERROR_ID_DOES_NOT_EXIST)==0 || strcmp(errorCode,OAI_ERROR_NO_RECORD_MATCH)==0) {
+				//xmlFreeDoc(state->xmldoc);
+				state->xmldoc = NULL;
 
-					//state->xmlroot = NULL;
+				if(strcmp(errorCode,OAI_ERROR_ID_DOES_NOT_EXIST)==0 || strcmp(errorCode,OAI_ERROR_NO_RECORD_MATCH)==0) {
 
 					ereport(WARNING,
 							(errcode(ERRCODE_NO_DATA_FOUND),
@@ -2475,6 +2521,7 @@ static void LoadOAIRecords(OAIFdwState *state) {
 
 				} else {
 
+					xmlFreeDoc(state->xmldoc);
 					ereport(ERROR,
 							(errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
 									errmsg("OAI %s: %s",errorCode,errorMessage)));
@@ -2490,8 +2537,8 @@ static void LoadOAIRecords(OAIFdwState *state) {
 
 
 	//xmlFreeDoc(xmlroot);
-	xmlFreeNode(recordsList);
-	xmlFreeNode(record);
+	//xmlFreeNode(recordsList);
+	//xmlFreeNode(record);
 	//xmlCleanupParser();
 
 	elog(DEBUG1,"%s => finished: current_row > %d",__func__,state->current_row);
