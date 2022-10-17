@@ -1,0 +1,120 @@
+CREATE FOREIGN TABLE IF NOT EXISTS ulb_oai_dc (
+  id text                OPTIONS (oai_node 'identifier'), 
+  xmldoc xml             OPTIONS (oai_node 'content'), 
+  sets text[]            OPTIONS (oai_node 'setspec'), 
+  updatedate timestamp   OPTIONS (oai_node 'datestamp'),
+  format text            OPTIONS (oai_node 'metadataprefix')
+ ) SERVER oai_server_ulb OPTIONS (metadataprefix 'oai_dc');
+/* Target table without schema */
+CALL OAI_HarvestTable('ulb_oai_dc','clone_ulb_oai_dc', interval '5 days', '2022-10-01 00:00:00', '2022-10-17 00:00:00',true,true);
+INFO:  target table "public.clone_ulb_oai_dc" sucessfully created.
+INFO:  1 records from "public.ulb_oai_dc" successfully updated or inserted into "public.clone_ulb_oai_dc" [Sat Oct 01 00:00:00 2022 - Thu Oct 06 00:00:00 2022].
+INFO:  57 records from "public.ulb_oai_dc" successfully updated or inserted into "public.clone_ulb_oai_dc" [Thu Oct 06 00:00:00 2022 - Tue Oct 11 00:00:00 2022].
+INFO:  32 records from "public.ulb_oai_dc" successfully updated or inserted into "public.clone_ulb_oai_dc" [Tue Oct 11 00:00:00 2022 - Sun Oct 16 00:00:00 2022].
+INFO:  90 records from "public.ulb_oai_dc" successfully inserted into "public.clone_ulb_oai_dc" [Sat Oct 01 00:00:00 2022 - Mon Oct 17 00:00:00 2022].
+SELECT count(*) FROM clone_ulb_oai_dc;
+ count 
+-------
+    90
+(1 row)
+
+-- Existing table will be upserted 
+CALL OAI_HarvestTable('ulb_oai_dc','clone_ulb_oai_dc', interval '5 days', '2022-10-01 00:00:00', '2022-10-17 00:00:00');
+INFO:  90 records from "public.ulb_oai_dc" successfully inserted into "public.clone_ulb_oai_dc" [Sat Oct 01 00:00:00 2022 - Mon Oct 17 00:00:00 2022].
+SELECT count(*) FROM clone_ulb_oai_dc;
+ count 
+-------
+    90
+(1 row)
+
+/* Target table with specific schema */
+CALL OAI_HarvestTable('ulb_oai_dc','oai_schema.clone_ulb_oai_dc', interval '5 days', '2022-10-01 00:00:00', '2022-10-17 00:00:00',true,true);
+ERROR:  schema "oai_schema" does not exist
+CONTEXT:  SQL statement "CREATE TABLE oai_schema.clone_ulb_oai_dc AS SELECT id, xmldoc, sets, updatedate, format FROM public.ulb_oai_dc WITH NO DATA;"
+PL/pgSQL function oai_harvesttable(text,text,interval,timestamp without time zone,timestamp without time zone,boolean,boolean) line 72 at EXECUTE
+SELECT count(*) FROM oai_schema.clone_ulb_oai_dc;
+ERROR:  relation "oai_schema.clone_ulb_oai_dc" does not exist
+LINE 1: SELECT count(*) FROM oai_schema.clone_ulb_oai_dc;
+                             ^
+-- Existing table will be upserted 
+CALL OAI_HarvestTable('ulb_oai_dc','oai_schema.clone_ulb_oai_dc', interval '5 days', '2022-10-01 00:00:00', '2022-10-17 00:00:00');
+ERROR:  schema "oai_schema" does not exist
+CONTEXT:  SQL statement "CREATE TABLE oai_schema.clone_ulb_oai_dc AS SELECT id, xmldoc, sets, updatedate, format FROM public.ulb_oai_dc WITH NO DATA;"
+PL/pgSQL function oai_harvesttable(text,text,interval,timestamp without time zone,timestamp without time zone,boolean,boolean) line 72 at EXECUTE
+SELECT count(*) FROM oai_schema.clone_ulb_oai_dc;
+ERROR:  relation "oai_schema.clone_ulb_oai_dc" does not exist
+LINE 1: SELECT count(*) FROM oai_schema.clone_ulb_oai_dc;
+                             ^
+/* Target table containing special characters */
+CALL OAI_HarvestTable('ulb_oai_dc','oai_schema."clone-ulb:oai/dc"', interval '5 days', '2022-10-01 00:00:00', '2022-10-17 00:00:00',true,true);
+ERROR:  schema "oai_schema" does not exist
+CONTEXT:  SQL statement "CREATE TABLE oai_schema."clone-ulb:oai/dc" AS SELECT id, xmldoc, sets, updatedate, format FROM public.ulb_oai_dc WITH NO DATA;"
+PL/pgSQL function oai_harvesttable(text,text,interval,timestamp without time zone,timestamp without time zone,boolean,boolean) line 72 at EXECUTE
+SELECT count(*) FROM oai_schema."clone-ulb:oai/dc";
+ERROR:  relation "oai_schema.clone-ulb:oai/dc" does not exist
+LINE 1: SELECT count(*) FROM oai_schema."clone-ulb:oai/dc";
+                             ^
+/* Target table containing special characters without schema */
+CALL OAI_HarvestTable('ulb_oai_dc','"clone-ulb:oai/dc"', interval '5 days', '2022-10-01 00:00:00', '2022-10-17 00:00:00',true,true);
+INFO:  target table "public."clone-ulb:oai/dc"" sucessfully created.
+INFO:  1 records from "public.ulb_oai_dc" successfully updated or inserted into "public."clone-ulb:oai/dc"" [Sat Oct 01 00:00:00 2022 - Thu Oct 06 00:00:00 2022].
+INFO:  57 records from "public.ulb_oai_dc" successfully updated or inserted into "public."clone-ulb:oai/dc"" [Thu Oct 06 00:00:00 2022 - Tue Oct 11 00:00:00 2022].
+INFO:  32 records from "public.ulb_oai_dc" successfully updated or inserted into "public."clone-ulb:oai/dc"" [Tue Oct 11 00:00:00 2022 - Sun Oct 16 00:00:00 2022].
+INFO:  90 records from "public.ulb_oai_dc" successfully inserted into "public."clone-ulb:oai/dc"" [Sat Oct 01 00:00:00 2022 - Mon Oct 17 00:00:00 2022].
+SELECT count(*) FROM "clone-ulb:oai/dc";
+ count 
+-------
+    90
+(1 row)
+
+/* WARNING: Foreign table without identifier */
+CREATE FOREIGN TABLE IF NOT EXISTS table_without_identifier (
+  xmldoc xml             OPTIONS (oai_node 'content'), 
+  sets text[]            OPTIONS (oai_node 'setspec'), 
+  updatedate timestamp   OPTIONS (oai_node 'datestamp'),
+  format text            OPTIONS (oai_node 'metadataprefix')
+ ) SERVER oai_server_ulb OPTIONS (metadataprefix 'oai_dc');
+ 
+CALL OAI_HarvestTable('table_without_identifier','clone_table_without_identifier', interval '5 days', '2022-10-01 00:00:00', '2022-10-17 00:00:00',true,true); 
+WARNING:  foreign table "public.table_without_identifier" has no identifier column. It is strongly recommended to map the OAI identifier to a column, as it can ensure that records are not duplicated.
+INFO:  target table "public.clone_table_without_identifier" sucessfully created.
+INFO:  1 records from "public.table_without_identifier" successfully updated or inserted into "public.clone_table_without_identifier" [Sat Oct 01 00:00:00 2022 - Thu Oct 06 00:00:00 2022].
+INFO:  57 records from "public.table_without_identifier" successfully updated or inserted into "public.clone_table_without_identifier" [Thu Oct 06 00:00:00 2022 - Tue Oct 11 00:00:00 2022].
+INFO:  32 records from "public.table_without_identifier" successfully updated or inserted into "public.clone_table_without_identifier" [Tue Oct 11 00:00:00 2022 - Sun Oct 16 00:00:00 2022].
+INFO:  90 records from "public.table_without_identifier" successfully inserted into "public.clone_table_without_identifier" [Sat Oct 01 00:00:00 2022 - Mon Oct 17 00:00:00 2022].
+/* EXCEPTION: oai_table does not exist */
+CALL OAI_HarvestTable('foo','clone_ulb_oai_dc', interval '5 days', '2022-10-01 00:00:00', '2022-10-17 00:00:00',true,true);
+ERROR:  foreign table "public.foo" does not exist.
+CONTEXT:  PL/pgSQL function oai_harvesttable(text,text,interval,timestamp without time zone,timestamp without time zone,boolean,boolean) line 57 at RAISE
+/* EXCEPTION: end date smaller than start date */
+CALL OAI_HarvestTable('ulb_oai_dc','clone_ulb_oai_dc', interval '5 days', '2022-10-01 00:00:00', '2022-09-01 00:00:00',true,true);
+ERROR:  invalid time window. Start date [Sat Oct 01 00:00:00 2022] greater than end date [Thu Sep 01 00:00:00 2022]
+CONTEXT:  PL/pgSQL function oai_harvesttable(text,text,interval,timestamp without time zone,timestamp without time zone,boolean,boolean) line 26 at RAISE
+/* EXCEPTION: Foreign table without datestamp */
+CREATE FOREIGN TABLE IF NOT EXISTS table_without_datestamp (
+  id text                OPTIONS (oai_node 'identifier'), 
+  xmldoc xml             OPTIONS (oai_node 'content'), 
+  sets text[]            OPTIONS (oai_node 'setspec'), 
+  format text            OPTIONS (oai_node 'metadataprefix')
+ ) SERVER oai_server_ulb OPTIONS (metadataprefix 'oai_dc');
+CALL OAI_HarvestTable('table_without_datestamp', 'clone_table_without_datestamp', interval '5 days', '2022-10-01 00:00:00', '2022-10-17 00:00:00',true,true); 
+ERROR:  foreign table "public.table_without_datestamp" has no datestamp column.
+CONTEXT:  PL/pgSQL function oai_harvesttable(text,text,interval,timestamp without time zone,timestamp without time zone,boolean,boolean) line 65 at RAISE
+/* EXCEPTION: Foreign table without datestamp and identifier*/
+CREATE FOREIGN TABLE IF NOT EXISTS table_without_datestamp_identifier (
+  xmldoc xml             OPTIONS (oai_node 'content'), 
+  sets text[]            OPTIONS (oai_node 'setspec'), 
+  format text            OPTIONS (oai_node 'metadataprefix')
+ ) SERVER oai_server_ulb OPTIONS (metadataprefix 'oai_dc');
+CALL OAI_HarvestTable('table_without_datestamp_identifier', 'clone_table_without_datestamp_identifier', interval '5 days', '2022-10-01 00:00:00', '2022-10-17 00:00:00',true,true); 
+ERROR:  foreign table "public.table_without_datestamp_identifier" has no datestamp column.
+CONTEXT:  PL/pgSQL function oai_harvesttable(text,text,interval,timestamp without time zone,timestamp without time zone,boolean,boolean) line 65 at RAISE
+/* EXCEPTION: Foreign table without any oai_node */
+CREATE FOREIGN TABLE IF NOT EXISTS table_without_oai_node (
+  xmldoc xml, 
+  sets text[], 
+  format text
+ ) SERVER oai_server_ulb OPTIONS (metadataprefix 'oai_dc');
+CALL OAI_HarvestTable('table_without_oai_node', 'clone_table_without_oai_node', interval '5 days', '2022-10-01 00:00:00', '2022-10-17 00:00:00',true,true); 
+ERROR:  foreign table "public.table_without_oai_node" has no datestamp column.
+CONTEXT:  PL/pgSQL function oai_harvesttable(text,text,interval,timestamp without time zone,timestamp without time zone,boolean,boolean) line 65 at RAISE
