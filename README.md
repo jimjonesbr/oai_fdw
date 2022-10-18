@@ -533,7 +533,10 @@ These support functions help to retrieve additional information from an OAI Serv
 
 *SETOF OAI_IdentityNode* **OAI_Identify**(server_name *text*);
 
+
 `server_name`: Name of a previously created OAI Foreign Data Wrapper Server
+
+-------
 
 **Availability**: 1.0.0
 
@@ -571,6 +574,8 @@ SELECT * FROM OAI_Identify('oai_server_ulb');
 
 `server_name`: Name of a previously created OAI Foreign Data Wrapper Server
 
+-------
+
 **Availability**: 1.0.0
 
 **Description**
@@ -605,6 +610,8 @@ SELECT * FROM OAI_ListMetadataFormats('oai_server_ulb');
 *SETOF OAI_Set* **OAI_ListSets**(server_name *text*);
 
 `server_name`: Name of a previously created OAI Foreign Data Wrapper Server
+
+-------
 
 **Availability**: 1.0.0
 
@@ -643,6 +650,8 @@ SELECT * FROM OAI_ListSets('oai_server_ulb');
 
 *text* **OAI_Version**();
 
+-------
+
 **Availability**: 1.0.0
 
 **Description**
@@ -653,9 +662,10 @@ Shows the version of the installed OAI FDW and its main libraries.
 
 ```sql
 SELECT OAI_Version();
-                                                                                                                                                           
-oai fdw = 1.1.0, libxml = 2.9.10, libcurl = libcurl/7.74.0 OpenSSL/1.1.1n zlib/1.2.11 brotli/1.0.9 libidn2/2.3.0 libpsl/0.21.0 (+libidn2/2.3.0) libssh2/1.9.0 nghttp2/1.43.0 librtmp/2.3
+                                                                                     
+oai fdw = 1.2.0, libxml = 2.9.10, libcurl = libcurl/7.74.0 OpenSSL/1.1.1n zlib/1.2.11 brotli/1.0.9 libidn2/2.3.0 libpsl/0.21.0 (+libidn2/2.3.0) libssh2/1.9.0 nghttp2/1.43.0 librtmp/2.3
 (1 row)
+
 ```
 
 ### [OAI_HarvestTable](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#oai_harvesttable)
@@ -684,6 +694,8 @@ oai fdw = 1.1.0, libxml = 2.9.10, libcurl = libcurl/7.74.0 OpenSSL/1.1.1n zlib/1
 `create_table`: (default **TRUE**). Set this parameter to `false` in case the target table already exists.
 
 `verbose`: (default **FALSE**). Set this parameter to `true` for more comprehensive output messages.
+
+-------
 
 **Availability**: 1.2.0
 

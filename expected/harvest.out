@@ -7,7 +7,7 @@ CREATE FOREIGN TABLE IF NOT EXISTS ulb_oai_dc (
  ) SERVER oai_server_ulb OPTIONS (metadataprefix 'oai_dc');
 /* Target table without schema */
 CALL OAI_HarvestTable('ulb_oai_dc','clone_ulb_oai_dc', interval '5 days', '2022-10-01 00:00:00', '2022-10-17 00:00:00',true,true);
-INFO:  target table "public.clone_ulb_oai_dc" sucessfully created.
+INFO:  target table "public.clone_ulb_oai_dc" successfully created.
 INFO:  1 records from "public.ulb_oai_dc" successfully updated or inserted into "public.clone_ulb_oai_dc" [Sat Oct 01 00:00:00 2022 - Thu Oct 06 00:00:00 2022].
 INFO:  57 records from "public.ulb_oai_dc" successfully updated or inserted into "public.clone_ulb_oai_dc" [Thu Oct 06 00:00:00 2022 - Tue Oct 11 00:00:00 2022].
 INFO:  32 records from "public.ulb_oai_dc" successfully updated or inserted into "public.clone_ulb_oai_dc" [Tue Oct 11 00:00:00 2022 - Sun Oct 16 00:00:00 2022].
@@ -56,7 +56,7 @@ LINE 1: SELECT count(*) FROM oai_schema."clone-ulb:oai/dc";
                              ^
 /* Target table containing special characters without schema */
 CALL OAI_HarvestTable('ulb_oai_dc','"clone-ulb:oai/dc"', interval '5 days', '2022-10-01 00:00:00', '2022-10-17 00:00:00',true,true);
-INFO:  target table "public."clone-ulb:oai/dc"" sucessfully created.
+INFO:  target table "public."clone-ulb:oai/dc"" successfully created.
 INFO:  1 records from "public.ulb_oai_dc" successfully updated or inserted into "public."clone-ulb:oai/dc"" [Sat Oct 01 00:00:00 2022 - Thu Oct 06 00:00:00 2022].
 INFO:  57 records from "public.ulb_oai_dc" successfully updated or inserted into "public."clone-ulb:oai/dc"" [Thu Oct 06 00:00:00 2022 - Tue Oct 11 00:00:00 2022].
 INFO:  32 records from "public.ulb_oai_dc" successfully updated or inserted into "public."clone-ulb:oai/dc"" [Tue Oct 11 00:00:00 2022 - Sun Oct 16 00:00:00 2022].
@@ -77,7 +77,7 @@ CREATE FOREIGN TABLE IF NOT EXISTS table_without_identifier (
  
 CALL OAI_HarvestTable('table_without_identifier','clone_table_without_identifier', interval '5 days', '2022-10-01 00:00:00', '2022-10-17 00:00:00',true,true); 
 WARNING:  foreign table "public.table_without_identifier" has no identifier column. It is strongly recommended to map the OAI identifier to a column, as it can ensure that records are not duplicated.
-INFO:  target table "public.clone_table_without_identifier" sucessfully created.
+INFO:  target table "public.clone_table_without_identifier" successfully created.
 INFO:  1 records from "public.table_without_identifier" successfully updated or inserted into "public.clone_table_without_identifier" [Sat Oct 01 00:00:00 2022 - Thu Oct 06 00:00:00 2022].
 INFO:  57 records from "public.table_without_identifier" successfully updated or inserted into "public.clone_table_without_identifier" [Thu Oct 06 00:00:00 2022 - Tue Oct 11 00:00:00 2022].
 INFO:  32 records from "public.table_without_identifier" successfully updated or inserted into "public.clone_table_without_identifier" [Tue Oct 11 00:00:00 2022 - Sun Oct 16 00:00:00 2022].
