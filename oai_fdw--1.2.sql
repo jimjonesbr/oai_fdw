@@ -143,7 +143,7 @@ BEGIN
       ELSE
         RAISE WARNING 'foreign table "%" has no identifier column. It is strongly recommended to map the OAI identifier to a column, as it can ensure that records are not duplicated.',oai_table;              
       END IF;    
-      RAISE INFO 'target table "%" sucessfully created.',target_table;  
+      RAISE INFO 'target table "%" successfully created.',target_table;  
     END IF;
     
   END IF;

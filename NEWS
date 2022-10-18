@@ -1,10 +1,16 @@
 oai_fdw 1.2.0
-YYYY-MM-DD
+2022-10-18
+
+ * New Features *
+   - OAI_HarvestTable: new procedure to harvest data from OAI foreign tables and store them into a 
+     local table.  
 
  * Bug Fixes *
-   - Fix memory leaks in libxml parser for ListIdentifiers requests 
+   - Fix memory leaks in the libxml2 parser for ListRecords and ListIdentifiers requests 
 
-
+* Enhancements *
+   - Add regression tests for PostgreSQL 15.
+   
 oai_fdw 1.1.0
 2022-10-01
 
@@ -17,8 +23,8 @@ oai_fdw 1.1.0
     requests. In previous versions these values were never fetched.
  
  * Enhancements *
-   - URL validator no longer chekcs if the URL is reachable. It now only checks the URL's syntax.
-   - URls with protocols other than http and https are now rejected before execution, as other
+   - URL validator no longer checks if the URL is reachable. It now only checks the URL's syntax.
+   - URls with protocols other than HTTP and HTTPS are now rejected before execution, as other
      protocols are not supported in the OAI-PMH Standard. 
   
 oai_fdw 1.0.0

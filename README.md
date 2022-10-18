@@ -20,6 +20,7 @@ A PostgreSQL Foreign Data Wrapper to access OAI-PMH repositories (Open Archives 
   - [OAI_ListMetadataFormats](#oai_listmetadataformats)
   - [OAI_ListSets](#oai_listsets)  
   - [OAI_Version](#oai_version)
+  - [OAI_HarvestTable](#oai_harvesttable)
 - [Deploy with Docker](#deploy-with-docker) 
 - [Limitations](#limitations)
    
@@ -534,6 +535,8 @@ These support functions help to retrieve additional information from an OAI Serv
 
 `server_name`: Name of a previously created OAI Foreign Data Wrapper Server
 
+**Availability**: 1.0.0
+
 **Description**
 
 This function is used to retrieve information about a repository. Some of the information returned is required as part of the OAI-PMH. Repositories may also employ the Identify verb to return additional descriptive information.
@@ -568,6 +571,8 @@ SELECT * FROM OAI_Identify('oai_server_ulb');
 
 `server_name`: Name of a previously created OAI Foreign Data Wrapper Server
 
+**Availability**: 1.0.0
+
 **Description**
 
 This function is used to retrieve the metadata formats available from a repository. An optional argument restricts the request to the formats available for a specific item.
@@ -600,6 +605,8 @@ SELECT * FROM OAI_ListMetadataFormats('oai_server_ulb');
 *SETOF OAI_Set* **OAI_ListSets**(server_name *text*);
 
 `server_name`: Name of a previously created OAI Foreign Data Wrapper Server
+
+**Availability**: 1.0.0
 
 **Description**
 
@@ -636,6 +643,8 @@ SELECT * FROM OAI_ListSets('oai_server_ulb');
 
 *text* **OAI_Version**();
 
+**Availability**: 1.0.0
+
 **Description**
 
 Shows the version of the installed OAI FDW and its main libraries.
@@ -649,20 +658,67 @@ oai fdw = 1.1.0, libxml = 2.9.10, libcurl = libcurl/7.74.0 OpenSSL/1.1.1n zlib/1
 (1 row)
 ```
 
+### [OAI_HarvestTable](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#oai_harvesttable)
+
+**Synopsis**
+
+*void* **OAI_HarvestTable**(oai_table *text*, target_table *text*, page_size *interval*, start_date *timestamp*);
+
+*void* **OAI_HarvestTable**(oai_table *text*, target_table *text*, page_size *interval*, start_date *timestamp*, end_date *timestamp*);
+
+*void* **OAI_HarvestTable**(oai_table *text*, target_table *text*, page_size *interval*, start_date *timestamp*, end_date *timestamp*, create_table *boolean*);
+
+*void* **OAI_HarvestTable**(oai_table *text*, target_table *text*, page_size *interval*, start_date *timestamp*, end_date *timestamp*, create_table *boolean*, verbose *boolean*);
+
+
+`oai_table`: OAI foreign table
+
+`target_table`: Local table where the data from the OAI foreign table will be imported to. If the `target_table` does not exist, a new table with the given name will be automatically created - unless explicitly configured otherwise in the parameter `create_table`. The `target_table` will be appended if it already exists. If the `oai_table`, and consequently the `target_table`, have an `identifier` column, the system will ensure that records are not duplicated in the `target_table` by updating the records in case of a conflict (upsert). 
+
+`page_size`: Page size (time interval) in which oai_fdw will request data from the OAI Server. For instance, setting this parameter to `1 day` within a time window from `2022-01-01` until `2022-01-10` will be translated into 10 distinct requests to the OAI repository.
+
+`start_date`:  Start date from the time window.
+
+`end_date`: (default **CURRENT_TIMESTAMP**) End date from the time window.
+
+`create_table`: (default **TRUE**). Set this parameter to `false` in case the target table already exists.
+
+`verbose`: (default **FALSE**). Set this parameter to `true` for more comprehensive output messages.
+
+**Availability**: 1.2.0
+
+**Description**
+
+Often it is the case that a OAI repository contains so much data, that a requests over large time windows become just too expensive and end up being rejected by the server. This stored procedure addresses this issue by internally partitioning a single request into several small ones using the a given [time interval](https://www.postgresql.org/docs/current/datatype-datetime.html) as partition unit - parameter `page_size`. 
+
+For instance, an OAI ListRecords request for all records from the year 2021 (`2021-01-01` to `2021-12-31`) can be split into 12 smaller requests by setting the `page_size` parameter to `interval '1 month'`. Although in the end the result sets from both approaches are pretty much the same, both client and server may significantly profit from having  smaller result sets instead of single large one.
+
+
+**Usage**
+
+```sql
+-- Cloning records from foreign table 'ulb_oai_dc' to a new table called 'clone_ulb_oai_dc'
+
+CALL OAI_HarvestTable('ulb_oai_dc','clone_ulb_oai_dc', interval '5 days', '2022-10-01 09:00:00', '2022-10-17 17:00:00');
+
+INFO:  target table "public.clone_ulb_oai_dc" successfully created.
+INFO:  90 records from "public.ulb_oai_dc" successfully inserted into "public.clone_ulb_oai_dc" [2022-10-01 09:00:00 - 2022-10-17 17:00:00].
+```
+
 ## [Deploy with Docker](#deploy-with-docker)
 
-To deploy the oai_fdw with docker just pick one of the supported PostgreSQL versions (preferably 14), install the [requirements](#requirements) and [compile](#build-and-install) the source code. For instance, a oai_fdw `Dockerfile` for PostgreSQL 14 should look like this:
+To deploy oai_fdw with docker just pick one of the supported PostgreSQL versions, install the [requirements](#requirements) and [compile](#build-and-install) the [source code](https://github.com/jimjonesbr/oai_fdw/releases). For instance, a oai_fdw `Dockerfile` for PostgreSQL 15 should look like this (minimal example):
 
 ```docker
-FROM postgres:14
+FROM postgres:15
 
 RUN apt-get update && \
-    apt-get install -y git make gcc postgresql-server-dev-14 libxml2-dev libcurl4-openssl-dev && \
-    git clone https://github.com/jimjonesbr/oai_fdw.git
+    apt-get install -y make gcc postgresql-server-dev-15 libxml2-dev libcurl4-openssl-dev
 
-WORKDIR /oai_fdw
-
-RUN make install
+RUN tar xvzf oai_fdw-1.2.0.tar.gz && \
+    cd oai_fdw-1.2.0 && \
+    make -j && \
+    make install
 ```
 
 To build the image save it in a `Dockerfile` and  run the following command in the root directory - this will create an image called `oai_fdw_image`.:
@@ -672,7 +728,7 @@ To build the image save it in a `Dockerfile` and  run the following command in t
 ```
 
 
-After successfully building the image you're ready ro `run` or `create` the container (minimal example)..
+After successfully building the image you're ready to `run` or `create` the container ..
  
 ```bash
 $ docker run --name my_oai_container -e POSTGRES_HOST_AUTH_METHOD=trust oai_fdw_image
