@@ -90,7 +90,7 @@ BEGIN
   END IF;
   
   IF start_date > end_date THEN
-    RAISE EXCEPTION 'invalid time window. Start date [%] greater than end date [%]',start_date,end_date;
+    RAISE EXCEPTION 'invalid time window. The end date [%] lies before the start date [%]',start_date,end_date;
   END IF;
   
   target_table_exists := (SELECT EXISTS (SELECT 1 FROM pg_tables WHERE schemaname||'.'||tablename = target_table));
@@ -165,9 +165,9 @@ BEGIN
       END IF;    
       
       RAISE DEBUG E'\n% %\n',sql_query,conflict_clause;
-      EXECUTE format('%s%s',sql_query,conflict_clause); 
-      GET CURRENT DIAGNOSTICS page_records = ROW_COUNT;           
-      
+      EXECUTE format('%s%s',sql_query,conflict_clause);                  
+      COMMIT;
+      GET CURRENT DIAGNOSTICS page_records = ROW_COUNT;
       total_records = total_records + page_records;
       IF exec_verbose THEN
         RAISE INFO '% records from "%" successfully updated or inserted into "%" [% - %].',
@@ -178,3 +178,4 @@ BEGIN
   RAISE INFO '% records from "%" successfully inserted into "%" [% - %].',
               total_records,oai_table,target_table,start_date,end_date;
 END; $$;
+COMMENT ON PROCEDURE OAI_HarvestTable(text,text,interval,timestamp,timestamp,boolean,boolean) IS 'Harvest an OAI foreign table and stores its records in a local table';

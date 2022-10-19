@@ -42,7 +42,6 @@
 #include <utils/builtins.h>
 #include <utils/array.h>
 #include <commands/explain.h>
-#include <curl/curl.h>
 #include <libxml/tree.h>
 #include <catalog/pg_collation.h>
 
@@ -744,6 +743,7 @@ static List *GetIdentity(OAIFdwState *state) {
 	elog(DEBUG1, "%s called",__func__);
 
 	state->requestType = OAI_REQUEST_IDENTIFY;
+	state->connectTimeout = OAI_REQUEST_CONNECTTIMEOUT;
 
 	oaiExecuteResponse = ExecuteOAIRequest(state);
 
@@ -796,6 +796,7 @@ static List *GetSets(OAIFdwState *state) {
 	elog(DEBUG1, "%s called",__func__);
 
 	state->requestType = OAI_REQUEST_LISTSETS;
+	state->connectTimeout = OAI_REQUEST_CONNECTTIMEOUT;
 
 	oaiExecuteResponse = ExecuteOAIRequest(state);
 
@@ -971,7 +972,7 @@ static int ExecuteOAIRequest(OAIFdwState *state) {
 
 	initStringInfo(&url_buffer);
 
-	elog(DEBUG1,"%s called: url > '%s' ",__func__,state->url);
+	elog(DEBUG1,"%s called: base url > '%s' ",__func__,state->url);
 
 	appendStringInfo(&url_buffer,"verb=%s",state->requestType);
 
@@ -979,35 +980,35 @@ static int ExecuteOAIRequest(OAIFdwState *state) {
 
 		if(state->set) {
 
-			elog(DEBUG2,"  %s (%s): appending 'set' > %s",__func__,state->requestType,state->set);
+			elog(DEBUG1,"  %s (%s): appending 'set' > %s",__func__,state->requestType,state->set);
 			appendStringInfo(&url_buffer,"&set=%s",state->set);
 
 		}
 
 		if(state->from) {
 
-			elog(DEBUG2,"  %s (%s): appending 'from' > %s",__func__,state->requestType,state->from);
+			elog(DEBUG1,"  %s (%s): appending 'from' > %s",__func__,state->requestType,state->from);
 			appendStringInfo(&url_buffer,"&from=%s",state->from);
 
 		}
 
 		if(state->until) {
 
-			elog(DEBUG2,"  %s (%s): appending 'until' > %s",__func__,state->requestType,state->until);
+			elog(DEBUG1,"  %s (%s): appending 'until' > %s",__func__,state->requestType,state->until);
 			appendStringInfo(&url_buffer,"&until=%s",state->until);
 
 		}
 
 		if(state->metadataPrefix) {
 
-			elog(DEBUG2,"  %s (%s): appending 'metadataPrefix' > %s",__func__,state->requestType,state->metadataPrefix);
+			elog(DEBUG1,"  %s (%s): appending 'metadataPrefix' > %s",__func__,state->requestType,state->metadataPrefix);
 			appendStringInfo(&url_buffer,"&metadataPrefix=%s",state->metadataPrefix);
 
 		}
 
 		if(state->resumptionToken) {
 
-			elog(DEBUG2,"  %s (%s): appending 'resumptionToken' > %s",__func__,state->requestType,state->resumptionToken);
+			elog(DEBUG1,"  %s (%s): appending 'resumptionToken' > %s",__func__,state->requestType,state->resumptionToken);
 			resetStringInfo(&url_buffer);
 			appendStringInfo(&url_buffer,"verb=%s&resumptionToken=%s",state->requestType,state->resumptionToken);
 
@@ -1019,14 +1020,14 @@ static int ExecuteOAIRequest(OAIFdwState *state) {
 
 		if(state->identifier) {
 
-			elog(DEBUG2,"  %s (%s): appending 'identifier' > %s",__func__,state->requestType,state->identifier);
+			elog(DEBUG1,"  %s (%s): appending 'identifier' > %s",__func__,state->requestType,state->identifier);
 			appendStringInfo(&url_buffer,"&identifier=%s",state->identifier);
 
 		}
 
 		if(state->metadataPrefix) {
 
-			elog(DEBUG2,"  %s (%s): appending 'metadataPrefix' > %s",__func__,state->requestType,state->metadataPrefix);
+			elog(DEBUG1,"  %s (%s): appending 'metadataPrefix' > %s",__func__,state->requestType,state->metadataPrefix);
 			appendStringInfo(&url_buffer,"&metadataPrefix=%s",state->metadataPrefix);
 
 		}
@@ -1036,14 +1037,14 @@ static int ExecuteOAIRequest(OAIFdwState *state) {
 
 		if(state->set) {
 
-			elog(DEBUG2,"  %s (%s): appending 'set' > %s",__func__,state->requestType,state->set);
+			elog(DEBUG1,"  %s (%s): appending 'set' > %s",__func__,state->requestType,state->set);
 			appendStringInfo(&url_buffer,"&set=%s",state->set);
 
 		}
 
 		if(state->from) {
 
-			elog(DEBUG2,"  %s (%s): appending 'from' > %s",__func__,state->requestType,state->from);
+			elog(DEBUG1,"  %s (%s): appending 'from' > %s",__func__,state->requestType,state->from);
 			appendStringInfo(&url_buffer,"&from=%s",state->from);
 
 
@@ -1051,14 +1052,14 @@ static int ExecuteOAIRequest(OAIFdwState *state) {
 
 		if(state->until) {
 
-			elog(DEBUG2,"  %s (%s): appending 'until' > %s",__func__,state->requestType,state->until);
+			elog(DEBUG1,"  %s (%s): appending 'until' > %s",__func__,state->requestType,state->until);
 			appendStringInfo(&url_buffer,"&until=%s",state->until);
 
 		}
 
 		if(state->metadataPrefix) {
 
-			elog(DEBUG2,"  %s (%s): appending 'metadataPrefix' > %s",__func__,state->requestType,state->metadataPrefix);
+			elog(DEBUG1,"  %s (%s): appending 'metadataPrefix' > %s",__func__,state->requestType,state->metadataPrefix);
 			appendStringInfo(&url_buffer,"&metadataPrefix=%s",state->metadataPrefix);
 
 		}
@@ -1066,7 +1067,7 @@ static int ExecuteOAIRequest(OAIFdwState *state) {
 
 		if(state->resumptionToken) {
 
-			elog(DEBUG2,"  %s (%s): appending 'resumptionToken' > %s",__func__,state->requestType,state->resumptionToken);
+			elog(DEBUG1,"  %s (%s): appending 'resumptionToken' > %s",__func__,state->requestType,state->resumptionToken);
 			resetStringInfo(&url_buffer);
 			appendStringInfo(&url_buffer,"verb=%s&resumptionToken=%s",state->requestType,state->resumptionToken);
 
@@ -1087,7 +1088,7 @@ static int ExecuteOAIRequest(OAIFdwState *state) {
 	}
 
 
-	elog(DEBUG1,"  %s (%s) url build: %s?%s",__func__,state->requestType,state->url,url_buffer.data);
+	elog(DEBUG1,"  %s (%s): url build > %s?%s",__func__,state->requestType,state->url,url_buffer.data);
 
 	curl_global_init(CURL_GLOBAL_ALL);
 	curl = curl_easy_init();
@@ -1104,7 +1105,7 @@ static int ExecuteOAIRequest(OAIFdwState *state) {
 		if(state->connectTimeout != 0) {
 
 			curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, state->connectTimeout);
-			elog(DEBUG1, "  %s (%s) timeout: %ld",__func__,state->requestType,state->connectTimeout);
+			elog(DEBUG1, "  %s (%s): timeout > %ld",__func__,state->requestType,state->connectTimeout);
 
 		} else {
 
@@ -1116,32 +1117,32 @@ static int ExecuteOAIRequest(OAIFdwState *state) {
 		/* Proxy support: added in version 1.1.0 */
 		if(state->proxy) {
 
-			elog(DEBUG1, "  %s (%s) proxy URL: '%s'",__func__,state->requestType,state->proxy);
+			elog(DEBUG1, "  %s (%s): proxy URL '%s'",__func__,state->requestType,state->proxy);
 
 			curl_easy_setopt(curl, CURLOPT_PROXY, state->proxy);
 
 			if(strcmp(state->proxyType,OAI_NODE_HTTP_PROXY)==0) {
 
-				elog(DEBUG1, "  %s (%s) proxy protocol: 'HTTP'",__func__,state->requestType);
+				elog(DEBUG1, "  %s (%s): proxy protocol 'HTTP'",__func__,state->requestType);
 				curl_easy_setopt(curl, CURLOPT_PROXYTYPE, CURLPROXY_HTTP);
 
 			} else if(strcmp(state->proxyType,OAI_NODE_HTTPS_PROXY)==0) {
 
-				elog(DEBUG1, "  %s (%s) proxy protocol: 'HTTPS'",__func__,state->requestType);
+				elog(DEBUG1, "  %s (%s): proxy protocol 'HTTPS'",__func__,state->requestType);
 				curl_easy_setopt(curl, CURLOPT_PROXYTYPE, CURLPROXY_HTTPS);
 
 			}
 
 			if(state->proxyUser) {
 
-				elog(DEBUG1, "  %s (%s) entering proxy user ('%s').",__func__,state->requestType,state->proxyUser);
+				elog(DEBUG1, "  %s (%s): entering proxy user ('%s').",__func__,state->requestType,state->proxyUser);
 				curl_easy_setopt(curl, CURLOPT_PROXYUSERNAME, state->proxyUser);
 
 			}
 
 			if(state->proxyUserPassword) {
 
-				elog(DEBUG1, "  %s (%s) entering proxy user's password.",__func__,state->requestType);
+				elog(DEBUG1, "  %s (%s): entering proxy user's password.",__func__,state->requestType);
 				curl_easy_setopt(curl, CURLOPT_PROXYUSERPWD, state->proxyUserPassword);
 
 			}
@@ -1153,11 +1154,11 @@ static int ExecuteOAIRequest(OAIFdwState *state) {
 		curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&chunk);
 		curl_easy_setopt(curl, CURLOPT_FAILONERROR, true);
 
-		elog(DEBUG1, "  %s (%s) performing cURL request ... ",__func__,state->requestType);
+		elog(DEBUG2, "  %s (%s) performing cURL request ... ",__func__,state->requestType);
 
 		res = curl_easy_perform(curl);
 
-		elog(DEBUG1, "  %s (%s) cURL response code : %u",__func__,state->requestType,res);
+		//elog(DEBUG1, "  %s (%s) cURL response code : %u",__func__,state->requestType,res);
 
 		if (res != CURLE_OK) {
 
@@ -1481,13 +1482,13 @@ static void deparseExpr(Expr *expr, OAIFdwTableOptions *opts){
 	char *operName;
 	char* oaiNode;
 
-	elog(DEBUG1,"%s called for expr->type %u",__func__,expr->type);
+	elog(DEBUG2,"%s called for expr->type %u",__func__,expr->type);
 
 	switch (expr->type)	{
 
 	case T_OpExpr:
 
-		elog(DEBUG1,"  %s: case T_OpExpr",__func__);
+		elog(DEBUG2,"  %s: case T_OpExpr",__func__);
 		oper = (OpExpr *)expr;
 
 		tuple = SearchSysCache1(OPEROID, ObjectIdGetDatum(oper->opno));
@@ -1499,7 +1500,7 @@ static void deparseExpr(Expr *expr, OAIFdwTableOptions *opts){
 		ReleaseSysCache(tuple);
 
 
-		elog(DEBUG1,"  %s: opername > %s",__func__,operName);
+		elog(DEBUG2,"  %s: opername > %s",__func__,operName);
 
 		var  = (Var *) linitial(oper->args);
 		oaiNode = GetOAINodeFromColumn(opts->foreigntableid,var->varattno);
@@ -1615,7 +1616,7 @@ static void deparseSelectColumns(OAIFdwTableOptions *opts, List *exprs){
 
 	ListCell *cell;
 
-	elog(DEBUG1,"%s called",__func__);
+	elog(DEBUG2,"%s called",__func__);
 
 	foreach(cell, exprs) {
 
@@ -1682,6 +1683,8 @@ static void OAIFdwGetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid 
 
 	OAIFdwTableOptions *opts = (OAIFdwTableOptions *)palloc0(sizeof(OAIFdwTableOptions));
 	ListCell *cell;
+
+	opts->connectTimeout = OAI_REQUEST_CONNECTTIMEOUT;
 
 	elog(DEBUG1,"%s called",__func__);
 
@@ -1856,7 +1859,7 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 
 	}
 
-	elog(DEBUG1,"%s (%s) called: current_identifier > '%s'",__func__,state->requestType,state->current_identifier);
+	elog(DEBUG2,"%s (%s) called: current_identifier > '%s'",__func__,state->requestType,state->current_identifier);
 
 
 	if(strcmp(state->requestType,OAI_REQUEST_LISTIDENTIFIERS)==0) {
@@ -1913,23 +1916,23 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 
 						if (xmlStrcmp(headerElements->name, (xmlChar*) "identifier")==0) {
 
-							elog(DEBUG1,"  %s (%s): setting identifier to OAI object > '%s'",__func__,state->requestType,(char*)buffer->content);
+							elog(DEBUG2,"  %s (%s): setting identifier to OAI object > '%s'",__func__,state->requestType,(char*)buffer->content);
 							oai->identifier = (char*) palloc0(sizeof(char)*content_size+1);
 							snprintf(oai->identifier,content_size+1,"%s",(char*)buffer->content);
 
 						} else if (xmlStrcmp(headerElements->name, (xmlChar*) "setSpec")==0) {
 
 							char *array_element = (char*) palloc0(sizeof(char)*content_size+1);
-							elog(DEBUG1,"  %s (%s): setting setspec to OAI object > '%s'",__func__,state->requestType,(char*)buffer->content);
+							elog(DEBUG2,"  %s (%s): setting setspec to OAI object > '%s'",__func__,state->requestType,(char*)buffer->content);
 							snprintf(array_element,content_size+1,"%s",(char*)buffer->content);
 
 							appendTextArray(&oai->setsArray,array_element);
 
-							elog(DEBUG1,"  %s (%s): array appended",__func__,state->requestType);
+							elog(DEBUG2,"  %s (%s): array appended",__func__,state->requestType);
 
 						} else if (xmlStrcmp(headerElements->name, (xmlChar*) "datestamp")==0)	{
 
-							elog(DEBUG1,"  %s (%s): setting datestamp to OAI object > '%s'",__func__,state->requestType,(char*)buffer->content);
+							elog(DEBUG2,"  %s (%s): setting datestamp to OAI object > '%s'",__func__,state->requestType,(char*)buffer->content);
 							oai->datestamp = (char*) palloc0(sizeof(char)*content_size+1);
 							snprintf(oai->datestamp,content_size+1,"%s",(char*)buffer->content);
 
@@ -1944,7 +1947,7 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 
 
 
-				elog(DEBUG1,"  %s (%s): starting evaluation > [buffer_identifier = '%s' | oai->identifier = '%s']",__func__,state->requestType,buffer_identifier,oai->identifier);
+				elog(DEBUG2,"  %s (%s): starting evaluation > [buffer_identifier = '%s' | oai->identifier = '%s']",__func__,state->requestType,buffer_identifier,oai->identifier);
 
 				if(buffer_identifier == NULL) {
 
@@ -2074,12 +2077,12 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 									oai->identifier = (char*) palloc0(sizeof(char)*content_size+1);
 									snprintf(oai->identifier,content_size+1,"%s",(char*)buffer->content);
 
-									elog(DEBUG1,"  %s (%s): setting identifier to OAI object > '%s'",__func__,state->requestType,oai->identifier);
+									elog(DEBUG2,"  %s (%s): setting identifier to OAI object > '%s'",__func__,state->requestType,oai->identifier);
 
 								} else if (xmlStrcmp(headerElements->name, (xmlChar*) "setSpec")==0) {
 
 									char *array_element = (char*) palloc0(sizeof(char)*content_size+1);
-									elog(DEBUG1,"  %s (%s): setting setspec to OAI object > '%s'",__func__,state->requestType,(char*)buffer->content);
+									elog(DEBUG2,"  %s (%s): setting setspec to OAI object > '%s'",__func__,state->requestType,(char*)buffer->content);
 									snprintf(array_element,content_size+1,"%s",(char*)buffer->content);
 
 									appendTextArray(&oai->setsArray,array_element);
@@ -2089,7 +2092,7 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 									oai->datestamp = (char*) palloc0(sizeof(char)*content_size+1);
 									snprintf(oai->datestamp,content_size+1,"%s",(char*)buffer->content);
 
-									elog(DEBUG1,"  %s (%s): setting datestamp to OAI object > '%s'",__func__,state->requestType,oai->datestamp);
+									elog(DEBUG2,"  %s (%s): setting datestamp to OAI object > '%s'",__func__,state->requestType,oai->datestamp);
 
 								}
 
@@ -2105,7 +2108,7 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 				}
 
 
-				elog(DEBUG1,"  %s (%s): starting evaluation > [buffer_identifier = '%s' | oai->identifier = '%s']",__func__,state->requestType,buffer_identifier,oai->identifier);
+				elog(DEBUG2,"  %s (%s): starting evaluation > [buffer_identifier = '%s' | oai->identifier = '%s']",__func__,state->requestType,buffer_identifier,oai->identifier);
 
 				if(buffer_identifier == NULL) {
 
@@ -2158,7 +2161,7 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 
 static void CreateOAITuple(TupleTableSlot *slot, OAIFdwState *state, OAIRecord *oai) {
 
-	elog(DEBUG1,"%s called",__func__);
+	elog(DEBUG2,"%s called",__func__);
 
 	for (int i = 0; i < state->numcols; i++) {
 
@@ -2276,7 +2279,7 @@ static void CreateOAITuple(TupleTableSlot *slot, OAIFdwState *state, OAIRecord *
 
 
 	state->rowcount++;
-	elog(DEBUG1,"%s => finished (rowcount: %d)",__func__,state->rowcount);
+	elog(DEBUG2,"%s => finished (rowcount: %d)",__func__,state->rowcount);
 
 }
 
@@ -2286,7 +2289,7 @@ static TupleTableSlot *OAIFdwIterateForeignScan(ForeignScanState *node) {
 	OAIFdwState *state = node->fdw_state;
 	OAIRecord *record = (OAIRecord *)palloc(sizeof(OAIRecord));
 
-	elog(DEBUG1,"%s called.",__func__);
+	elog(DEBUG2,"%s called.",__func__);
 
 	ExecClearTuple(slot);
 
@@ -2307,7 +2310,7 @@ static TupleTableSlot *OAIFdwIterateForeignScan(ForeignScanState *node) {
 		state->current_identifier = NULL;
 		LoadOAIRecords(state);
 
-		elog(DEBUG2,"  %s: completeListSize > %s (rowcount: %d)",__func__,state->completeListSize,state->rowcount);
+		elog(DEBUG1,"%s: records retrieved %d/%s (rowcount/completeListSize)",__func__,state->rowcount,state->completeListSize);
 
 	}
 
@@ -2323,13 +2326,15 @@ static TupleTableSlot *OAIFdwIterateForeignScan(ForeignScanState *node) {
 
 	} else {
 
-		elog(DEBUG2,"  %s: (EOF) freeing xml document and cleaning xml parser",__func__);
+		elog(DEBUG1,"%s: records retrieved %d/%s (rowcount/completeListSize)",__func__,state->rowcount,state->completeListSize);
+
 		xmlFreeDoc(state->xmldoc);
 		xmlCleanupParser();
+		elog(DEBUG2,"  %s: (EOF) xmldoc and xml parser cleared",__func__);
 		//pfree(record);
 	}
 
-	elog(DEBUG1,"%s => returning tuple (rowcount: %d)",__func__,state->rowcount);
+	elog(DEBUG2,"%s => returning tuple (rowcount: %d)",__func__,state->rowcount);
 
 	return slot;
 
@@ -2343,11 +2348,11 @@ static void LoadOAIRecords(OAIFdwState *state) {
 
 	int oaiExecuteResponse;
 
-	elog(DEBUG1,"%s called: current_row > %d",__func__,state->current_row);
+	elog(DEBUG2,"%s called.",__func__);
 
 	oaiExecuteResponse = ExecuteOAIRequest(state);
 
-	elog(DEBUG1,"  %s: ExecuteOAIRequest response > %d",__func__,oaiExecuteResponse);
+	elog(DEBUG2,"  %s: ExecuteOAIRequest response > %d",__func__,oaiExecuteResponse);
 
 	if(oaiExecuteResponse == OAI_SUCCESS) {
 
@@ -2355,7 +2360,7 @@ static void LoadOAIRecords(OAIFdwState *state) {
 
 		for (recordsList = xmlroot->children; recordsList != NULL; recordsList = recordsList->next) {
 
-			elog(DEBUG1,"  %s: ExecuteOAIRequest parsing xmlroot's children",__func__);
+			elog(DEBUG2,"  %s: ExecuteOAIRequest parsing xmlroot's children",__func__);
 
 			if (recordsList->type != XML_ELEMENT_NODE) continue;
 
@@ -2381,7 +2386,7 @@ static void LoadOAIRecords(OAIFdwState *state) {
 
 			} else if (xmlStrcmp(recordsList->name, (xmlChar*)"error")==0) {
 
-				char *errorMessage = (char*)xmlNodeGetContent(recordsList);
+				//char *errorMessage = (char*)xmlNodeGetContent(recordsList);
 				char *errorCode = (char*) xmlGetProp(recordsList, (xmlChar*) "code");
 
 				state->xmldoc = NULL;
@@ -2390,14 +2395,14 @@ static void LoadOAIRecords(OAIFdwState *state) {
 
 					ereport(WARNING,
 							(errcode(ERRCODE_NO_DATA_FOUND),
-									errmsg("OAI %s: %s",errorCode,errorMessage)));
+									errmsg("OAI %s: %s",errorCode,(char*)xmlNodeGetContent(recordsList))));
 
 				} else {
 
 					xmlFreeDoc(state->xmldoc);
 					ereport(ERROR,
 							(errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
-									errmsg("OAI %s: %s",errorCode,errorMessage)));
+									errmsg("OAI %s: %s",errorCode,(char*)xmlNodeGetContent(recordsList))));
 
 				}
 

@@ -88,7 +88,7 @@ ERROR:  foreign table "public.foo" does not exist.
 CONTEXT:  PL/pgSQL function oai_harvesttable(text,text,interval,timestamp without time zone,timestamp without time zone,boolean,boolean) line 57 at RAISE
 /* EXCEPTION: end date smaller than start date */
 CALL OAI_HarvestTable('ulb_oai_dc','clone_ulb_oai_dc', interval '5 days', '2022-10-01 00:00:00', '2022-09-01 00:00:00',true,true);
-ERROR:  invalid time window. Start date [Sat Oct 01 00:00:00 2022] greater than end date [Thu Sep 01 00:00:00 2022]
+ERROR:  invalid time window. The end date [Sat Oct 01 00:00:00 2022] lies before the start date [Thu Sep 01 00:00:00 2022]
 CONTEXT:  PL/pgSQL function oai_harvesttable(text,text,interval,timestamp without time zone,timestamp without time zone,boolean,boolean) line 26 at RAISE
 /* EXCEPTION: Foreign table without datestamp */
 CREATE FOREIGN TABLE IF NOT EXISTS table_without_datestamp (
