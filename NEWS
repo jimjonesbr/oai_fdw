@@ -1,5 +1,5 @@
 oai_fdw 1.2.0
-2022-10-18
+2022-10-19
 
  * New Features *
    - OAI_HarvestTable: new procedure to harvest data from OAI foreign tables and store them into a 
@@ -7,7 +7,8 @@ oai_fdw 1.2.0
 
  * Bug Fixes *
    - Fix memory leaks in the libxml2 parser for ListRecords and ListIdentifiers requests 
-
+   - Fix missing timeout parameter for non-proxy OAI requests
+   
 * Enhancements *
    - Add regression tests for PostgreSQL 15.
    

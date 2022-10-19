@@ -130,7 +130,6 @@ typedef struct OAIFdwState {
 	char	*current_identifier;
 
 	Oid 		foreigntableid;
-	//xmlNodePtr 	xmlroot;
 	xmlDocPtr	xmldoc;
 
 } OAIFdwState;
@@ -735,8 +734,6 @@ Datum oai_fdw_validator(PG_FUNCTION_ARGS) {
 
 static List *GetIdentity(OAIFdwState *state) {
 
-	//struct string xmlStream;
-	//xmlDocPtr xmldoc = NULL;
 	int oaiExecuteResponse;
 	List *result = NIL;
 
@@ -789,7 +786,6 @@ static List *GetIdentity(OAIFdwState *state) {
 
 static List *GetSets(OAIFdwState *state) {
 
-	//xmlDocPtr xmldoc = NULL;
 	int oaiExecuteResponse;
 	List *result = NIL;
 
@@ -858,6 +854,7 @@ static List *GetMetadataFormats(OAIFdwState *state) {
 	elog(DEBUG1, "  %s called",__func__);
 
 	state->requestType = OAI_REQUEST_LISTMETADATAFORMATS;
+	state->connectTimeout = OAI_REQUEST_CONNECTTIMEOUT;
 
 	oaiExecuteResponse = ExecuteOAIRequest(state);
 
@@ -1157,8 +1154,6 @@ static int ExecuteOAIRequest(OAIFdwState *state) {
 		elog(DEBUG2, "  %s (%s) performing cURL request ... ",__func__,state->requestType);
 
 		res = curl_easy_perform(curl);
-
-		//elog(DEBUG1, "  %s (%s) cURL response code : %u",__func__,state->requestType,res);
 
 		if (res != CURLE_OK) {
 
@@ -1836,15 +1831,9 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 	xmlNodePtr headerElements;
 	xmlNodePtr ListRecordsRequest;
 	xmlNodePtr record;
-
 	xmlNodePtr xmlroot = xmlDocGetRootElement(state->xmldoc);
-
 	bool getNext = false;
-    //bool emptyToken = false;
-
 	char *buffer_identifier = NULL;
-
-
 
 	OAIRecord *oai = (OAIRecord*) palloc(sizeof(OAIRecord));
 
@@ -2141,8 +2130,6 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 
 				if(ret) {
 
-					//if (xmlroot!=NULL) xmlFreeNode(xmlroot);
-
 					elog(DEBUG2,"%s (%s): => returning %s",__func__,state->requestType,oai->identifier);
 					return oai;
 				}
@@ -2213,7 +2200,6 @@ static void CreateOAITuple(TupleTableSlot *slot, OAIFdwState *state, OAIRecord *
 
 					slot->tts_isnull[i] = false;
 					slot->tts_values[i] = (Datum) DatumGetArrayTypeP(oai->setsArray);
-					//elog(DEBUG2,"    %s: setspec added to tuple",__func__);
 
 				}  else if (strcmp(option_value,OAI_NODE_DATESTAMP)==0 && oai->datestamp) {
 
@@ -2331,7 +2317,7 @@ static TupleTableSlot *OAIFdwIterateForeignScan(ForeignScanState *node) {
 		xmlFreeDoc(state->xmldoc);
 		xmlCleanupParser();
 		elog(DEBUG2,"  %s: (EOF) xmldoc and xml parser cleared",__func__);
-		//pfree(record);
+
 	}
 
 	elog(DEBUG2,"%s => returning tuple (rowcount: %d)",__func__,state->rowcount);
@@ -2386,7 +2372,6 @@ static void LoadOAIRecords(OAIFdwState *state) {
 
 			} else if (xmlStrcmp(recordsList->name, (xmlChar*)"error")==0) {
 
-				//char *errorMessage = (char*)xmlNodeGetContent(recordsList);
 				char *errorCode = (char*) xmlGetProp(recordsList, (xmlChar*) "code");
 
 				state->xmldoc = NULL;
@@ -2489,7 +2474,6 @@ static List* OAIFdwImportForeignSchema(ImportForeignSchemaStmt* stmt, Oid server
 	List *sql_commands = NIL;
 	List *all_sets = NIL;
 	char *format = "oai_dc";
-	//char *url = NULL;
 	bool format_set = false;
 	OAIFdwState *state ;
 	ForeignServer *server = GetForeignServer(serverOid);

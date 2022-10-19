@@ -121,15 +121,15 @@ BEGIN
   GROUP BY srv.foreign_data_wrapper_name, tb.foreign_table_name, node_datestamp.attname, node_identifier.attname ;
 
   IF foreign_table_name IS NULL THEN
-    RAISE EXCEPTION 'foreign table "%" does not exist.', oai_table;
+    RAISE EXCEPTION 'foreign table "%" does not exist', oai_table;
   END IF;
   
   IF columns_list IS NULL THEN
-    RAISE EXCEPTION 'foreign table "%" does not have any oai_node mapping.', oai_table;
+    RAISE EXCEPTION 'foreign table "%" does not have any oai_node mapping', oai_table;
   END IF; 
     
   IF datestamp_column IS NULL THEN 
-    RAISE EXCEPTION 'foreign table "%" has no datestamp column.',oai_table;
+    RAISE EXCEPTION 'foreign table "%" has no datestamp column',oai_table;
   END IF;           
                     
   IF create_table = true THEN 
@@ -141,9 +141,9 @@ BEGIN
       IF identifier_column IS NOT NULL THEN 
         EXECUTE format('ALTER TABLE %s ADD PRIMARY KEY (%s);',target_table,identifier_column);      
       ELSE
-        RAISE WARNING 'foreign table "%" has no identifier column. It is strongly recommended to map the OAI identifier to a column, as it can ensure that records are not duplicated.',oai_table;              
+        RAISE WARNING 'foreign table "%" has no identifier column. It is strongly recommended to map the OAI identifier to a column, as it can ensure that records are not duplicated',oai_table;              
       END IF;    
-      RAISE INFO 'target table "%" successfully created.',target_table;  
+      RAISE INFO 'target table "%" created',target_table;  
     END IF;
     
   END IF;
@@ -170,12 +170,12 @@ BEGIN
       GET CURRENT DIAGNOSTICS page_records = ROW_COUNT;
       total_records = total_records + page_records;
       IF exec_verbose THEN
-        RAISE INFO '% records from "%" successfully updated or inserted into "%" [% - %].',
-                     page_records,oai_table,target_table,rec.date_from,rec.date_until;
+        RAISE INFO '% records from "%" updated or inserted into "%" [% - %]',
+                     page_records,oai_table,target_table,to_char(rec.date_from,'yyyy-mm-dd hh24:mi:ss'),to_char(rec.date_until,'yyyy-mm-dd hh24:mi:ss');
       END IF;
     END IF;
   END LOOP;
-  RAISE INFO '% records from "%" successfully inserted into "%" [% - %].',
-              total_records,oai_table,target_table,start_date,end_date;
+  RAISE INFO 'OAI harvester complete ("%" -> "%"): % records affected [% - %]',
+              oai_table,target_table,total_records,to_char(start_date,'yyyy-mm-dd hh24:mi:ss'),to_char(end_date,'yyyy-mm-dd hh24:mi:ss');
 END; $$;
 COMMENT ON PROCEDURE OAI_HarvestTable(text,text,interval,timestamp,timestamp,boolean,boolean) IS 'Harvest an OAI foreign table and stores its records in a local table';
