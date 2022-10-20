@@ -4,6 +4,7 @@ oai_fdw 1.2.0
  * New Features *
    - OAI_HarvestTable: new procedure to harvest data from OAI foreign tables and store them into a 
      local table.  
+   - Connection retry option for HTTP requests (CREATE SERVER).
 
  * Bug Fixes *
    - Fix memory leaks in the libxml2 parser for ListRecords and ListIdentifiers requests 
