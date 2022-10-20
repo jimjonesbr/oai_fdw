@@ -75,8 +75,43 @@ SELECT * FROM oai_table_err13 LIMIT 1;
 CREATE SERVER oai_server_err14 FOREIGN DATA WRAPPER oai_fdw 
 OPTIONS (url 'foo://services.dnb.de/oai/repository',
          metadataprefix 'oai_dc'); 
-      
-            
+
+-- Empty connect_retry
+CREATE SERVER oai_server_err15 FOREIGN DATA WRAPPER oai_fdw 
+OPTIONS (url 'https://services.dnb.de/oai/repository',
+         connect_retry ''); 
+         
+-- Invalid connect_retry
+CREATE SERVER oai_server_err15 FOREIGN DATA WRAPPER oai_fdw 
+OPTIONS (url 'https://services.dnb.de/oai/repository',
+         connect_retry 'foo');
+
+-- Unreachable proxy server
+-- Timeout 1 second
+-- Retry 5 times 
+CREATE SERVER oai_server_err16 FOREIGN DATA WRAPPER oai_fdw 
+OPTIONS (url 'https://services.dnb.de/oai/repository',
+         http_proxy 'http://proxy.server.im:8080',
+         connect_timeout '1',
+         connect_retry '5');
+         
+CREATE FOREIGN TABLE oai_table_err16 (
+  id text OPTIONS (oai_node 'identifier')
+) SERVER oai_server_err16 OPTIONS (metadataPrefix 'oai_dc');
+
+SELECT * FROM oai_table_err16 LIMIT 1;
+
+
+-- Unreachable proxy server
+-- Timeout 1 second
+-- Invalid retry (-5 times)
+CREATE SERVER oai_server_err17 FOREIGN DATA WRAPPER oai_fdw 
+OPTIONS (url 'https://services.dnb.de/oai/repository',
+         http_proxy 'http://proxy.server.im:8080',
+         connect_timeout '1',
+         connect_retry '-5');
+         
+                     
 -- Unknown COLUMN OPTION value
 CREATE FOREIGN TABLE oai_table_err1 (
   id text                OPTIONS (oai_node 'foo'),

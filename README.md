@@ -81,6 +81,7 @@ OPTIONS (url 'https://sammlungen.ulb.uni-muenster.de/oai');
 | `proxy_user` | optional            | User for proxy server authentication.  
 | `proxy_user_password` | optional            | Password for proxy server authentication.
 | `connect_timeout`         | optional            | Connection timeout for HTTP requests in seconds (default 300 seconds). 
+| `connect_retry`         | optional            | Number of attempts to retry a request in case of failure (default 3 times). 
  
 
 ### [IMPORT FOREIGN SCHEMA](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#import-foreign-schema)
@@ -689,11 +690,11 @@ oai fdw = 1.2.0, libxml = 2.9.10, libcurl = libcurl/7.74.0 OpenSSL/1.1.1n zlib/1
 
 `start_date`:  Start date from the time window.
 
-`end_date`: (default **CURRENT_TIMESTAMP**) End date from the time window.
+`end_date` (optional): End date from the time window. Default **CURRENT_TIMESTAMP**.
 
-`create_table`: (default **TRUE**). Set this parameter to `false` in case the target table already exists.
+`create_table` (optional): Set this parameter to `false` in case the target table already exists. Default **TRUE**.
 
-`verbose`: (default **FALSE**). Set this parameter to `true` for more comprehensive output messages.
+`verbose` (optional): Set this parameter to `true` for more comprehensive output messages. Default **FALSE**.
 
 -------
 

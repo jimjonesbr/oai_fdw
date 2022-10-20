@@ -39,7 +39,7 @@ OPTIONS (url 'https://services.dnb.de/oai/repository',
          metadataprefix 'oai_dc',
          connect_timeout '-1');
 ERROR:  invalid connect_timeout: -1
-HINT:  expected values are positive integers (timeout in seconds).
+HINT:  expected values are positive integers (timeout in seconds)
          
 -- Invalid timeout
 CREATE SERVER oai_server_err9 FOREIGN DATA WRAPPER oai_fdw
@@ -47,7 +47,7 @@ OPTIONS (url 'https://services.dnb.de/oai/repository',
          metadataprefix 'oai_dc',
          connect_timeout 'foo');         
 ERROR:  invalid connect_timeout: foo
-HINT:  expected values are positive integers (timeout in seconds).
+HINT:  expected values are positive integers (timeout in seconds)
          
 -- Empty metadataprefix
 CREATE SERVER oai_server_err10 FOREIGN DATA WRAPPER oai_fdw 
@@ -75,6 +75,9 @@ CREATE FOREIGN TABLE oai_table_err13 (
 ) 
 SERVER oai_server_err13 OPTIONS (metadataPrefix 'oai_dc');
 SELECT * FROM oai_table_err13 LIMIT 1;
+WARNING:  ExecuteOAIRequest (ListIdentifiers): connection to 'ftp://services.dnb.de/oai/repository' failed (1)
+WARNING:  ExecuteOAIRequest (ListIdentifiers): connection to 'ftp://services.dnb.de/oai/repository' failed (2)
+WARNING:  ExecuteOAIRequest (ListIdentifiers): connection to 'ftp://services.dnb.de/oai/repository' failed (3)
 ERROR:  ExecuteOAIRequest => (1) Protocol "ftp" not supported or disabled in libcurl
 
 -- URL with an invalid protocol
@@ -82,8 +85,50 @@ CREATE SERVER oai_server_err14 FOREIGN DATA WRAPPER oai_fdw
 OPTIONS (url 'foo://services.dnb.de/oai/repository',
          metadataprefix 'oai_dc'); 
 ERROR:  invalid url: 'foo://services.dnb.de/oai/repository'
-      
-            
+-- Empty connect_retry
+CREATE SERVER oai_server_err15 FOREIGN DATA WRAPPER oai_fdw 
+OPTIONS (url 'https://services.dnb.de/oai/repository',
+         connect_retry ''); 
+ERROR:  empty value in option 'connect_retry'
+         
+-- Invalid connect_retry
+CREATE SERVER oai_server_err15 FOREIGN DATA WRAPPER oai_fdw 
+OPTIONS (url 'https://services.dnb.de/oai/repository',
+         connect_retry 'foo');
+ERROR:  invalid connect_retry: foo
+HINT:  expected values are positive integers (retry attempts in case of failure)
+-- Unreachable proxy server
+-- Timeout 1 second
+-- Retry 5 times 
+CREATE SERVER oai_server_err16 FOREIGN DATA WRAPPER oai_fdw 
+OPTIONS (url 'https://services.dnb.de/oai/repository',
+         http_proxy 'http://proxy.server.im:8080',
+         connect_timeout '1',
+         connect_retry '5');
+         
+CREATE FOREIGN TABLE oai_table_err16 (
+  id text OPTIONS (oai_node 'identifier')
+) SERVER oai_server_err16 OPTIONS (metadataPrefix 'oai_dc');
+SELECT * FROM oai_table_err16 LIMIT 1;
+WARNING:  ExecuteOAIRequest (ListIdentifiers): connection to 'https://services.dnb.de/oai/repository' failed (1)
+WARNING:  ExecuteOAIRequest (ListIdentifiers): connection to 'https://services.dnb.de/oai/repository' failed (2)
+WARNING:  ExecuteOAIRequest (ListIdentifiers): connection to 'https://services.dnb.de/oai/repository' failed (3)
+WARNING:  ExecuteOAIRequest (ListIdentifiers): connection to 'https://services.dnb.de/oai/repository' failed (4)
+WARNING:  ExecuteOAIRequest (ListIdentifiers): connection to 'https://services.dnb.de/oai/repository' failed (5)
+ERROR:  ExecuteOAIRequest => (5) Could not resolve proxy: proxy.server.im
+
+-- Unreachable proxy server
+-- Timeout 1 second
+-- Invalid retry (-5 times)
+CREATE SERVER oai_server_err17 FOREIGN DATA WRAPPER oai_fdw 
+OPTIONS (url 'https://services.dnb.de/oai/repository',
+         http_proxy 'http://proxy.server.im:8080',
+         connect_timeout '1',
+         connect_retry '-5');
+ERROR:  invalid connect_retry: -5
+HINT:  expected values are positive integers (retry attempts in case of failure)
+         
+                     
 -- Unknown COLUMN OPTION value
 CREATE FOREIGN TABLE oai_table_err1 (
   id text                OPTIONS (oai_node 'foo'),

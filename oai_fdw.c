@@ -75,6 +75,7 @@
 #define OAI_REQUEST_LISTMETADATAFORMATS "ListMetadataFormats"
 #define OAI_REQUEST_LISTSETS "ListSets"
 #define OAI_REQUEST_CONNECTTIMEOUT 300
+#define OAI_REQUEST_MAXRETRY 3
 
 #define OAI_XML_ROOT_ELEMENT "OAI-PMH"
 #define OAI_NODE_IDENTIFIER "identifier"
@@ -84,6 +85,7 @@
 #define OAI_NODE_PROXY_USER "proxy_user"
 #define OAI_NODE_PROXY_USER_PASSWORD "proxy_user_password"
 #define OAI_NODE_CONNECTTIMEOUT "connect_timeout"
+#define OAI_NODE_CONNECTRETRY "connect_retry"
 #define OAI_NODE_CONTENT "content"
 #define OAI_NODE_DATESTAMP "datestamp"
 #define OAI_NODE_SETSPEC "setspec"
@@ -111,6 +113,7 @@ typedef struct OAIFdwState {
 	int 	numcols;
 	int 	numfdwcols;
 	int		rowcount;
+	long    maxretries;
 	long    connectTimeout;
 	char	*completeListSize;
 	char	*identifier;
@@ -161,6 +164,7 @@ typedef struct OAIFdwTableOptions {
 	Oid foreigntableid;
 	int numcols;
 	int numfdwcols;
+	long maxretries;
 	long connectTimeout;
 	char *metadataPrefix;
 	char *from;
@@ -227,6 +231,7 @@ static struct OAIFdwOption valid_options[] =
 	{OAI_NODE_PROXY_USER, ForeignServerRelationId, false, false},
 	{OAI_NODE_PROXY_USER_PASSWORD, ForeignServerRelationId, false, false},
 	{OAI_NODE_CONNECTTIMEOUT, ForeignServerRelationId, false, false},
+	{OAI_NODE_CONNECTRETRY, ForeignServerRelationId, false, false},
 
 	{OAI_NODE_IDENTIFIER, ForeignTableRelationId, false, false},
 	{OAI_NODE_METADATAPREFIX, ForeignTableRelationId, true, false},
@@ -671,10 +676,27 @@ Datum oai_fdw_validator(PG_FUNCTION_ARGS) {
 						ereport(ERROR,
 								(errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
 									errmsg("invalid %s: %s", def->defname,timeout_str),
-						       		errhint("expected values are positive integers (timeout in seconds).")));
+						       		errhint("expected values are positive integers (timeout in seconds)")));
 
 					}
 				}
+
+				if(strcmp(opt->optname, OAI_NODE_CONNECTRETRY)==0){
+
+					char *endptr;
+					char *retry_str =  defGetString(def);
+					long retry_val = strtol(retry_str, &endptr, 0);
+
+					if (retry_str[0] == '\0' || *endptr != '\0' || retry_val < 0) {
+
+						ereport(ERROR,
+								(errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
+									errmsg("invalid %s: %s", def->defname,retry_str),
+						       		errhint("expected values are positive integers (retry attempts in case of failure)")));
+
+					}
+				}
+
 
 				if (strcmp(opt->optname, OAI_NODE_OPTION) == 0) {
 
@@ -740,7 +762,7 @@ static List *GetIdentity(OAIFdwState *state) {
 	elog(DEBUG1, "%s called",__func__);
 
 	state->requestType = OAI_REQUEST_IDENTIFY;
-	state->connectTimeout = OAI_REQUEST_CONNECTTIMEOUT;
+	//state->connectTimeout = OAI_REQUEST_CONNECTTIMEOUT;
 
 	oaiExecuteResponse = ExecuteOAIRequest(state);
 
@@ -792,7 +814,7 @@ static List *GetSets(OAIFdwState *state) {
 	elog(DEBUG1, "%s called",__func__);
 
 	state->requestType = OAI_REQUEST_LISTSETS;
-	state->connectTimeout = OAI_REQUEST_CONNECTTIMEOUT;
+//	state->connectTimeout = OAI_REQUEST_CONNECTTIMEOUT;
 
 	oaiExecuteResponse = ExecuteOAIRequest(state);
 
@@ -854,7 +876,7 @@ static List *GetMetadataFormats(OAIFdwState *state) {
 	elog(DEBUG1, "  %s called",__func__);
 
 	state->requestType = OAI_REQUEST_LISTMETADATAFORMATS;
-	state->connectTimeout = OAI_REQUEST_CONNECTTIMEOUT;
+	//state->connectTimeout = OAI_REQUEST_CONNECTTIMEOUT;
 
 	oaiExecuteResponse = ExecuteOAIRequest(state);
 
@@ -1099,33 +1121,51 @@ static int ExecuteOAIRequest(OAIFdwState *state) {
 		curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, errbuf);
 
 
-		if(state->connectTimeout != 0) {
+//		if(state->connectTimeout != 0) {
+//
+//			curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, state->connectTimeout);
+//			elog(DEBUG1, "  %s (%s): timeout > %ld",__func__,state->requestType,state->connectTimeout);
+//
+//		} else {
+//
+//			curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, OAI_REQUEST_CONNECTTIMEOUT);
+//
+//		}
 
-			curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, state->connectTimeout);
-			elog(DEBUG1, "  %s (%s): timeout > %ld",__func__,state->requestType,state->connectTimeout);
+//		elog(DEBUG1, "  %s (%s): DEFAULT > %ld",__func__,state->requestType,state->connectTimeout);
 
-		} else {
+		if(!state->connectTimeout) {
 
-			curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, OAI_REQUEST_CONNECTTIMEOUT);
+			state->connectTimeout = OAI_REQUEST_CONNECTTIMEOUT;
 
 		}
 
+		curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, state->connectTimeout);
+		elog(DEBUG1, "  %s (%s): timeout > %ld",__func__,state->requestType,state->connectTimeout);
+
+		if(!state->maxretries) {
+
+			state->maxretries = OAI_REQUEST_MAXRETRY;
+
+		}
+
+		elog(DEBUG1, "  %s (%s): max retry > %ld",__func__,state->requestType,state->maxretries);
 
 		/* Proxy support: added in version 1.1.0 */
 		if(state->proxy) {
 
-			elog(DEBUG1, "  %s (%s): proxy URL '%s'",__func__,state->requestType,state->proxy);
+			elog(DEBUG1, "  %s (%s): proxy URL > '%s'",__func__,state->requestType,state->proxy);
 
 			curl_easy_setopt(curl, CURLOPT_PROXY, state->proxy);
 
 			if(strcmp(state->proxyType,OAI_NODE_HTTP_PROXY)==0) {
 
-				elog(DEBUG1, "  %s (%s): proxy protocol 'HTTP'",__func__,state->requestType);
+				elog(DEBUG1, "  %s (%s): proxy protocol > 'HTTP'",__func__,state->requestType);
 				curl_easy_setopt(curl, CURLOPT_PROXYTYPE, CURLPROXY_HTTP);
 
 			} else if(strcmp(state->proxyType,OAI_NODE_HTTPS_PROXY)==0) {
 
-				elog(DEBUG1, "  %s (%s): proxy protocol 'HTTPS'",__func__,state->requestType);
+				elog(DEBUG1, "  %s (%s): proxy protocol > 'HTTPS'",__func__,state->requestType);
 				curl_easy_setopt(curl, CURLOPT_PROXYTYPE, CURLPROXY_HTTPS);
 
 			}
@@ -1151,9 +1191,20 @@ static int ExecuteOAIRequest(OAIFdwState *state) {
 		curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&chunk);
 		curl_easy_setopt(curl, CURLOPT_FAILONERROR, true);
 
-		elog(DEBUG2, "  %s (%s) performing cURL request ... ",__func__,state->requestType);
+		elog(DEBUG2, "  %s (%s): performing cURL request ... ",__func__,state->requestType);
 
 		res = curl_easy_perform(curl);
+		//res = NULL;
+
+		if (res != CURLE_OK) {
+
+			for (long i = 1; i <= state->maxretries && (res = curl_easy_perform(curl)) != CURLE_OK; i++) {
+
+				elog(WARNING, "%s (%s): connection to '%s' failed (%ld)",__func__,state->requestType, state->url,i);
+
+			}
+
+		}
 
 		if (res != CURLE_OK) {
 
@@ -1679,7 +1730,8 @@ static void OAIFdwGetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid 
 	OAIFdwTableOptions *opts = (OAIFdwTableOptions *)palloc0(sizeof(OAIFdwTableOptions));
 	ListCell *cell;
 
-	opts->connectTimeout = OAI_REQUEST_CONNECTTIMEOUT;
+//	opts->connectTimeout = OAI_REQUEST_CONNECTTIMEOUT;
+//	opts->maxretries = OAI_REQUEST_MAXRETRY;
 
 	elog(DEBUG1,"%s called",__func__);
 
@@ -1720,7 +1772,14 @@ static void OAIFdwGetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid 
 
 			opts->connectTimeout = strtol(timeout_str, &tailpt, 0);
 
-			elog(DEBUG1,"  %s parsing node '%s': %ld",__func__,def->defname,opts->connectTimeout);
+			//elog(DEBUG1,"  %s parsing node '%s': %ld",__func__,def->defname,opts->connectTimeout);
+
+		} else if (strcmp(OAI_NODE_CONNECTRETRY, def->defname) == 0) {
+
+			char *tailpt;
+			char *maxretry_str =  defGetString(def);
+			//elog(DEBUG2,"  %s parsing node '%s': %d",__func__,def->defname,opts->maxretries);
+			opts->maxretries = strtol(maxretry_str, &tailpt, 0);
 
 		} else {
 
@@ -1785,6 +1844,7 @@ static ForeignScan *OAIFdwGetForeignPlan(PlannerInfo *root, RelOptInfo *baserel,
 	state->proxyUser = opts->proxyUser;
 	state->proxyUserPassword = opts->proxyUserPassword;
 	state->connectTimeout = opts->connectTimeout;
+	state->maxretries = opts->maxretries;
 	state->set = opts->set;
 	state->from = opts->from;
 	state->until = opts->until;
