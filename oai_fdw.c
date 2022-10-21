@@ -762,7 +762,6 @@ static List *GetIdentity(OAIFdwState *state) {
 	elog(DEBUG1, "%s called",__func__);
 
 	state->requestType = OAI_REQUEST_IDENTIFY;
-	//state->connectTimeout = OAI_REQUEST_CONNECTTIMEOUT;
 
 	oaiExecuteResponse = ExecuteOAIRequest(state);
 
@@ -814,7 +813,6 @@ static List *GetSets(OAIFdwState *state) {
 	elog(DEBUG1, "%s called",__func__);
 
 	state->requestType = OAI_REQUEST_LISTSETS;
-//	state->connectTimeout = OAI_REQUEST_CONNECTTIMEOUT;
 
 	oaiExecuteResponse = ExecuteOAIRequest(state);
 
@@ -876,7 +874,6 @@ static List *GetMetadataFormats(OAIFdwState *state) {
 	elog(DEBUG1, "  %s called",__func__);
 
 	state->requestType = OAI_REQUEST_LISTMETADATAFORMATS;
-	//state->connectTimeout = OAI_REQUEST_CONNECTTIMEOUT;
 
 	oaiExecuteResponse = ExecuteOAIRequest(state);
 
@@ -1180,7 +1177,6 @@ static int ExecuteOAIRequest(OAIFdwState *state) {
 		elog(DEBUG2, "  %s (%s): performing cURL request ... ",__func__,state->requestType);
 
 		res = curl_easy_perform(curl);
-		//res = NULL;
 
 		if (res != CURLE_OK) {
 
@@ -1712,12 +1708,8 @@ static void OAIFdwGetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid 
 
 	ForeignTable *ft = GetForeignTable(foreigntableid);
 	ForeignServer *server = GetForeignServer(ft->serverid);
-
 	OAIFdwTableOptions *opts = (OAIFdwTableOptions *)palloc0(sizeof(OAIFdwTableOptions));
 	ListCell *cell;
-
-//	opts->connectTimeout = OAI_REQUEST_CONNECTTIMEOUT;
-//	opts->maxretries = OAI_REQUEST_MAXRETRY;
 
 	elog(DEBUG1,"%s called",__func__);
 
