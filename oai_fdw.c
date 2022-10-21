@@ -66,7 +66,7 @@
 #include "access/reloptions.h"
 #include "catalog/pg_namespace.h"
 
-#define OAI_FDW_VERSION "1.3.0"
+#define OAI_FDW_VERSION "1.3.1"
 #define OAI_REQUEST_LISTRECORDS "ListRecords"
 #define OAI_REQUEST_LISTIDENTIFIERS "ListIdentifiers"
 #define OAI_REQUEST_IDENTIFY "Identify"
@@ -1119,20 +1119,6 @@ static int ExecuteOAIRequest(OAIFdwState *state) {
 		curl_easy_setopt(curl, CURLOPT_URL, state->url);
 		curl_easy_setopt(curl, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
 		curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, errbuf);
-
-
-//		if(state->connectTimeout != 0) {
-//
-//			curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, state->connectTimeout);
-//			elog(DEBUG1, "  %s (%s): timeout > %ld",__func__,state->requestType,state->connectTimeout);
-//
-//		} else {
-//
-//			curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, OAI_REQUEST_CONNECTTIMEOUT);
-//
-//		}
-
-//		elog(DEBUG1, "  %s (%s): DEFAULT > %ld",__func__,state->requestType,state->connectTimeout);
 
 		if(!state->connectTimeout) {
 
