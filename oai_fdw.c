@@ -2349,8 +2349,6 @@ static TupleTableSlot *OAIFdwIterateForeignScan(ForeignScanState *node) {
 		ExecStoreVirtualTuple(slot);
 		elog(DEBUG2,"  %s: virtual tuple stored",__func__);
 
-		pfree(record);
-
 	} else {
 
 		elog(DEBUG1,"%s: records retrieved %d/%s (rowcount/completeListSize)",__func__,state->rowcount,state->completeListSize);
