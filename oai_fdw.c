@@ -2401,7 +2401,12 @@ static void LoadOAIRecords(OAIFdwState *state) {
 
 						if(xmlGetProp(record, (xmlChar*) "completeListSize")) {
 
-							state->completeListSize = (char*) xmlGetProp(record, (xmlChar*) "completeListSize");
+							xmlChar *size = xmlGetProp(record, (xmlChar*) "completeListSize");
+							state->completeListSize = palloc(sizeof(char)*xmlStrlen(size)+1);
+							snprintf(state->completeListSize,xmlStrlen(size)+1,"%s",(char*)size);
+							//state->completeListSize = (char*) size;
+
+							xmlFree(size);
 
 						}
 
