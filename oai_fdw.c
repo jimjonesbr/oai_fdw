@@ -2326,8 +2326,9 @@ static TupleTableSlot *OAIFdwIterateForeignScan(ForeignScanState *node) {
 
 		if(state->xmldoc != NULL) {
 
-			elog(DEBUG2,"  %s: clearing xml document.",__func__);
-			state->xmldoc = NULL;
+			elog(DEBUG2,"  %s: freeing xml document.",__func__);
+			xmlFreeDoc(state->xmldoc);
+			xmlCleanupParser();
 
 		}
 
@@ -2347,6 +2348,8 @@ static TupleTableSlot *OAIFdwIterateForeignScan(ForeignScanState *node) {
 
 		ExecStoreVirtualTuple(slot);
 		elog(DEBUG2,"  %s: virtual tuple stored",__func__);
+
+		pfree(record);
 
 	} else {
 
