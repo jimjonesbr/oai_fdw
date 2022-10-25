@@ -66,7 +66,7 @@
 #include "access/reloptions.h"
 #include "catalog/pg_namespace.h"
 
-#define OAI_FDW_VERSION "1.3.0"
+#define OAI_FDW_VERSION "1.4.0"
 #define OAI_REQUEST_LISTRECORDS "ListRecords"
 #define OAI_REQUEST_LISTIDENTIFIERS "ListIdentifiers"
 #define OAI_REQUEST_IDENTIFY "Identify"
@@ -94,6 +94,7 @@
 #define OAI_NODE_UNTIL "until"
 #define OAI_NODE_STATUS "status"
 #define OAI_NODE_RESUMPTIONTOKEN "resumptionToken"
+#define OAI_NODE_COMPLETELISTSIZE "completeListSize"
 #define OAI_NODE_OPTION "oai_node"
 
 #define OAI_ERROR_ID_DOES_NOT_EXIST "idDoesNotExist"
@@ -1986,14 +1987,14 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 
 				} else if (strcmp(buffer_identifier,oai->identifier)==0){
 
-					elog(DEBUG2,"  %s (%s): ##########  match > %s",__func__,state->requestType,oai->identifier);
+					elog(DEBUG2,"  %s (%s): match > %s",__func__,state->requestType,oai->identifier);
 					getNext = true;
 
 				} else if(getNext == true) {
 
 					state->current_identifier = palloc0(sizeof(char)*strlen(oai->identifier)+1);
 					snprintf(state->current_identifier,strlen(oai->identifier)+1,"%s",oai->identifier);
-					elog(DEBUG2,"  %s: (%s) setting new current identifier > %s",__func__,state->requestType,state->current_identifier);
+					elog(DEBUG2,"  %s (%s): setting new current identifier > %s",__func__,state->requestType,state->current_identifier);
 
 					ret=true;
 
@@ -2155,7 +2156,7 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 
 					state->current_identifier = palloc0(sizeof(char)*strlen(oai->identifier)+1);
 					snprintf(state->current_identifier,strlen(oai->identifier)+1,"%s",oai->identifier);
-					elog(DEBUG2,"  %s: (%s) setting new current identifier > %s",__func__,state->requestType,state->current_identifier);
+					elog(DEBUG2,"  %s (%s): setting new current identifier > %s",__func__,state->requestType,state->current_identifier);
 
 					ret=true;
 
@@ -2177,11 +2178,9 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 
 		}
 
-
 	}
 
 	return NULL;
-
 }
 
 static void CreateOAITuple(TupleTableSlot *slot, OAIFdwState *state, OAIRecord *oai) {
@@ -2343,11 +2342,11 @@ static TupleTableSlot *OAIFdwIterateForeignScan(ForeignScanState *node) {
 
 	if(record) {
 
+		elog(DEBUG2,"  %s: creating OAI tuple",__func__);
 		CreateOAITuple(slot, state, record);
-		elog(DEBUG2,"  %s: OAI tuple created",__func__);
 
+		elog(DEBUG2,"  %s: storing virtual tuple",__func__);
 		ExecStoreVirtualTuple(slot);
-		elog(DEBUG2,"  %s: virtual tuple stored",__func__);
 
 	} else {
 
@@ -2397,15 +2396,13 @@ static void LoadOAIRecords(OAIFdwState *state) {
 
 					if (record->type != XML_ELEMENT_NODE) continue;
 
-					if (xmlStrcmp(record->name, (xmlChar*)"resumptionToken")==0){
+					if (xmlStrcmp(record->name, (xmlChar*)OAI_NODE_RESUMPTIONTOKEN)==0){
 
-						if(xmlGetProp(record, (xmlChar*) "completeListSize")) {
+						if(xmlGetProp(record, (xmlChar*) OAI_NODE_COMPLETELISTSIZE)) {
 
-							xmlChar *size = xmlGetProp(record, (xmlChar*) "completeListSize");
+							xmlChar *size = xmlGetProp(record, (xmlChar*) OAI_NODE_COMPLETELISTSIZE);
 							state->completeListSize = palloc(sizeof(char)*xmlStrlen(size)+1);
 							snprintf(state->completeListSize,xmlStrlen(size)+1,"%s",(char*)size);
-							//state->completeListSize = (char*) size;
-
 							xmlFree(size);
 
 						}
@@ -2416,22 +2413,23 @@ static void LoadOAIRecords(OAIFdwState *state) {
 
 			} else if (xmlStrcmp(recordsList->name, (xmlChar*)"error")==0) {
 
-				char *errorCode = (char*) xmlGetProp(recordsList, (xmlChar*) "code");
-
 				state->xmldoc = NULL;
 
-				if(strcmp(errorCode,OAI_ERROR_ID_DOES_NOT_EXIST)==0 || strcmp(errorCode,OAI_ERROR_NO_RECORD_MATCH)==0) {
+				if(strcmp((char*) xmlGetProp(recordsList, (xmlChar*) "code"),OAI_ERROR_ID_DOES_NOT_EXIST)==0 ||
+				   strcmp((char*) xmlGetProp(recordsList, (xmlChar*) "code"),OAI_ERROR_NO_RECORD_MATCH)==0) {
 
 					ereport(WARNING,
 							(errcode(ERRCODE_NO_DATA_FOUND),
-									errmsg("OAI %s: %s",errorCode,(char*)xmlNodeGetContent(recordsList))));
+							 errmsg("OAI %s: %s",(char*) xmlGetProp(recordsList, (xmlChar*) "code"), (char*)xmlNodeGetContent(recordsList))));
+
 
 				} else {
 
 					xmlFreeDoc(state->xmldoc);
+
 					ereport(ERROR,
 							(errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
-									errmsg("OAI %s: %s",errorCode,(char*)xmlNodeGetContent(recordsList))));
+							 errmsg("OAI %s: %s",(char*) xmlGetProp(recordsList, (xmlChar*) "code"), (char*)xmlNodeGetContent(recordsList))));
 
 				}
 
