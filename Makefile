@@ -2,7 +2,7 @@ MODULE_big = oai_fdw
 OBJS = oai_fdw.o
 
 EXTENSION = oai_fdw
-DATA = oai_fdw--1.4.sql
+DATA = oai_fdw--1.4.sql oai_fdw--1.3--1.4.sql oai_fdw--1.2--1.4.sql oai_fdw--1.1--1.4.sql
 REGRESS = create_server import_foreign_schema create_foreign_table select_statements exceptions functions harvest
 
 

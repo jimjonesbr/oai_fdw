@@ -1,62 +1,3 @@
-CREATE FUNCTION oai_fdw_handler() 
-  RETURNS fdw_handler AS 'MODULE_PATHNAME' 
-  LANGUAGE C STRICT;
-
-CREATE TYPE oai_node AS (
-  code text,
-  description text
-);
-
-CREATE TYPE OAI_IdentityNode AS (
-  name text,
-  description text
-);
-
-CREATE TYPE OAI_Set AS (
-  setspec text,
-  setname text
-);
-
-CREATE TYPE OAI_MetadataFormat AS (
-  metadataPrefix text,
-  schema text,
-  metadataNamespace text
-);
-
-CREATE OR REPLACE FUNCTION OAI_Version()
-  RETURNS text AS 'MODULE_PATHNAME', 'oai_fdw_version'
-  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
-  
-  COMMENT ON FUNCTION OAI_Version() IS 'Shows current version of oai_fdw and its major libraries';
-
-CREATE OR REPLACE FUNCTION OAI_ListMetadataFormats(text)
-  RETURNS SETOF OAI_MetadataFormat AS 'MODULE_PATHNAME', 'oai_fdw_listMetadataFormats'
-  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
-  
-  COMMENT ON FUNCTION OAI_ListMetadataFormats(text) IS 'Lists all metadata formats of a given OAI-PMH server';
-
-CREATE OR REPLACE FUNCTION OAI_ListSets(text)
-  RETURNS SETOF OAI_Set AS 'MODULE_PATHNAME', 'oai_fdw_listSets'
-  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
-  
-  COMMENT ON FUNCTION OAI_ListSets(text) IS 'Lists all sets of a given OAI-PMH server';
-  
-CREATE OR REPLACE FUNCTION OAI_Identify(text)
-  RETURNS SETOF OAI_IdentityNode AS 'MODULE_PATHNAME', 'oai_fdw_identity'
-  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
-  
-  COMMENT ON FUNCTION OAI_Identify(text) IS 'Lists settings of a given OAI-PMH server';
-  
-CREATE FUNCTION oai_fdw_validator(text[], oid)
-  RETURNS void AS 'MODULE_PATHNAME'
-  LANGUAGE C STRICT;
-
-  COMMENT ON FUNCTION oai_fdw_validator(text[], oid) IS 'OAI foreign data wrapper options validator';
-  
-CREATE FOREIGN DATA WRAPPER oai_fdw
-  HANDLER oai_fdw_handler
-  VALIDATOR oai_fdw_validator;
-
 CREATE OR REPLACE PROCEDURE OAI_HarvestTable
 (oai_table text, 
  target_table text, 
@@ -170,7 +111,7 @@ BEGIN
       GET CURRENT DIAGNOSTICS page_records = ROW_COUNT;
       total_records = total_records + page_records;
       IF exec_verbose THEN
-        RAISE INFO '% records from "%" updated or inserted into "%" [% - %]',
+        RAISE INFO '% records from "%" inserted into "%" [% - %]',
                      page_records,oai_table,target_table,to_char(rec.date_from,'yyyy-mm-dd hh24:mi:ss'),to_char(rec.date_until,'yyyy-mm-dd hh24:mi:ss');
       END IF;
     END IF;
@@ -178,4 +119,6 @@ BEGIN
   RAISE INFO 'OAI harvester complete ("%" -> "%"): % records affected [% - %]',
               oai_table,target_table,total_records,to_char(start_date,'yyyy-mm-dd hh24:mi:ss'),to_char(end_date,'yyyy-mm-dd hh24:mi:ss');
 END; $$;
-COMMENT ON PROCEDURE OAI_HarvestTable(text,text,interval,timestamp,timestamp,boolean,boolean) IS 'Harvest an OAI foreign table and stores its records in a local table';
+
+COMMENT ON PROCEDURE OAI_HarvestTable(text,text,interval,timestamp,timestamp,boolean,boolean) IS 'Harvests an OAI foreign table and stores its records in a local table';
+
