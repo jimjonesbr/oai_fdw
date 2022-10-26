@@ -10,6 +10,7 @@ A PostgreSQL Foreign Data Wrapper to access OAI-PMH repositories (Open Archives 
 
 - [Requirements](#requirements)
 - [Build & Install](#build-and-install)
+- [Update](#update)
 - [Usage](#usage)
   - [CREATE SERVER](#create-server)
   - [IMPORT FOREIGN SCHEMA](#import-foreign-schema)
@@ -51,10 +52,31 @@ After building and installing the extension you're ready to create the extension
 CREATE EXTENSION oai_fdw;
 ```
 
+To install an specific version add the full version number in the `WITH VERSION` clause
+
+```sql
+CREATE EXTENSION oai_fdw WITH VERSION '1.3';
+```
+
 To run the predefined regression tests run `make installcheck` with the user `postgres`:
 
 ```bash
 $ make PGUSER=postgres installcheck
+```
+
+## [Update](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#update)
+
+To update the oai_fdw's version you must first build and install the binaries and then run `ALTER EXTENSION`:
+
+
+```sql
+ALTER EXTENSION oai_fdw UPDATE';
+```
+
+To update to an specific version use `UPDATE TO` and the full version number
+
+```sql
+ALTER EXTENSION oai_fdw UPDATE TO '1.4';
 ```
 
 ## [Usage](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#usage)
