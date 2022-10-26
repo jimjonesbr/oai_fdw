@@ -8,9 +8,9 @@ CREATE FOREIGN TABLE IF NOT EXISTS ulb_oai_dc (
 /* Target table without schema */
 CALL OAI_HarvestTable('ulb_oai_dc','clone_ulb_oai_dc', interval '5 days', '2022-10-01 00:00:00', '2022-10-17 00:00:00',true,true);
 INFO:  target table "public.clone_ulb_oai_dc" created
-INFO:  1 records from "public.ulb_oai_dc" updated or inserted into "public.clone_ulb_oai_dc" [2022-10-01 00:00:00 - 2022-10-06 00:00:00]
-INFO:  57 records from "public.ulb_oai_dc" updated or inserted into "public.clone_ulb_oai_dc" [2022-10-06 00:00:00 - 2022-10-11 00:00:00]
-INFO:  32 records from "public.ulb_oai_dc" updated or inserted into "public.clone_ulb_oai_dc" [2022-10-11 00:00:00 - 2022-10-16 00:00:00]
+INFO:  1 records from "public.ulb_oai_dc" inserted into "public.clone_ulb_oai_dc" [2022-10-01 00:00:00 - 2022-10-06 00:00:00]
+INFO:  57 records from "public.ulb_oai_dc" inserted into "public.clone_ulb_oai_dc" [2022-10-06 00:00:00 - 2022-10-11 00:00:00]
+INFO:  32 records from "public.ulb_oai_dc" inserted into "public.clone_ulb_oai_dc" [2022-10-11 00:00:00 - 2022-10-16 00:00:00]
 INFO:  OAI harvester complete ("public.ulb_oai_dc" -> "public.clone_ulb_oai_dc"): 90 records affected [2022-10-01 00:00:00 - 2022-10-17 00:00:00]
 SELECT count(*) FROM clone_ulb_oai_dc;
  count 
@@ -57,9 +57,9 @@ LINE 1: SELECT count(*) FROM oai_schema."clone-ulb:oai/dc";
 /* Target table containing special characters without schema */
 CALL OAI_HarvestTable('ulb_oai_dc','"clone-ulb:oai/dc"', interval '5 days', '2022-10-01 00:00:00', '2022-10-17 00:00:00',true,true);
 INFO:  target table "public."clone-ulb:oai/dc"" created
-INFO:  1 records from "public.ulb_oai_dc" updated or inserted into "public."clone-ulb:oai/dc"" [2022-10-01 00:00:00 - 2022-10-06 00:00:00]
-INFO:  57 records from "public.ulb_oai_dc" updated or inserted into "public."clone-ulb:oai/dc"" [2022-10-06 00:00:00 - 2022-10-11 00:00:00]
-INFO:  32 records from "public.ulb_oai_dc" updated or inserted into "public."clone-ulb:oai/dc"" [2022-10-11 00:00:00 - 2022-10-16 00:00:00]
+INFO:  1 records from "public.ulb_oai_dc" inserted into "public."clone-ulb:oai/dc"" [2022-10-01 00:00:00 - 2022-10-06 00:00:00]
+INFO:  57 records from "public.ulb_oai_dc" inserted into "public."clone-ulb:oai/dc"" [2022-10-06 00:00:00 - 2022-10-11 00:00:00]
+INFO:  32 records from "public.ulb_oai_dc" inserted into "public."clone-ulb:oai/dc"" [2022-10-11 00:00:00 - 2022-10-16 00:00:00]
 INFO:  OAI harvester complete ("public.ulb_oai_dc" -> "public."clone-ulb:oai/dc""): 90 records affected [2022-10-01 00:00:00 - 2022-10-17 00:00:00]
 SELECT count(*) FROM "clone-ulb:oai/dc";
  count 
@@ -78,9 +78,9 @@ CREATE FOREIGN TABLE IF NOT EXISTS table_without_identifier (
 CALL OAI_HarvestTable('table_without_identifier','clone_table_without_identifier', interval '5 days', '2022-10-01 00:00:00', '2022-10-17 00:00:00',true,true); 
 WARNING:  foreign table "public.table_without_identifier" has no identifier column. It is strongly recommended to map the OAI identifier to a column, as it can ensure that records are not duplicated
 INFO:  target table "public.clone_table_without_identifier" created
-INFO:  1 records from "public.table_without_identifier" updated or inserted into "public.clone_table_without_identifier" [2022-10-01 00:00:00 - 2022-10-06 00:00:00]
-INFO:  57 records from "public.table_without_identifier" updated or inserted into "public.clone_table_without_identifier" [2022-10-06 00:00:00 - 2022-10-11 00:00:00]
-INFO:  32 records from "public.table_without_identifier" updated or inserted into "public.clone_table_without_identifier" [2022-10-11 00:00:00 - 2022-10-16 00:00:00]
+INFO:  1 records from "public.table_without_identifier" inserted into "public.clone_table_without_identifier" [2022-10-01 00:00:00 - 2022-10-06 00:00:00]
+INFO:  57 records from "public.table_without_identifier" inserted into "public.clone_table_without_identifier" [2022-10-06 00:00:00 - 2022-10-11 00:00:00]
+INFO:  32 records from "public.table_without_identifier" inserted into "public.clone_table_without_identifier" [2022-10-11 00:00:00 - 2022-10-16 00:00:00]
 INFO:  OAI harvester complete ("public.table_without_identifier" -> "public.clone_table_without_identifier"): 90 records affected [2022-10-01 00:00:00 - 2022-10-17 00:00:00]
 /* EXCEPTION: oai_table does not exist */
 CALL OAI_HarvestTable('foo','clone_ulb_oai_dc', interval '5 days', '2022-10-01 00:00:00', '2022-10-17 00:00:00',true,true);
