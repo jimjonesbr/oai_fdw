@@ -326,6 +326,9 @@ Datum oai_fdw_version(PG_FUNCTION_ARGS) {
     PG_RETURN_TEXT_P(cstring_to_text(buffer.data));
 }
 
+/**
+ * Retrieves all information configured in the CREATE SERVER statement.
+ */
 OAIFdwState *GetServerInfo(const char *srvname) {
 
 	OAIFdwState *state = (OAIFdwState *) palloc0(sizeof(OAIFdwState));
@@ -755,6 +758,10 @@ Datum oai_fdw_validator(PG_FUNCTION_ARGS) {
 	PG_RETURN_VOID();
 }
 
+/*
+ * Parses information from the OAI Identify request.
+ * https://www.openarchives.org/OAI/openarchivesprotocol.html#Identify
+ */
 static List *GetIdentity(OAIFdwState *state) {
 
 	int oaiExecuteResponse;
@@ -805,7 +812,10 @@ static List *GetIdentity(OAIFdwState *state) {
 
 }
 
-
+/*
+ * Parses information from the OAI ListSets request.
+ * https://www.openarchives.org/OAI/openarchivesprotocol.html#ListSets
+ */
 static List *GetSets(OAIFdwState *state) {
 
 	int oaiExecuteResponse;
@@ -867,6 +877,10 @@ static List *GetSets(OAIFdwState *state) {
 	return result;
 }
 
+/*
+ * Parses information from the OAI ListMetadataFormats request.
+ * https://www.openarchives.org/OAI/openarchivesprotocol.html#ListMetadataFormats
+ */
 static List *GetMetadataFormats(OAIFdwState *state) {
 
 	int oaiExecuteResponse;
@@ -931,6 +945,9 @@ static List *GetMetadataFormats(OAIFdwState *state) {
 	return result;
 }
 
+/**
+ * Checks if a given URL is valid.
+ */
 static int CheckURL(char *url) {
 
 	CURLUcode code;
@@ -977,6 +994,10 @@ static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, voi
   return realsize;
 }
 
+/**
+ * Executes the HTTP request to the OAI repository using the
+ * libcurl library.
+ */
 static int ExecuteOAIRequest(OAIFdwState *state) {
 
 	CURL *curl;
@@ -1229,9 +1250,17 @@ static int ExecuteOAIRequest(OAIFdwState *state) {
 
 	return OAI_SUCCESS;
 
-
 }
 
+/**
+ * This function validates the oai_nodes in the OPTION clause of each column
+ * and its data types. Additionally it chooses which OAI Request will be
+ * executed bases on the oai_nodes set in the foreign table (ListRecords or
+ * ListIdentifiers).
+ *
+ * ListRecords:     https://www.openarchives.org/OAI/openarchivesprotocol.html#ListRecords
+ * ListIdentifiers: https://www.openarchives.org/OAI/openarchivesprotocol.html#ListIdentifiers
+ */
 static void OAIRequestPlanner(OAIFdwTableOptions *opts, ForeignTable *ft, RelOptInfo *baserel) {
 
 	List *conditions = baserel->baserestrictinfo;
@@ -1244,7 +1273,6 @@ static void OAIRequestPlanner(OAIFdwTableOptions *opts, ForeignTable *ft, RelOpt
 #endif
 
 	elog(DEBUG1, "%s called.",__func__);
-
 
 	/* The default request type is OAI_REQUEST_LISTRECORDS.
 	 * This can be altered depending on the columns used
@@ -1864,6 +1892,10 @@ static void OAIFdwBeginForeignScan(ForeignScanState *node, int eflags) {
 
 }
 
+/**
+ * Fetches the next record from the OAI request result set. Returns null
+ * if there is no further records and no resumption token (EOF).
+ */
 static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 
 	xmlNodePtr oaipmh;
@@ -2316,7 +2348,7 @@ static TupleTableSlot *OAIFdwIterateForeignScan(ForeignScanState *node) {
 
 	ExecClearTuple(slot);
 
-	/* Returns empty tuple in case there is no mapping for OAI nodes and columns*/
+	/* Returns empty tuple in case there is no mapping for OAI nodes and columns */
 	if(state->numfdwcols == 0) return slot;
 
 	if(state->rowcount == 0 || state->resumptionToken) {
@@ -2364,6 +2396,11 @@ static TupleTableSlot *OAIFdwIterateForeignScan(ForeignScanState *node) {
 
 }
 
+/**
+ * Loads the XML document from the OAI Request and stores it in the
+ * OAIFdwState *state variable for further parsing. If applicable,
+ * the resumption token will be stored for the next request.
+ */
 static void LoadOAIRecords(OAIFdwState *state) {
 
 	xmlNodePtr recordsList;
@@ -2396,7 +2433,7 @@ static void LoadOAIRecords(OAIFdwState *state) {
 
 					if (record->type != XML_ELEMENT_NODE) continue;
 
-					if (xmlStrcmp(record->name, (xmlChar*)OAI_NODE_RESUMPTIONTOKEN)==0){
+					if (xmlStrcmp(record->name, (xmlChar*) OAI_NODE_RESUMPTIONTOKEN)==0){
 
 						if(xmlGetProp(record, (xmlChar*) OAI_NODE_COMPLETELISTSIZE)) {
 
