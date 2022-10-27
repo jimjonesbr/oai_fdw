@@ -70,7 +70,7 @@ To update the oai_fdw's version you must first build and install the binaries an
 
 
 ```sql
-ALTER EXTENSION oai_fdw UPDATE';
+ALTER EXTENSION oai_fdw UPDATE;
 ```
 
 To update to an specific version use `UPDATE TO` and the full version number
