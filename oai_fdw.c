@@ -66,7 +66,7 @@
 #include "access/reloptions.h"
 #include "catalog/pg_namespace.h"
 
-#define OAI_FDW_VERSION "1.4.0"
+#define OAI_FDW_VERSION "1.4.1"
 #define OAI_REQUEST_LISTRECORDS "ListRecords"
 #define OAI_REQUEST_LISTIDENTIFIERS "ListIdentifiers"
 #define OAI_REQUEST_IDENTIFY "Identify"
@@ -76,6 +76,16 @@
 #define OAI_REQUEST_LISTSETS "ListSets"
 #define OAI_REQUEST_CONNECTTIMEOUT 300
 #define OAI_REQUEST_MAXRETRY 3
+
+#define OAI_RESPONSE_ELEMENT_RECORD "record"
+#define OAI_RESPONSE_ELEMENT_METADATA "metadata"
+#define OAI_RESPONSE_ELEMENT_HEADER "header"
+#define OAI_RESPONSE_ELEMENT_IDENTIFIER "identifier"
+#define OAI_RESPONSE_ELEMENT_DATESTAMP "datestamp"
+#define OAI_RESPONSE_ELEMENT_SETSPEC "setSpec"
+#define OAI_RESPONSE_ELEMENT_DELETED "deleted"
+#define OAI_RESPONSE_ELEMENT_RESUMPTIONTOKEN "resumptionToken"
+#define OAI_RESPONSE_ELEMENT_COMPLETELISTSIZE "completeListSize"
 
 #define OAI_XML_ROOT_ELEMENT "OAI-PMH"
 #define OAI_NODE_IDENTIFIER "identifier"
@@ -93,10 +103,7 @@
 #define OAI_NODE_FROM "from"
 #define OAI_NODE_UNTIL "until"
 #define OAI_NODE_STATUS "status"
-#define OAI_NODE_RESUMPTIONTOKEN "resumptionToken"
-#define OAI_NODE_COMPLETELISTSIZE "completeListSize"
 #define OAI_NODE_OPTION "oai_node"
-
 #define OAI_ERROR_ID_DOES_NOT_EXIST "idDoesNotExist"
 #define OAI_ERROR_NO_RECORD_MATCH "noRecordsMatch"
 
@@ -851,7 +858,7 @@ static List *GetSets(OAIFdwState *state) {
 
 					if (SetElement->type != XML_ELEMENT_NODE)	continue;
 
-					if (xmlStrcmp(SetElement->name, (xmlChar*) "setSpec") == 0) {
+					if (xmlStrcmp(SetElement->name, (xmlChar*) OAI_RESPONSE_ELEMENT_SETSPEC) == 0) {
 
 						set->setSpec = (char*) xmlNodeGetContent(SetElement);
 
@@ -978,12 +985,13 @@ static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, voi
 {
   size_t realsize = size * nmemb;
   struct MemoryStruct *mem = (struct MemoryStruct *)userp;
-
   char *ptr = repalloc(mem->memory, mem->size + realsize + 1);
+
   if(!ptr) {
-    /* out of memory! */
-    printf("not enough memory (realloc returned NULL)\n");
-    return 0;
+
+    ereport(ERROR,
+    	   (errcode(ERRCODE_FDW_OUT_OF_MEMORY),
+    		errmsg("out of memory (repalloc returned NULL)")));
   }
 
   mem->memory = ptr;
@@ -1459,11 +1467,10 @@ static char *GetOAINodeFromColumn(Oid foreigntableid, int16 attnum) {
 #if PG_VERSION_NUM < 130000
 	Relation rel = heap_open(foreigntableid, NoLock);
 #else
-	Relation rel = table_open(foreigntableid, NoLock);;
+	Relation rel = table_open(foreigntableid, NoLock);
 #endif
 
 	elog(DEBUG1, "  %s called",__func__);
-
 
 	for (int i = 0; i < rel->rd_att->natts ; i++) {
 
@@ -1490,7 +1497,6 @@ static char *GetOAINodeFromColumn(Oid foreigntableid, int16 attnum) {
 
 	}
 
-	//table_close(rel, NoLock);
 #if PG_VERSION_NUM < 130000
 	heap_close(rel, NoLock);
 #else
@@ -1779,13 +1785,10 @@ static void OAIFdwGetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid 
 
 			opts->connectTimeout = strtol(timeout_str, &tailpt, 0);
 
-			//elog(DEBUG1,"  %s parsing node '%s': %ld",__func__,def->defname,opts->connectTimeout);
-
 		} else if (strcmp(OAI_NODE_CONNECTRETRY, def->defname) == 0) {
 
 			char *tailpt;
 			char *maxretry_str =  defGetString(def);
-			//elog(DEBUG2,"  %s parsing node '%s': %d",__func__,def->defname,opts->maxretries);
 			opts->maxretries = strtol(maxretry_str, &tailpt, 0);
 
 		} else {
@@ -1894,7 +1897,8 @@ static void OAIFdwBeginForeignScan(ForeignScanState *node, int eflags) {
 
 /**
  * Fetches the next record from the OAI request result set. Returns null
- * if there is no further records and no resumption token (EOF).
+ * if there is no further records and no resumption  token in the current
+ * request(EOF).
  */
 static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 
@@ -1937,7 +1941,7 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 
 				if(ListRecordsRequest->next) {
 
-					if (xmlStrcmp(ListRecordsRequest->next->name, (xmlChar*)OAI_NODE_RESUMPTIONTOKEN)==0) {
+					if (xmlStrcmp(ListRecordsRequest->next->name, (xmlChar*)OAI_RESPONSE_ELEMENT_RESUMPTIONTOKEN)==0) {
 
 						xmlBufferPtr bufferToken = xmlBufferCreate();
 						size_t content_size = (size_t) xmlNodeDump(bufferToken, state->xmldoc, ListRecordsRequest->next->children, 0, 0);
@@ -1957,7 +1961,7 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 				}
 
 
-				if (xmlStrcmp(ListRecordsRequest->name, (xmlChar*) "header") == 0) {
+				if (xmlStrcmp(ListRecordsRequest->name, (xmlChar*) OAI_RESPONSE_ELEMENT_HEADER) == 0) {
 
 					oai->setsArray = NULL;
 
@@ -1965,7 +1969,7 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 
 						char *status = (char*) xmlGetProp(ListRecordsRequest, (xmlChar*) OAI_NODE_STATUS);
 
-						if (strcmp(status,"deleted")) oai->isDeleted = true;
+						if (strcmp(status,OAI_RESPONSE_ELEMENT_DELETED)) oai->isDeleted = true;
 
 					}
 
@@ -1974,13 +1978,13 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 						xmlBufferPtr buffer = xmlBufferCreate();
 						size_t content_size = (size_t) xmlNodeDump(buffer, state->xmldoc, headerElements->children, 0, 0);
 
-						if (xmlStrcmp(headerElements->name, (xmlChar*) "identifier")==0) {
+						if (xmlStrcmp(headerElements->name, (xmlChar*) OAI_RESPONSE_ELEMENT_IDENTIFIER)==0) {
 
 							elog(DEBUG2,"  %s (%s): setting identifier to OAI object > '%s'",__func__,state->requestType,(char*)buffer->content);
 							oai->identifier = (char*) palloc0(sizeof(char)*content_size+1);
 							snprintf(oai->identifier,content_size+1,"%s",(char*)buffer->content);
 
-						} else if (xmlStrcmp(headerElements->name, (xmlChar*) "setSpec")==0) {
+						} else if (xmlStrcmp(headerElements->name, (xmlChar*) OAI_RESPONSE_ELEMENT_SETSPEC)==0) {
 
 							char *array_element = (char*) palloc0(sizeof(char)*content_size+1);
 							elog(DEBUG2,"  %s (%s): setting setspec to OAI object > '%s'",__func__,state->requestType,(char*)buffer->content);
@@ -1990,7 +1994,7 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 
 							elog(DEBUG2,"  %s (%s): array appended",__func__,state->requestType);
 
-						} else if (xmlStrcmp(headerElements->name, (xmlChar*) "datestamp")==0)	{
+						} else if (xmlStrcmp(headerElements->name, (xmlChar*) OAI_RESPONSE_ELEMENT_DATESTAMP)==0)	{
 
 							elog(DEBUG2,"  %s (%s): setting datestamp to OAI object > '%s'",__func__,state->requestType,(char*)buffer->content);
 							oai->datestamp = (char*) palloc0(sizeof(char)*content_size+1);
@@ -2070,7 +2074,7 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 
 				if(ListRecordsRequest->next) {
 
-					if (xmlStrcmp(ListRecordsRequest->next->name, (xmlChar*)OAI_NODE_RESUMPTIONTOKEN)==0) {
+					if (xmlStrcmp(ListRecordsRequest->next->name, (xmlChar*)OAI_RESPONSE_ELEMENT_RESUMPTIONTOKEN)==0) {
 
 						xmlBufferPtr bufferToken = xmlBufferCreate();
 						size_t content_size = (size_t) xmlNodeDump(bufferToken, state->xmldoc, ListRecordsRequest->next->children, 0, 0);
@@ -2089,13 +2093,13 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 
 				}
 
-				if (xmlStrcmp(ListRecordsRequest->name, (xmlChar*) "record") == 0) {
+				if (xmlStrcmp(ListRecordsRequest->name, (xmlChar*) OAI_RESPONSE_ELEMENT_RECORD) == 0) {
 
 					oai->setsArray = NULL;
 
 					for (record = ListRecordsRequest->children; record != NULL; record = record->next) {
 
-						if (xmlStrcmp(record->name, (xmlChar*) "metadata") == 0) {
+						if (xmlStrcmp(record->name, (xmlChar*) OAI_RESPONSE_ELEMENT_METADATA) == 0) {
 
 							/*copy necessary to get include the namespaces in the buffer output*/
 							xmlNodePtr copy = xmlCopyNode(record->children, 1);
@@ -2116,14 +2120,13 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 
 						}
 
-
-						if (xmlStrcmp(record->name, (xmlChar*) "header") == 0) {
+						if (xmlStrcmp(record->name, (xmlChar*) OAI_RESPONSE_ELEMENT_HEADER) == 0) {
 
 							if( xmlGetProp(record, (xmlChar*) OAI_NODE_STATUS)){
 
 								char *status = (char*) xmlGetProp(record, (xmlChar*) OAI_NODE_STATUS);
 
-								if (strcmp(status,"deleted")) oai->isDeleted = true;
+								if (strcmp(status,OAI_RESPONSE_ELEMENT_DELETED)) oai->isDeleted = true;
 
 							}
 
@@ -2132,14 +2135,14 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 								xmlBufferPtr buffer = xmlBufferCreate();
 								size_t content_size = (size_t) xmlNodeDump(buffer, state->xmldoc, headerElements->children, 0, 0);
 
-								if (xmlStrcmp(headerElements->name, (xmlChar*) "identifier")==0) {
+								if (xmlStrcmp(headerElements->name, (xmlChar*) OAI_RESPONSE_ELEMENT_IDENTIFIER)==0) {
 
 									oai->identifier = (char*) palloc0(sizeof(char)*content_size+1);
 									snprintf(oai->identifier,content_size+1,"%s",(char*)buffer->content);
 
 									elog(DEBUG2,"  %s (%s): setting identifier to OAI object > '%s'",__func__,state->requestType,oai->identifier);
 
-								} else if (xmlStrcmp(headerElements->name, (xmlChar*) "setSpec")==0) {
+								} else if (xmlStrcmp(headerElements->name, (xmlChar*) OAI_RESPONSE_ELEMENT_SETSPEC)==0) {
 
 									char *array_element = (char*) palloc0(sizeof(char)*content_size+1);
 									elog(DEBUG2,"  %s (%s): setting setspec to OAI object > '%s'",__func__,state->requestType,(char*)buffer->content);
@@ -2147,7 +2150,7 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 
 									appendTextArray(&oai->setsArray,array_element);
 
-								} else if (xmlStrcmp(headerElements->name, (xmlChar*) "datestamp")==0)	{
+								} else if (xmlStrcmp(headerElements->name, (xmlChar*) OAI_RESPONSE_ELEMENT_DATESTAMP)==0)	{
 
 									oai->datestamp = (char*) palloc0(sizeof(char)*content_size+1);
 									snprintf(oai->datestamp,content_size+1,"%s",(char*)buffer->content);
@@ -2332,7 +2335,6 @@ static void CreateOAITuple(TupleTableSlot *slot, OAIFdwState *state, OAIRecord *
 
 	}
 
-
 	state->rowcount++;
 	elog(DEBUG2,"%s => finished (rowcount: %d)",__func__,state->rowcount);
 
@@ -2433,11 +2435,11 @@ static void LoadOAIRecords(OAIFdwState *state) {
 
 					if (record->type != XML_ELEMENT_NODE) continue;
 
-					if (xmlStrcmp(record->name, (xmlChar*) OAI_NODE_RESUMPTIONTOKEN)==0){
+					if (xmlStrcmp(record->name, (xmlChar*) OAI_RESPONSE_ELEMENT_RESUMPTIONTOKEN)==0){
 
-						if(xmlGetProp(record, (xmlChar*) OAI_NODE_COMPLETELISTSIZE)) {
+						if(xmlGetProp(record, (xmlChar*) OAI_RESPONSE_ELEMENT_COMPLETELISTSIZE)) {
 
-							xmlChar *size = xmlGetProp(record, (xmlChar*) OAI_NODE_COMPLETELISTSIZE);
+							xmlChar *size = xmlGetProp(record, (xmlChar*) OAI_RESPONSE_ELEMENT_COMPLETELISTSIZE);
 							state->completeListSize = palloc(sizeof(char)*xmlStrlen(size)+1);
 							snprintf(state->completeListSize,xmlStrlen(size)+1,"%s",(char*)size);
 							xmlFree(size);
