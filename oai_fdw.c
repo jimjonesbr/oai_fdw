@@ -427,7 +427,6 @@ Datum oai_fdw_identity(PG_FUNCTION_ARGS) {
 			ereport(ERROR,(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					errmsg("function returning record called in context that cannot accept type record")));
 
-
 		attinmeta = TupleDescGetAttInMetadata(tupdesc);
 		funcctx->attinmeta = attinmeta;
 
@@ -776,6 +775,8 @@ static List *GetIdentity(OAIFdwState *state) {
 
 	elog(DEBUG1, "%s called",__func__);
 
+	xmlInitParser();
+
 	state->requestType = OAI_REQUEST_IDENTIFY;
 
 	oaiExecuteResponse = ExecuteOAIRequest(state);
@@ -807,11 +808,10 @@ static List *GetIdentity(OAIFdwState *state) {
 
 		}
 
-		xmlFreeNode(oai_root);
-		xmlFreeNode(Identity);
-		xmlFreeNode(xmlroot);
-
 	}
+
+	xmlFreeDoc(state->xmldoc);
+	xmlCleanupParser();
 
 	elog(DEBUG1, "%s => finished",__func__);
 
@@ -829,6 +829,8 @@ static List *GetSets(OAIFdwState *state) {
 	List *result = NIL;
 
 	elog(DEBUG1, "%s called",__func__);
+
+	xmlInitParser();
 
 	state->requestType = OAI_REQUEST_LISTSETS;
 
@@ -879,6 +881,9 @@ static List *GetSets(OAIFdwState *state) {
 
 	}
 
+	xmlFreeDoc(state->xmldoc);
+	xmlCleanupParser();
+
 	elog(DEBUG1, "%s => finished",__func__);
 
 	return result;
@@ -894,6 +899,8 @@ static List *GetMetadataFormats(OAIFdwState *state) {
 	List *result = NIL;
 
 	elog(DEBUG1, "  %s called",__func__);
+
+	xmlInitParser();
 
 	state->requestType = OAI_REQUEST_LISTMETADATAFORMATS;
 
@@ -947,9 +954,13 @@ static List *GetMetadataFormats(OAIFdwState *state) {
 
 	}
 
+	xmlFreeDoc(state->xmldoc);
+	xmlCleanupParser();
+
 	elog(DEBUG1, "  %s => finished.",__func__);
 
 	return result;
+
 }
 
 /**
