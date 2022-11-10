@@ -14,7 +14,12 @@ SELECT count(*) FROM clone_ulb_oai_dc;
 CALL OAI_HarvestTable('ulb_oai_dc','clone_ulb_oai_dc', interval '5 days', '2022-10-01 00:00:00', '2022-10-17 00:00:00');
 SELECT count(*) FROM clone_ulb_oai_dc;
 
+CREATE SCHEMA oai_schema;
 /* Target table with specific schema */
+CALL OAI_HarvestTable('ulb_oai_dc','oai_schema.clone_ulb_oai_dc', interval '5 days', '2022-10-01 00:00:00', '2022-10-17 00:00:00',true,true);
+SELECT count(*) FROM oai_schema.clone_ulb_oai_dc;
+
+/* Target table with specific schema (update records) */
 CALL OAI_HarvestTable('ulb_oai_dc','oai_schema.clone_ulb_oai_dc', interval '5 days', '2022-10-01 00:00:00', '2022-10-17 00:00:00',true,true);
 SELECT count(*) FROM oai_schema.clone_ulb_oai_dc;
 
