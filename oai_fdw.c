@@ -796,14 +796,16 @@ static List *GetIdentity(OAIFdwState *state) {
 			for (Identity = oai_root->children; Identity != NULL; Identity = Identity->next) {
 
 				OAIFdwIdentityNode *node = (OAIFdwIdentityNode *)palloc0(sizeof(OAIFdwIdentityNode));
+				char *name = (char*) Identity->name;
+				char *desc = (char*) xmlNodeGetContent(Identity);
 
 				if (Identity->type != XML_ELEMENT_NODE)	continue;
 
-				node->name = (char*) palloc0(sizeof(char)*strlen((char*)Identity->name)+1);
-				snprintf(node->name,strlen((char*)Identity->name)+1,"%s",(char*)Identity->name);
+				node->name = (char*) palloc0(sizeof(char)*strlen(name)+1);
+				snprintf(node->name,strlen(name)+1,"%s",name);
 
-				node->description = (char*) palloc0(sizeof(char)*strlen((char*) xmlNodeGetContent(Identity))+1);
-				snprintf(node->description,strlen((char*) xmlNodeGetContent(Identity))+1,"%s",(char*) xmlNodeGetContent(Identity));
+				node->description = (char*) palloc0(sizeof(char)*strlen(desc)+1);
+				snprintf(node->description,strlen(desc)+1,"%s",desc);
 
 
 				//node->name = (char*) Identity->name;
@@ -865,16 +867,24 @@ static List *GetSets(OAIFdwState *state) {
 
 				for (SetElement = ListSets->children; SetElement != NULL; SetElement = SetElement->next) {
 
+					char *se = (char*) xmlNodeGetContent(SetElement);
+
 					if (SetElement->type != XML_ELEMENT_NODE)	continue;
 
 					if (xmlStrcmp(SetElement->name, (xmlChar*) OAI_RESPONSE_ELEMENT_SETSPEC) == 0) {
 
-						set->setSpec = (char*) xmlNodeGetContent(SetElement);
+						set->setSpec = (char*) palloc0(sizeof(char)*strlen(se)+1);
+						snprintf(set->setSpec,strlen(se)+1,"%s",se);
+
+						//set->setSpec = (char*) xmlNodeGetContent(SetElement);
 
 
 					} else if (xmlStrcmp(SetElement->name, (xmlChar*) "setName") == 0) {
 
-						set->setName = (char*) xmlNodeGetContent(SetElement);
+						//set->setName = (char*) xmlNodeGetContent(SetElement);
+						set->setName = (char*) palloc0(sizeof(char)*strlen(se)+1);
+						snprintf(set->setName,strlen(se)+1,"%s",se);
+
 
 					}
 
@@ -935,19 +945,29 @@ static List *GetMetadataFormats(OAIFdwState *state) {
 
 				for (MetadataElement = ListMetadataFormats->children; MetadataElement != NULL; MetadataElement = MetadataElement->next) {
 
+					char *mde = (char*) xmlNodeGetContent(MetadataElement);
+
 					if (MetadataElement->type != XML_ELEMENT_NODE)	continue;
 
 					if (xmlStrcmp(MetadataElement->name, (xmlChar*) "metadataPrefix") == 0) {
 
-						format->metadataPrefix = (char*) xmlNodeGetContent(MetadataElement);
+						format->metadataPrefix = (char*) palloc0(sizeof(char)*strlen(mde)+1);
+						snprintf(format->metadataPrefix,strlen(mde)+1,"%s",mde);
+
+						//format->metadataPrefix = (char*) xmlNodeGetContent(MetadataElement);
 
 					} else if (xmlStrcmp(MetadataElement->name, (xmlChar*) "schema") == 0) {
 
-						format->schema = (char*) xmlNodeGetContent(MetadataElement);
+						format->schema = (char*) palloc0(sizeof(char)*strlen(mde)+1);
+						snprintf(format->schema,strlen(mde)+1,"%s",mde);
+						//format->schema = (char*) xmlNodeGetContent(MetadataElement);
 
 					} else if (xmlStrcmp(MetadataElement->name, (xmlChar*) "metadataNamespace") == 0) {
 
-						format->metadataNamespace = (char*) xmlNodeGetContent(MetadataElement);
+						format->metadataNamespace = (char*) palloc0(sizeof(char)*strlen(mde)+1);
+						snprintf(format->metadataNamespace,strlen(mde)+1,"%s",mde);
+
+						//format->metadataNamespace = (char*) xmlNodeGetContent(MetadataElement);
 
 					}
 
