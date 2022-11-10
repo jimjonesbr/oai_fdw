@@ -66,7 +66,7 @@
 #include "access/reloptions.h"
 #include "catalog/pg_namespace.h"
 
-#define OAI_FDW_VERSION "1.4.1"
+#define OAI_FDW_VERSION "1.5.0"
 #define OAI_REQUEST_LISTRECORDS "ListRecords"
 #define OAI_REQUEST_LISTIDENTIFIERS "ListIdentifiers"
 #define OAI_REQUEST_IDENTIFY "Identify"
@@ -1943,7 +1943,9 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 
 		for (oaipmh = xmlroot->children; oaipmh!= NULL; oaipmh = oaipmh->next) {
 
-			oai->metadataPrefix = state->metadataPrefix;
+			oai->metadataPrefix = (char*) palloc0(sizeof(char)*strlen(state->metadataPrefix)+1);
+			snprintf(oai->metadataPrefix,strlen(state->metadataPrefix)+1,"%s",state->metadataPrefix);
+			//oai->metadataPrefix = state->metadataPrefix;
 			oai->isDeleted = false;
 
 			if (xmlStrcmp(oaipmh->name, (xmlChar*)state->requestType)!=0) continue;
@@ -2379,7 +2381,16 @@ static TupleTableSlot *OAIFdwIterateForeignScan(ForeignScanState *node) {
 		state->current_identifier = NULL;
 		LoadOAIRecords(state);
 
-		elog(DEBUG1,"%s: records retrieved %d/%s (rowcount/completeListSize)",__func__,state->rowcount,state->completeListSize);
+		if(!state->completeListSize){
+
+			elog(DEBUG1,"%s: records loaded in the current page %d/%d",__func__,state->current_row,state->current_row);
+
+		} else {
+
+			elog(DEBUG1,"%s: records loaded in the current page %d/%s",__func__,state->current_row,state->completeListSize);
+
+		}
+
 
 	}
 
@@ -2395,7 +2406,7 @@ static TupleTableSlot *OAIFdwIterateForeignScan(ForeignScanState *node) {
 
 	} else {
 
-		elog(DEBUG1,"%s: records retrieved %d/%s (rowcount/completeListSize)",__func__,state->rowcount,state->completeListSize);
+		elog(DEBUG1,"%s: total records retrieved %d",__func__,state->rowcount);
 
 		xmlFreeDoc(state->xmldoc);
 		xmlCleanupParser();
@@ -2456,6 +2467,10 @@ static void LoadOAIRecords(OAIFdwState *state) {
 							xmlFree(size);
 
 						}
+
+					} else {
+
+						state->current_row++;
 
 					}
 
