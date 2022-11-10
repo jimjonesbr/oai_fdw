@@ -20,7 +20,7 @@ CALL OAI_HarvestTable('ulb_oai_dc','oai_schema.clone_ulb_oai_dc', interval '5 da
 SELECT count(*) FROM oai_schema.clone_ulb_oai_dc;
 
 /* Target table with specific schema (update records) */
-CALL OAI_HarvestTable('ulb_oai_dc','oai_schema.clone_ulb_oai_dc', interval '5 days', '2022-10-01 00:00:00', '2022-10-17 00:00:00',true,true);
+CALL OAI_HarvestTable('ulb_oai_dc','oai_schema.clone_ulb_oai_dc', interval '1 day', '2022-10-06 00:00:00', '2022-10-11 00:00:00',true,true);
 SELECT count(*) FROM oai_schema.clone_ulb_oai_dc;
 
 -- Existing table will be upserted 
