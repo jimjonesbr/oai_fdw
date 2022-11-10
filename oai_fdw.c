@@ -799,8 +799,15 @@ static List *GetIdentity(OAIFdwState *state) {
 
 				if (Identity->type != XML_ELEMENT_NODE)	continue;
 
-				node->name = (char*) Identity->name;
-				node->description = (char*) xmlNodeGetContent(Identity);
+				node->name = (char*) palloc0(sizeof(char)*strlen((char*)Identity->name)+1);
+				snprintf(node->name,strlen((char*)Identity->name)+1,"%s",(char*)Identity->name);
+
+				node->description = (char*) palloc0(sizeof(char)*strlen((char*) xmlNodeGetContent(Identity))+1);
+				snprintf(node->description,strlen((char*) xmlNodeGetContent(Identity))+1,"%s",(char*) xmlNodeGetContent(Identity));
+
+
+				//node->name = (char*) Identity->name;
+				//node->description = (char*) xmlNodeGetContent(Identity);
 
 				result = lappend(result, node);
 
@@ -1945,7 +1952,6 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 
 			oai->metadataPrefix = (char*) palloc0(sizeof(char)*strlen(state->metadataPrefix)+1);
 			snprintf(oai->metadataPrefix,strlen(state->metadataPrefix)+1,"%s",state->metadataPrefix);
-			//oai->metadataPrefix = state->metadataPrefix;
 			oai->isDeleted = false;
 
 			if (xmlStrcmp(oaipmh->name, (xmlChar*)state->requestType)!=0) continue;
@@ -2462,8 +2468,8 @@ static void LoadOAIRecords(OAIFdwState *state) {
 						if(xmlGetProp(record, (xmlChar*) OAI_RESPONSE_ELEMENT_COMPLETELISTSIZE)) {
 
 							xmlChar *size = xmlGetProp(record, (xmlChar*) OAI_RESPONSE_ELEMENT_COMPLETELISTSIZE);
-							state->completeListSize = palloc(sizeof(char)*xmlStrlen(size)+1);
-							snprintf(state->completeListSize,xmlStrlen(size)+1,"%s",(char*)size);
+							state->completeListSize = palloc0(sizeof(char) * strlen((char*)size)+1);
+							snprintf(state->completeListSize,strlen((char*)size)+1,"%s",(char*)size);
 							xmlFree(size);
 
 						}
