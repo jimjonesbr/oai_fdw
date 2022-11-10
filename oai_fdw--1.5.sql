@@ -74,11 +74,14 @@ DECLARE
   datestamp_column text;
   identifier_column text;
   foreign_table_name text;
+  total_inserts bigint := 0;
+  total_updates bigint := 0;
+  target_table_exists boolean := false;  
+  final_query text := '';
+  insert_query text := '';
   conflict_clause text := '';
-  sql_query text := '';
-  page_records  bigint := 0;
-  total_records bigint := 0;
-  target_table_exists boolean := false;
+  inserted_records  bigint := 0;
+  updated_records  bigint := 0; 
 BEGIN
   
   IF oai_table !~~ '%.%' OR (oai_table !~~ '"%"."%"' AND oai_table ~~ '"%"') THEN
@@ -155,29 +158,43 @@ BEGIN
   LOOP
     IF rec.date_until IS NOT NULL THEN             
     
-      sql_query := format(E'INSERT INTO %1$s (%2$s)  
+      insert_query := format(E'INSERT INTO %1$s (%2$s)  
                             SELECT %2$s FROM %3$s 
                             WHERE %4$s >= %5$L AND %4$s < %6$L\n', 
-                            target_table, columns_list, oai_table, datestamp_column, rec.date_from, rec.date_until); 
+                            target_table, columns_list, oai_table, datestamp_column, rec.date_from, rec.date_until);
                       
       IF identifier_column IS NOT NULL THEN     
-        conflict_clause := format('ON CONFLICT (%1$s) DO UPDATE SET (%2$s) = (%3$s);',identifier_column, columns_list, columns_list_excluded);
+        conflict_clause := format('ON CONFLICT (%1$s) DO UPDATE SET (%2$s) = (%3$s)',identifier_column, columns_list, columns_list_excluded);
       END IF;    
       
-      RAISE DEBUG E'\n% %\n',sql_query,conflict_clause;
-      EXECUTE format('%s%s',sql_query,conflict_clause);                  
+	  final_query := format('
+		WITH j AS (
+		  %s 
+		  %s 
+		  RETURNING xmax=0 AS inserted) 
+		SELECT 
+		  COUNT(*) FILTER (WHERE inserted) AS inserted, 
+		  COUNT(*) FILTER (WHERE NOT inserted) AS updated 
+		FROM j', insert_query, conflict_clause);
+	  
+	  RAISE DEBUG '%',final_query;
+
+	  EXECUTE final_query INTO inserted_records, updated_records;   
+	  total_inserts := total_inserts + inserted_records;
+	  total_updates := total_updates + updated_records;
       COMMIT;
-      GET CURRENT DIAGNOSTICS page_records = ROW_COUNT;
-      total_records = total_records + page_records;
+
       IF exec_verbose THEN
-        RAISE INFO '% records from "%" inserted into "%" [% - %]',
-                     page_records,oai_table,target_table,to_char(rec.date_from,'yyyy-mm-dd hh24:mi:ss'),to_char(rec.date_until,'yyyy-mm-dd hh24:mi:ss');
+	    RAISE INFO 'page stored into "%": % records inserted and % updated [% - %]',
+		            target_table, 
+					inserted_records,
+					updated_records,
+					to_char(rec.date_from,'yyyy-mm-dd hh24:mi:ss'),to_char(rec.date_until,'yyyy-mm-dd hh24:mi:ss');
       END IF;
     END IF;
   END LOOP;
-  RAISE INFO 'OAI harvester complete ("%" -> "%"): % records affected [% - %]',
-              oai_table,target_table,total_records,to_char(start_date,'yyyy-mm-dd hh24:mi:ss'),to_char(end_date,'yyyy-mm-dd hh24:mi:ss');
+  RAISE INFO 'OAI harvester complete ("%" -> "%"): % records inserted and % updated [% - %]',
+              oai_table,target_table,total_inserts,total_updates,to_char(start_date,'yyyy-mm-dd hh24:mi:ss'),to_char(end_date,'yyyy-mm-dd hh24:mi:ss');
 END; $$;
 
 COMMENT ON PROCEDURE OAI_HarvestTable(text,text,interval,timestamp,timestamp,boolean,boolean) IS 'Harvests an OAI foreign table and stores its records in a local table';
-
