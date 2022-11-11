@@ -83,6 +83,12 @@
 #define OAI_RESPONSE_ELEMENT_IDENTIFIER "identifier"
 #define OAI_RESPONSE_ELEMENT_DATESTAMP "datestamp"
 #define OAI_RESPONSE_ELEMENT_SETSPEC "setSpec"
+#define OAI_RESPONSE_ELEMENT_SETNAME "setName"
+#define OAI_RESPONSE_ELEMENT_METADATANAMESPACE "metadataNamespace"
+#define OAI_RESPONSE_ELEMENT_METADATAPREFIX "metadataPrefix"
+#define OAI_RESPONSE_ELEMENT_METADATAFORMAT "metadataFormat"
+#define OAI_RESPONSE_ELEMENT_SCHEMA "schema"
+
 #define OAI_RESPONSE_ELEMENT_DELETED "deleted"
 #define OAI_RESPONSE_ELEMENT_RESUMPTIONTOKEN "resumptionToken"
 #define OAI_RESPONSE_ELEMENT_COMPLETELISTSIZE "completeListSize"
@@ -137,7 +143,7 @@ typedef struct OAIFdwState {
 	char 	*until;
 	char 	*metadataPrefix;
 	char 	*resumptionToken;
-	char	*requestType;
+	char	*requestVerb;
 	char	*current_identifier;
 
 	Oid 		foreigntableid;
@@ -184,7 +190,7 @@ typedef struct OAIFdwTableOptions {
 	char *proxyUserPassword;
 	char *set;
 	char *identifier;
-	char *requestType;
+	char *requestVerb;
 
 } OAIFdwTableOptions;
 
@@ -777,7 +783,7 @@ static List *GetIdentity(OAIFdwState *state) {
 
 	xmlInitParser();
 
-	state->requestType = OAI_REQUEST_IDENTIFY;
+	state->requestVerb = OAI_REQUEST_IDENTIFY;
 
 	oaiExecuteResponse = ExecuteOAIRequest(state);
 
@@ -841,7 +847,7 @@ static List *GetSets(OAIFdwState *state) {
 
 	xmlInitParser();
 
-	state->requestType = OAI_REQUEST_LISTSETS;
+	state->requestVerb = OAI_REQUEST_LISTSETS;
 
 	oaiExecuteResponse = ExecuteOAIRequest(state);
 
@@ -879,7 +885,7 @@ static List *GetSets(OAIFdwState *state) {
 						//set->setSpec = (char*) xmlNodeGetContent(SetElement);
 
 
-					} else if (xmlStrcmp(SetElement->name, (xmlChar*) "setName") == 0) {
+					} else if (xmlStrcmp(SetElement->name, (xmlChar*) OAI_RESPONSE_ELEMENT_SETNAME) == 0) {
 
 						//set->setName = (char*) xmlNodeGetContent(SetElement);
 						set->setName = (char*) palloc0(sizeof(char)*strlen(se)+1);
@@ -919,7 +925,7 @@ static List *GetMetadataFormats(OAIFdwState *state) {
 
 	xmlInitParser();
 
-	state->requestType = OAI_REQUEST_LISTMETADATAFORMATS;
+	state->requestVerb = OAI_REQUEST_LISTMETADATAFORMATS;
 
 	oaiExecuteResponse = ExecuteOAIRequest(state);
 
@@ -941,7 +947,7 @@ static List *GetMetadataFormats(OAIFdwState *state) {
 				OAIMetadataFormat *format = (OAIMetadataFormat *)palloc0(sizeof(OAIMetadataFormat));
 
 				if (ListMetadataFormats->type != XML_ELEMENT_NODE)	continue;
-				if (xmlStrcmp(ListMetadataFormats->name, (xmlChar*) "metadataFormat") != 0) continue;
+				if (xmlStrcmp(ListMetadataFormats->name, (xmlChar*) OAI_RESPONSE_ELEMENT_METADATAFORMAT) != 0) continue;
 
 				for (MetadataElement = ListMetadataFormats->children; MetadataElement != NULL; MetadataElement = MetadataElement->next) {
 
@@ -949,20 +955,20 @@ static List *GetMetadataFormats(OAIFdwState *state) {
 
 					if (MetadataElement->type != XML_ELEMENT_NODE)	continue;
 
-					if (xmlStrcmp(MetadataElement->name, (xmlChar*) "metadataPrefix") == 0) {
+					if (xmlStrcmp(MetadataElement->name, (xmlChar*) OAI_RESPONSE_ELEMENT_METADATAPREFIX) == 0) {
 
 						format->metadataPrefix = (char*) palloc0(sizeof(char)*strlen(mde)+1);
 						snprintf(format->metadataPrefix,strlen(mde)+1,"%s",mde);
 
 						//format->metadataPrefix = (char*) xmlNodeGetContent(MetadataElement);
 
-					} else if (xmlStrcmp(MetadataElement->name, (xmlChar*) "schema") == 0) {
+					} else if (xmlStrcmp(MetadataElement->name, (xmlChar*) OAI_RESPONSE_ELEMENT_SCHEMA) == 0) {
 
 						format->schema = (char*) palloc0(sizeof(char)*strlen(mde)+1);
 						snprintf(format->schema,strlen(mde)+1,"%s",mde);
 						//format->schema = (char*) xmlNodeGetContent(MetadataElement);
 
-					} else if (xmlStrcmp(MetadataElement->name, (xmlChar*) "metadataNamespace") == 0) {
+					} else if (xmlStrcmp(MetadataElement->name, (xmlChar*) OAI_RESPONSE_ELEMENT_METADATANAMESPACE) == 0) {
 
 						format->metadataNamespace = (char*) palloc0(sizeof(char)*strlen(mde)+1);
 						snprintf(format->metadataNamespace,strlen(mde)+1,"%s",mde);
@@ -1058,77 +1064,77 @@ static int ExecuteOAIRequest(OAIFdwState *state) {
 
 	elog(DEBUG1,"%s called: base url > '%s' ",__func__,state->url);
 
-	appendStringInfo(&url_buffer,"verb=%s",state->requestType);
+	appendStringInfo(&url_buffer,"verb=%s",state->requestVerb);
 
-	if(strcmp(state->requestType,OAI_REQUEST_LISTRECORDS)==0) {
+	if(strcmp(state->requestVerb,OAI_REQUEST_LISTRECORDS)==0) {
 
 		if(state->set) {
 
-			elog(DEBUG1,"  %s (%s): appending 'set' > %s",__func__,state->requestType,state->set);
+			elog(DEBUG1,"  %s (%s): appending 'set' > %s",__func__,state->requestVerb,state->set);
 			appendStringInfo(&url_buffer,"&set=%s",state->set);
 
 		}
 
 		if(state->from) {
 
-			elog(DEBUG1,"  %s (%s): appending 'from' > %s",__func__,state->requestType,state->from);
+			elog(DEBUG1,"  %s (%s): appending 'from' > %s",__func__,state->requestVerb,state->from);
 			appendStringInfo(&url_buffer,"&from=%s",state->from);
 
 		}
 
 		if(state->until) {
 
-			elog(DEBUG1,"  %s (%s): appending 'until' > %s",__func__,state->requestType,state->until);
+			elog(DEBUG1,"  %s (%s): appending 'until' > %s",__func__,state->requestVerb,state->until);
 			appendStringInfo(&url_buffer,"&until=%s",state->until);
 
 		}
 
 		if(state->metadataPrefix) {
 
-			elog(DEBUG1,"  %s (%s): appending 'metadataPrefix' > %s",__func__,state->requestType,state->metadataPrefix);
+			elog(DEBUG1,"  %s (%s): appending 'metadataPrefix' > %s",__func__,state->requestVerb,state->metadataPrefix);
 			appendStringInfo(&url_buffer,"&metadataPrefix=%s",state->metadataPrefix);
 
 		}
 
 		if(state->resumptionToken) {
 
-			elog(DEBUG1,"  %s (%s): appending 'resumptionToken' > %s",__func__,state->requestType,state->resumptionToken);
+			elog(DEBUG1,"  %s (%s): appending 'resumptionToken' > %s",__func__,state->requestVerb,state->resumptionToken);
 			resetStringInfo(&url_buffer);
-			appendStringInfo(&url_buffer,"verb=%s&resumptionToken=%s",state->requestType,state->resumptionToken);
+			appendStringInfo(&url_buffer,"verb=%s&resumptionToken=%s",state->requestVerb,state->resumptionToken);
 
 			state->resumptionToken = NULL;
 
 		}
 
-	} else if(strcmp(state->requestType,OAI_REQUEST_GETRECORD)==0) {
+	} else if(strcmp(state->requestVerb,OAI_REQUEST_GETRECORD)==0) {
 
 		if(state->identifier) {
 
-			elog(DEBUG1,"  %s (%s): appending 'identifier' > %s",__func__,state->requestType,state->identifier);
+			elog(DEBUG1,"  %s (%s): appending 'identifier' > %s",__func__,state->requestVerb,state->identifier);
 			appendStringInfo(&url_buffer,"&identifier=%s",state->identifier);
 
 		}
 
 		if(state->metadataPrefix) {
 
-			elog(DEBUG1,"  %s (%s): appending 'metadataPrefix' > %s",__func__,state->requestType,state->metadataPrefix);
+			elog(DEBUG1,"  %s (%s): appending 'metadataPrefix' > %s",__func__,state->requestVerb,state->metadataPrefix);
 			appendStringInfo(&url_buffer,"&metadataPrefix=%s",state->metadataPrefix);
 
 		}
 
-	} else if(strcmp(state->requestType,OAI_REQUEST_LISTIDENTIFIERS)==0) {
+	} else if(strcmp(state->requestVerb,OAI_REQUEST_LISTIDENTIFIERS)==0) {
 
 
 		if(state->set) {
 
-			elog(DEBUG1,"  %s (%s): appending 'set' > %s",__func__,state->requestType,state->set);
+			elog(DEBUG1,"  %s (%s): appending 'set' > %s",__func__,state->requestVerb,state->set);
 			appendStringInfo(&url_buffer,"&set=%s",state->set);
 
 		}
 
 		if(state->from) {
 
-			elog(DEBUG1,"  %s (%s): appending 'from' > %s",__func__,state->requestType,state->from);
+			elog(DEBUG1,"  %s (%s): appending 'from' > %s",__func__,state->requestVerb,state->from);
 			appendStringInfo(&url_buffer,"&from=%s",state->from);
 
 
@@ -1136,14 +1142,14 @@ static int ExecuteOAIRequest(OAIFdwState *state) {
 
 		if(state->until) {
 
-			elog(DEBUG1,"  %s (%s): appending 'until' > %s",__func__,state->requestType,state->until);
+			elog(DEBUG1,"  %s (%s): appending 'until' > %s",__func__,state->requestVerb,state->until);
 			appendStringInfo(&url_buffer,"&until=%s",state->until);
 
 		}
 
 		if(state->metadataPrefix) {
 
-			elog(DEBUG1,"  %s (%s): appending 'metadataPrefix' > %s",__func__,state->requestType,state->metadataPrefix);
+			elog(DEBUG1,"  %s (%s): appending 'metadataPrefix' > %s",__func__,state->requestVerb,state->metadataPrefix);
 			appendStringInfo(&url_buffer,"&metadataPrefix=%s",state->metadataPrefix);
 
 		}
@@ -1151,9 +1157,9 @@ static int ExecuteOAIRequest(OAIFdwState *state) {
 
 		if(state->resumptionToken) {
 
-			elog(DEBUG1,"  %s (%s): appending 'resumptionToken' > %s",__func__,state->requestType,state->resumptionToken);
+			elog(DEBUG1,"  %s (%s): appending 'resumptionToken' > %s",__func__,state->requestVerb,state->resumptionToken);
 			resetStringInfo(&url_buffer);
-			appendStringInfo(&url_buffer,"verb=%s&resumptionToken=%s",state->requestType,state->resumptionToken);
+			appendStringInfo(&url_buffer,"verb=%s&resumptionToken=%s",state->requestVerb,state->resumptionToken);
 
 			state->resumptionToken = NULL;
 
@@ -1161,9 +1167,9 @@ static int ExecuteOAIRequest(OAIFdwState *state) {
 
 	} else {
 
-		if(strcmp(state->requestType,OAI_REQUEST_LISTMETADATAFORMATS)!=0 &&
-		   strcmp(state->requestType,OAI_REQUEST_LISTSETS)!=0 &&
-		   strcmp(state->requestType,OAI_REQUEST_IDENTIFY)!=0) {
+		if(strcmp(state->requestVerb,OAI_REQUEST_LISTMETADATAFORMATS)!=0 &&
+		   strcmp(state->requestVerb,OAI_REQUEST_LISTSETS)!=0 &&
+		   strcmp(state->requestVerb,OAI_REQUEST_IDENTIFY)!=0) {
 
 			return OAI_UNKNOWN_REQUEST;
 
@@ -1172,7 +1178,7 @@ static int ExecuteOAIRequest(OAIFdwState *state) {
 	}
 
 
-	elog(DEBUG1,"  %s (%s): url build > %s?%s",__func__,state->requestType,state->url,url_buffer.data);
+	elog(DEBUG1,"  %s (%s): url build > %s?%s",__func__,state->requestVerb,state->url,url_buffer.data);
 
 	curl_global_init(CURL_GLOBAL_ALL);
 	curl = curl_easy_init();
@@ -1192,7 +1198,7 @@ static int ExecuteOAIRequest(OAIFdwState *state) {
 		}
 
 		curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, state->connectTimeout);
-		elog(DEBUG1, "  %s (%s): timeout > %ld",__func__,state->requestType,state->connectTimeout);
+		elog(DEBUG1, "  %s (%s): timeout > %ld",__func__,state->requestVerb,state->connectTimeout);
 
 		if(!state->maxretries) {
 
@@ -1200,37 +1206,37 @@ static int ExecuteOAIRequest(OAIFdwState *state) {
 
 		}
 
-		elog(DEBUG1, "  %s (%s): max retry > %ld",__func__,state->requestType,state->maxretries);
+		elog(DEBUG1, "  %s (%s): max retry > %ld",__func__,state->requestVerb,state->maxretries);
 
 		/* Proxy support: added in version 1.1.0 */
 		if(state->proxy) {
 
-			elog(DEBUG1, "  %s (%s): proxy URL > '%s'",__func__,state->requestType,state->proxy);
+			elog(DEBUG1, "  %s (%s): proxy URL > '%s'",__func__,state->requestVerb,state->proxy);
 
 			curl_easy_setopt(curl, CURLOPT_PROXY, state->proxy);
 
 			if(strcmp(state->proxyType,OAI_NODE_HTTP_PROXY)==0) {
 
-				elog(DEBUG1, "  %s (%s): proxy protocol > 'HTTP'",__func__,state->requestType);
+				elog(DEBUG1, "  %s (%s): proxy protocol > 'HTTP'",__func__,state->requestVerb);
 				curl_easy_setopt(curl, CURLOPT_PROXYTYPE, CURLPROXY_HTTP);
 
 			} else if(strcmp(state->proxyType,OAI_NODE_HTTPS_PROXY)==0) {
 
-				elog(DEBUG1, "  %s (%s): proxy protocol > 'HTTPS'",__func__,state->requestType);
+				elog(DEBUG1, "  %s (%s): proxy protocol > 'HTTPS'",__func__,state->requestVerb);
 				curl_easy_setopt(curl, CURLOPT_PROXYTYPE, CURLPROXY_HTTPS);
 
 			}
 
 			if(state->proxyUser) {
 
-				elog(DEBUG1, "  %s (%s): entering proxy user ('%s').",__func__,state->requestType,state->proxyUser);
+				elog(DEBUG1, "  %s (%s): entering proxy user ('%s').",__func__,state->requestVerb,state->proxyUser);
 				curl_easy_setopt(curl, CURLOPT_PROXYUSERNAME, state->proxyUser);
 
 			}
 
 			if(state->proxyUserPassword) {
 
-				elog(DEBUG1, "  %s (%s): entering proxy user's password.",__func__,state->requestType);
+				elog(DEBUG1, "  %s (%s): entering proxy user's password.",__func__,state->requestVerb);
 				curl_easy_setopt(curl, CURLOPT_PROXYUSERPWD, state->proxyUserPassword);
 
 			}
@@ -1242,7 +1248,7 @@ static int ExecuteOAIRequest(OAIFdwState *state) {
 		curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&chunk);
 		curl_easy_setopt(curl, CURLOPT_FAILONERROR, true);
 
-		elog(DEBUG2, "  %s (%s): performing cURL request ... ",__func__,state->requestType);
+		elog(DEBUG2, "  %s (%s): performing cURL request ... ",__func__,state->requestVerb);
 
 		res = curl_easy_perform(curl);
 
@@ -1250,7 +1256,7 @@ static int ExecuteOAIRequest(OAIFdwState *state) {
 
 			for (long i = 1; i <= state->maxretries && (res = curl_easy_perform(curl)) != CURLE_OK; i++) {
 
-				elog(WARNING, "%s (%s): connection to '%s' failed (%ld)",__func__,state->requestType, state->url,i);
+				elog(WARNING, "%s (%s): connection to '%s' failed (%ld)",__func__,state->requestVerb, state->url,i);
 
 			}
 
@@ -1284,8 +1290,8 @@ static int ExecuteOAIRequest(OAIFdwState *state) {
 			curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
 			state->xmldoc = xmlReadMemory(chunk.memory, chunk.size, NULL, NULL, XML_PARSE_NOBLANKS);
 
-			elog(DEBUG1, "%s (%s) => http response code: %ld",__func__,state->requestType,response_code);
-			elog(DEBUG1, "%s (%s) => http response size: %ld",__func__,state->requestType,chunk.size);
+			elog(DEBUG1, "%s (%s) => http response code: %ld",__func__,state->requestVerb,response_code);
+			elog(DEBUG1, "%s (%s) => http response size: %ld",__func__,state->requestVerb,chunk.size);
 		}
 
 	}
@@ -1323,7 +1329,7 @@ static void OAIRequestPlanner(OAIFdwTableOptions *opts, ForeignTable *ft, RelOpt
 	/* The default request type is OAI_REQUEST_LISTRECORDS.
 	 * This can be altered depending on the columns used
 	 * in the WHERE and SELECT clauses */
-	opts->requestType = OAI_REQUEST_LISTRECORDS;
+	opts->requestVerb = OAI_REQUEST_LISTRECORDS;
 	opts->numcols = rel->rd_att->natts;
 	opts->foreigntableid = ft->relid;
 
@@ -1437,7 +1443,7 @@ static void OAIRequestPlanner(OAIFdwTableOptions *opts, ForeignTable *ft, RelOpt
 	 * whole OAI header */
 	if(!hasContentForeignColumn) {
 
-		opts->requestType = OAI_REQUEST_LISTIDENTIFIERS;
+		opts->requestVerb = OAI_REQUEST_LISTIDENTIFIERS;
 		elog(DEBUG1,"  %s: the foreign table '%s' has no 'content' OAI node. Request type set to '%s'",
 				__func__,NameStr(rel->rd_rel->relname),OAI_REQUEST_LISTIDENTIFIERS);
 
@@ -1612,7 +1618,7 @@ static void deparseExpr(Expr *expr, OAIFdwTableOptions *opts){
 
 				Const *constant = (Const*) lsecond(oper->args);
 
-				opts->requestType = OAI_REQUEST_GETRECORD;
+				opts->requestVerb = OAI_REQUEST_GETRECORD;
 				opts->identifier = datumToString(constant->constvalue,constant->consttype);
 
 				elog(DEBUG2,"  %s: request type set to '%s' with identifier '%s'",__func__,OAI_REQUEST_GETRECORD,opts->identifier);
@@ -1899,7 +1905,7 @@ static ForeignScan *OAIFdwGetForeignPlan(PlannerInfo *root, RelOptInfo *baserel,
 	state->metadataPrefix = opts->metadataPrefix;
 	state->foreigntableid = opts->foreigntableid;
 	state->numcols = opts->numcols;
-	state->requestType = opts->requestType;
+	state->requestVerb = opts->requestVerb;
 	state->identifier = opts->identifier;
 	state->numfdwcols = opts->numfdwcols;
 
@@ -1961,10 +1967,10 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 
 	}
 
-	elog(DEBUG2,"%s (%s) called: current_identifier > '%s'",__func__,state->requestType,state->current_identifier);
+	elog(DEBUG2,"%s (%s) called: current_identifier > '%s'",__func__,state->requestVerb,state->current_identifier);
 
 
-	if(strcmp(state->requestType,OAI_REQUEST_LISTIDENTIFIERS)==0) {
+	if(strcmp(state->requestVerb,OAI_REQUEST_LISTIDENTIFIERS)==0) {
 
 		bool ret = false;
 
@@ -1974,7 +1980,7 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 			snprintf(oai->metadataPrefix,strlen(state->metadataPrefix)+1,"%s",state->metadataPrefix);
 			oai->isDeleted = false;
 
-			if (xmlStrcmp(oaipmh->name, (xmlChar*)state->requestType)!=0) continue;
+			if (xmlStrcmp(oaipmh->name, (xmlChar*)state->requestVerb)!=0) continue;
 
 			for (ListRecordsRequest = oaipmh->children; ListRecordsRequest != NULL; ListRecordsRequest = ListRecordsRequest->next) {
 
@@ -1990,7 +1996,7 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 							state->resumptionToken = (char*) palloc0(sizeof(char)*content_size+1);
 							snprintf(state->resumptionToken,content_size+1,"%s",(char*)bufferToken->content);
 
-							elog(DEBUG2,"  %s: (%s): Token detected in current page > %s",__func__,state->requestType,(char*)bufferToken->content);
+							elog(DEBUG2,"  %s: (%s): Token detected in current page > %s",__func__,state->requestVerb,(char*)bufferToken->content);
 
 						}
 
@@ -2019,29 +2025,29 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 
 						if (xmlStrcmp(headerElements->name, (xmlChar*) OAI_RESPONSE_ELEMENT_IDENTIFIER)==0) {
 
-							elog(DEBUG2,"  %s (%s): setting identifier to OAI object > '%s'",__func__,state->requestType,(char*)buffer->content);
+							elog(DEBUG2,"  %s (%s): setting identifier to OAI object > '%s'",__func__,state->requestVerb,(char*)buffer->content);
 							oai->identifier = (char*) palloc0(sizeof(char)*content_size+1);
 							snprintf(oai->identifier,content_size+1,"%s",(char*)buffer->content);
 
 						} else if (xmlStrcmp(headerElements->name, (xmlChar*) OAI_RESPONSE_ELEMENT_SETSPEC)==0) {
 
 							char *array_element = (char*) palloc0(sizeof(char)*content_size+1);
-							elog(DEBUG2,"  %s (%s): setting setspec to OAI object > '%s'",__func__,state->requestType,(char*)buffer->content);
+							elog(DEBUG2,"  %s (%s): setting setspec to OAI object > '%s'",__func__,state->requestVerb,(char*)buffer->content);
 							snprintf(array_element,content_size+1,"%s",(char*)buffer->content);
 
 							appendTextArray(&oai->setsArray,array_element);
 
-							elog(DEBUG2,"  %s (%s): array appended",__func__,state->requestType);
+							elog(DEBUG2,"  %s (%s): array appended",__func__,state->requestVerb);
 
 						} else if (xmlStrcmp(headerElements->name, (xmlChar*) OAI_RESPONSE_ELEMENT_DATESTAMP)==0)	{
 
-							elog(DEBUG2,"  %s (%s): setting datestamp to OAI object > '%s'",__func__,state->requestType,(char*)buffer->content);
+							elog(DEBUG2,"  %s (%s): setting datestamp to OAI object > '%s'",__func__,state->requestVerb,(char*)buffer->content);
 							oai->datestamp = (char*) palloc0(sizeof(char)*content_size+1);
 							snprintf(oai->datestamp,content_size+1,"%s",(char*)buffer->content);
 
 						}
 
-						elog(DEBUG2,"  %s (%s): freeing header buffer.",__func__,state->requestType);
+						elog(DEBUG2,"  %s (%s): freeing header buffer.",__func__,state->requestVerb);
 						xmlBufferFree(buffer);
 
 					}
@@ -2050,26 +2056,26 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 
 
 
-				elog(DEBUG2,"  %s (%s): starting evaluation > [buffer_identifier = '%s' | oai->identifier = '%s']",__func__,state->requestType,buffer_identifier,oai->identifier);
+				elog(DEBUG2,"  %s (%s): starting evaluation > [buffer_identifier = '%s' | oai->identifier = '%s']",__func__,state->requestVerb,buffer_identifier,oai->identifier);
 
 				if(buffer_identifier == NULL) {
 
 					state->current_identifier = palloc0(sizeof(char)*strlen(oai->identifier)+1);
 					snprintf(state->current_identifier,strlen(oai->identifier)+1,"%s",oai->identifier);
-					elog(DEBUG2,"  %s (%s): setting first current identifier > %s",__func__,state->requestType,state->current_identifier );
+					elog(DEBUG2,"  %s (%s): setting first current identifier > %s",__func__,state->requestVerb,state->current_identifier );
 
 					ret = true;
 
 				} else if (strcmp(buffer_identifier,oai->identifier)==0){
 
-					elog(DEBUG2,"  %s (%s): match > %s",__func__,state->requestType,oai->identifier);
+					elog(DEBUG2,"  %s (%s): match > %s",__func__,state->requestVerb,oai->identifier);
 					getNext = true;
 
 				} else if(getNext == true) {
 
 					state->current_identifier = palloc0(sizeof(char)*strlen(oai->identifier)+1);
 					snprintf(state->current_identifier,strlen(oai->identifier)+1,"%s",oai->identifier);
-					elog(DEBUG2,"  %s (%s): setting new current identifier > %s",__func__,state->requestType,state->current_identifier);
+					elog(DEBUG2,"  %s (%s): setting new current identifier > %s",__func__,state->requestVerb,state->current_identifier);
 
 					ret=true;
 
@@ -2082,7 +2088,7 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 
 				if(ret) {
 
-					elog(DEBUG2,"%s: (%s) => returning %s",__func__,state->requestType,oai->identifier);
+					elog(DEBUG2,"%s: (%s) => returning %s",__func__,state->requestVerb,oai->identifier);
 					return oai;
 				}
 
@@ -2097,7 +2103,7 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 
 
 	/* Fetches next record from OAI ListRecord or GetRecord requests. */
-	if(strcmp(state->requestType,OAI_REQUEST_LISTRECORDS)==0 || strcmp(state->requestType,OAI_REQUEST_GETRECORD)==0) {
+	if(strcmp(state->requestVerb,OAI_REQUEST_LISTRECORDS)==0 || strcmp(state->requestVerb,OAI_REQUEST_GETRECORD)==0) {
 
 		bool ret = false;
 
@@ -2107,7 +2113,7 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 			snprintf(oai->metadataPrefix,strlen(state->metadataPrefix)+1,"%s",state->metadataPrefix);
 			oai->isDeleted = false;
 
-			if (xmlStrcmp(oaipmh->name, (xmlChar*)state->requestType)!=0) continue;
+			if (xmlStrcmp(oaipmh->name, (xmlChar*)state->requestVerb)!=0) continue;
 
 			for (ListRecordsRequest = oaipmh->children; ListRecordsRequest != NULL; ListRecordsRequest = ListRecordsRequest->next) {
 
@@ -2123,7 +2129,7 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 							state->resumptionToken = (char*) palloc0(sizeof(char)*content_size+1);
 							snprintf(state->resumptionToken,content_size+1,"%s",(char*)bufferToken->content);
 
-							elog(DEBUG2,"  %s (%s): Token detected in current page > %s",__func__,state->requestType,(char*)bufferToken->content);
+							elog(DEBUG2,"  %s (%s): Token detected in current page > %s",__func__,state->requestVerb,(char*)bufferToken->content);
 
 						}
 
@@ -2146,15 +2152,15 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 							xmlBufferPtr buffer = xmlBufferCreate();
 							size_t content_size = (size_t) xmlNodeDump(buffer, state->xmldoc, copy, 0, 1);
 
-							elog(DEBUG2,"  %s (%s): XML Buffer size: %ld",__func__,state->requestType,content_size);
+							elog(DEBUG2,"  %s (%s): XML Buffer size: %ld",__func__,state->requestVerb,content_size);
 
 							oai->content = (char*) palloc0(sizeof(char)*content_size+1);
 							snprintf(oai->content,content_size+1,"%s",(char*)buffer->content);
 
 
-							elog(DEBUG2,"  %s (%s): freeing node copy.",__func__,state->requestType);
+							elog(DEBUG2,"  %s (%s): freeing node copy.",__func__,state->requestVerb);
 							xmlFreeNode(copy);
-							elog(DEBUG2,"  %s (%s): freeing xml content buffer.",__func__,state->requestType);
+							elog(DEBUG2,"  %s (%s): freeing xml content buffer.",__func__,state->requestVerb);
 							xmlBufferFree(buffer);
 
 						}
@@ -2179,12 +2185,12 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 									oai->identifier = (char*) palloc0(sizeof(char)*content_size+1);
 									snprintf(oai->identifier,content_size+1,"%s",(char*)buffer->content);
 
-									elog(DEBUG2,"  %s (%s): setting identifier to OAI object > '%s'",__func__,state->requestType,oai->identifier);
+									elog(DEBUG2,"  %s (%s): setting identifier to OAI object > '%s'",__func__,state->requestVerb,oai->identifier);
 
 								} else if (xmlStrcmp(headerElements->name, (xmlChar*) OAI_RESPONSE_ELEMENT_SETSPEC)==0) {
 
 									char *array_element = (char*) palloc0(sizeof(char)*content_size+1);
-									elog(DEBUG2,"  %s (%s): setting setspec to OAI object > '%s'",__func__,state->requestType,(char*)buffer->content);
+									elog(DEBUG2,"  %s (%s): setting setspec to OAI object > '%s'",__func__,state->requestVerb,(char*)buffer->content);
 									snprintf(array_element,content_size+1,"%s",(char*)buffer->content);
 
 									appendTextArray(&oai->setsArray,array_element);
@@ -2194,11 +2200,11 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 									oai->datestamp = (char*) palloc0(sizeof(char)*content_size+1);
 									snprintf(oai->datestamp,content_size+1,"%s",(char*)buffer->content);
 
-									elog(DEBUG2,"  %s (%s): setting datestamp to OAI object > '%s'",__func__,state->requestType,oai->datestamp);
+									elog(DEBUG2,"  %s (%s): setting datestamp to OAI object > '%s'",__func__,state->requestVerb,oai->datestamp);
 
 								}
 
-								elog(DEBUG3,"  %s (%s): freeing header buffer.",__func__,state->requestType);
+								elog(DEBUG3,"  %s (%s): freeing header buffer.",__func__,state->requestVerb);
 								xmlBufferFree(buffer);
 
 							}
@@ -2210,19 +2216,19 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 				}
 
 
-				elog(DEBUG2,"  %s (%s): starting evaluation > [buffer_identifier = '%s' | oai->identifier = '%s']",__func__,state->requestType,buffer_identifier,oai->identifier);
+				elog(DEBUG2,"  %s (%s): starting evaluation > [buffer_identifier = '%s' | oai->identifier = '%s']",__func__,state->requestVerb,buffer_identifier,oai->identifier);
 
 				if(buffer_identifier == NULL) {
 
 					state->current_identifier = palloc0(sizeof(char)*strlen(oai->identifier)+1);
 					snprintf(state->current_identifier,strlen(oai->identifier)+1,"%s",oai->identifier);
-					elog(DEBUG2,"  %s (%s): setting first current identifier > %s",__func__,state->requestType,state->current_identifier );
+					elog(DEBUG2,"  %s (%s): setting first current identifier > %s",__func__,state->requestVerb,state->current_identifier );
 
 					ret = true;
 
 				} else if (strcmp(buffer_identifier,oai->identifier)==0){
 
-					elog(DEBUG2,"  %s (%s): match (next record will be returned) > %s",__func__,state->requestType,oai->identifier);
+					elog(DEBUG2,"  %s (%s): match (next record will be returned) > %s",__func__,state->requestVerb,oai->identifier);
 					getNext = true;
 
 
@@ -2230,7 +2236,7 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 
 					state->current_identifier = palloc0(sizeof(char)*strlen(oai->identifier)+1);
 					snprintf(state->current_identifier,strlen(oai->identifier)+1,"%s",oai->identifier);
-					elog(DEBUG2,"  %s (%s): setting new current identifier > %s",__func__,state->requestType,state->current_identifier);
+					elog(DEBUG2,"  %s (%s): setting new current identifier > %s",__func__,state->requestVerb,state->current_identifier);
 
 					ret=true;
 
@@ -2243,7 +2249,7 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 
 				if(ret) {
 
-					elog(DEBUG2,"%s (%s): => returning %s",__func__,state->requestType,oai->identifier);
+					elog(DEBUG2,"%s (%s): => returning %s",__func__,state->requestVerb,oai->identifier);
 					return oai;
 				}
 
@@ -2398,7 +2404,7 @@ static TupleTableSlot *OAIFdwIterateForeignScan(ForeignScanState *node) {
 
 		if(state->xmldoc != NULL) {
 
-			elog(DEBUG2,"  %s: freeing xml document.",__func__);
+			elog(DEBUG2,"  %s: freeing xml document",__func__);
 			xmlFreeDoc(state->xmldoc);
 			xmlCleanupParser();
 
@@ -2477,7 +2483,7 @@ static void LoadOAIRecords(OAIFdwState *state) {
 
 			elog(DEBUG3,"  %s: XML root parsed and it has valid children (XML_ELEMENT_NODE) -> '%s'",__func__,recordsList->name);
 
-			if (xmlStrcmp(recordsList->name, (xmlChar*)state->requestType)==0) {
+			if (xmlStrcmp(recordsList->name, (xmlChar*)state->requestVerb)==0) {
 
 				for (record = recordsList->children; record!= NULL; record = record->next) {
 
@@ -2511,7 +2517,7 @@ static void LoadOAIRecords(OAIFdwState *state) {
 
 					ereport(WARNING,
 							(errcode(ERRCODE_NO_DATA_FOUND),
-							 errmsg("OAI %s: %s",(char*) xmlGetProp(recordsList, (xmlChar*) "code"), (char*)xmlNodeGetContent(recordsList))));
+							 errmsg("OAI %s: %s",(char*) xmlGetProp(recordsList, (xmlChar*) "code"), (char*) xmlNodeGetContent(recordsList))));
 
 
 				} else {
@@ -2520,7 +2526,7 @@ static void LoadOAIRecords(OAIFdwState *state) {
 
 					ereport(ERROR,
 							(errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
-							 errmsg("OAI %s: %s",(char*) xmlGetProp(recordsList, (xmlChar*) "code"), (char*)xmlNodeGetContent(recordsList))));
+							 errmsg("OAI %s: %s",(char*) xmlGetProp(recordsList, (xmlChar*) "code"), (char*) xmlNodeGetContent(recordsList))));
 
 				}
 
