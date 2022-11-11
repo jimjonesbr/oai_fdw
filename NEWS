@@ -6,7 +6,8 @@ oai_fdw 1.5.0
    - add number of inserted and updated records in the harvester log messages
     
  * Bug Fixes *
-   -  clean up parser in support function calls (libxml2) 
+   - clean up parser in support function calls (libxml2) 
+   - fix wrong initial page size in the logs for debug1 sessions
 
 
 oai_fdw 1.4.0
