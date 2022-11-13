@@ -1,6 +1,6 @@
 
 oai_fdw 1.5.0
-2022-11-11
+2022-11-15
 
  * Enhancements *
    - add number of inserted and updated records in the harvester log messages
@@ -8,6 +8,7 @@ oai_fdw 1.5.0
  * Bug Fixes *
    - clean up parser in support function calls (libxml2) 
    - fix wrong initial page size in the logs for debug1 sessions
+   - add missing memory contexts for oai loader and parser.
 
 
 oai_fdw 1.4.0
