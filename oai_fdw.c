@@ -1967,6 +1967,9 @@ static void OAIFdwBeginForeignScan(ForeignScanState *node, int eflags) {
  */
 static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 
+	MemoryContext oldcontext;
+	MemoryContext recordparser;
+
 	xmlNodePtr oaipmh;
 	xmlNodePtr headerElements;
 	xmlNodePtr ListRecordsRequest;
@@ -1978,6 +1981,15 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 	OAIRecord *oai = (OAIRecord*) palloc(sizeof(OAIRecord));
 
 	elog(DEBUG2,"%s (%s) called",__func__,state->requestVerb);
+
+	//MemoryContextReset(state->oaicxt);
+	//oldcontext = MemoryContextSwitchTo(state->oaicxt);
+
+	recordparser = AllocSetContextCreate(CurrentMemoryContext,
+									   "oai_records_context",
+									   ALLOCSET_DEFAULT_SIZES);
+
+	oldcontext = MemoryContextSwitchTo(recordparser);
 
 	if(state->xmldoc == NULL ) return NULL;
 
@@ -2125,6 +2137,9 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 				if(ret) {
 
 					elog(DEBUG2,"%s: (%s) => returning %s",__func__,state->requestVerb,oai->identifier);
+
+					MemoryContextSwitchTo(oldcontext);
+					////MemoryContextDelete(recordscontext);
 					return oai;
 				}
 
@@ -2306,6 +2321,8 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 				if(ret) {
 
 					elog(DEBUG2,"%s (%s): => returning %s",__func__,state->requestVerb,oai->identifier);
+					MemoryContextSwitchTo(oldcontext);
+					//MemoryContextDelete(recordscontext);
 					return oai;
 				}
 
@@ -2315,6 +2332,9 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 		}
 
 	}
+
+	//MemoryContextSwitchTo(oldcontext);
+	//MemoryContextDelete(recordscontext);
 
 	return NULL;
 }
@@ -2531,15 +2551,24 @@ static void LoadOAIRecords(OAIFdwState *state) {
 	xmlNodePtr record;
 	xmlNodePtr xmlroot;
 
-	int oaiExecuteResponse;
+	MemoryContext oldcontext;
+	MemoryContext loadercontext;
+	//int oaiExecuteResponse;
+
 
 	elog(DEBUG2,"%s called.",__func__);
 
-	oaiExecuteResponse = ExecuteOAIRequest(state);
+	//oaiExecuteResponse = ExecuteOAIRequest(state);
 
-	elog(DEBUG2,"  %s: ExecuteOAIRequest response > %d",__func__,oaiExecuteResponse);
+	//elog(DEBUG2,"  %s: ExecuteOAIRequest response > %d",__func__,oaiExecuteResponse);
 
-	if(oaiExecuteResponse == OAI_SUCCESS) {
+	if(ExecuteOAIRequest(state) == OAI_SUCCESS) {
+
+		loadercontext = AllocSetContextCreate(CurrentMemoryContext,
+										   "oai_fdw_loader",
+										   ALLOCSET_DEFAULT_SIZES);
+
+		oldcontext = MemoryContextSwitchTo(loadercontext);
 
 		xmlroot = xmlDocGetRootElement(state->xmldoc);
 
@@ -2561,11 +2590,12 @@ static void LoadOAIRecords(OAIFdwState *state) {
 
 						if(xmlGetProp(record, (xmlChar*) OAI_RESPONSE_ELEMENT_COMPLETELISTSIZE)) {
 
-							xmlChar *size = xmlGetProp(record, (xmlChar*) OAI_RESPONSE_ELEMENT_COMPLETELISTSIZE);
+							//xmlChar *size = xmlGetProp(record, (xmlChar*) OAI_RESPONSE_ELEMENT_COMPLETELISTSIZE);
 							//state->completeListSize = palloc0(sizeof(char) * strlen((char*)size)+1);
 							//snprintf(state->completeListSize,strlen((char*)size)+1,"%s",(char*)size);
-							state->completeListSize = pstrdup((char*)size);
-							xmlFree(size);
+							//state->completeListSize = pstrdup((char*)size);
+							state->completeListSize = pstrdup((char*)xmlGetProp(record, (xmlChar*) OAI_RESPONSE_ELEMENT_COMPLETELISTSIZE));
+							//xmlFree(size);
 
 						}
 
@@ -2603,6 +2633,10 @@ static void LoadOAIRecords(OAIFdwState *state) {
 			}
 
 		}
+
+
+		MemoryContextSwitchTo(oldcontext);
+		//MemoryContextDelete(loadercontext);
 
 	}
 
