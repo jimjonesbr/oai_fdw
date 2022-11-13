@@ -1953,7 +1953,7 @@ static void OAIFdwBeginForeignScan(ForeignScanState *node, int eflags) {
 	node->fdw_state = state;
 
 	state->oaicxt = AllocSetContextCreate(estate->es_query_cxt,
-											"tokenize_auth_file",
+											"oai_fdw_ctx",
 											ALLOCSET_DEFAULT_SIZES);
 
 	xmlInitParser();
@@ -2170,7 +2170,7 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState *state) {
 
 							state->resumptionToken = pstrdup((char*)bufferToken->content);
 
-							elog(DEBUG2,"  %s (%s): Token detected in current page > %s",__func__,state->requestVerb,(char*)bufferToken->content);
+							elog(DEBUG2,"  %s (%s): Token detected in current page > '%s'",__func__,state->requestVerb,(char*)bufferToken->content);
 
 						}
 
@@ -2325,7 +2325,7 @@ static void CreateOAITuple(TupleTableSlot *slot, OAIFdwState *state, OAIRecord *
 
 	elog(DEBUG2,"%s called",__func__);
 
-
+	MemoryContextReset(state->oaicxt);
 	oldcontext = MemoryContextSwitchTo(state->oaicxt);
 
 	for (int i = 0; i < state->numcols; i++) {
@@ -2443,7 +2443,10 @@ static void CreateOAITuple(TupleTableSlot *slot, OAIFdwState *state, OAIRecord *
 
 	state->rowcount++;
 
+
+	//MemoryContextReset(state->oaicxt);
 	MemoryContextSwitchTo(oldcontext);
+
 	//MemoryContextReset(state->oaicxt);
 
 
