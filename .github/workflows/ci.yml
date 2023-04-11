@@ -10,7 +10,7 @@ jobs:
     container: pgxn/pgxn-tools
     steps:
       - name: Prepare environment 
-        run: sudo apt-get update && sudo apt-get install -y make gcc postgresql-server-dev-14 libxml2-dev libcurl4-openssl-dev
+        run: sudo apt-get update && sudo apt-get install -y make gcc libxml2-dev libcurl4-openssl-dev
       - name: Start PostgreSQL ${{ matrix.pg }}
         run: pg-start ${{ matrix.pg }}
       - uses: actions/checkout@v2
