@@ -8,27 +8,27 @@ SELECT * FROM OAI_ListMetadataFormats('oai_server_davidrumsey');
 
 SELECT * FROM OAI_ListSets('oai_server_ulb') 
 WHERE setname IS NOT NULL AND setspec IS NOT NULL 
-ORDER BY setname DESC 
+ORDER BY setname 
 FETCH FIRST ROW ONLY;
 
 SELECT * FROM OAI_ListSets('oai_server_dnb') 
 WHERE setname IS NOT NULL AND setspec IS NOT NULL 
-ORDER BY setname DESC 
+ORDER BY setname 
 FETCH FIRST ROW ONLY;
 
 SELECT * FROM OAI_ListSets('oai_server_bjihs') 
 WHERE setname IS NOT NULL AND setspec IS NOT NULL 
-ORDER BY setname DESC 
+ORDER BY setname 
 FETCH FIRST ROW ONLY;
 
 SELECT * FROM OAI_ListSets('oai_server_kbnl') 
 WHERE setname IS NOT NULL AND setspec IS NOT NULL 
-ORDER BY setname DESC 
+ORDER BY setname 
 FETCH FIRST ROW ONLY;
 
 SELECT * FROM OAI_ListSets('oai_server_davidrumsey') 
 WHERE setname IS NOT NULL AND setspec IS NOT NULL 
-ORDER BY setname DESC 
+ORDER BY setname 
 FETCH FIRST ROW ONLY;
 
 SELECT count(*) > 0 

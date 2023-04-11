@@ -75,43 +75,43 @@ SELECT * FROM OAI_ListMetadataFormats('oai_server_davidrumsey');
 
 SELECT * FROM OAI_ListSets('oai_server_ulb') 
 WHERE setname IS NOT NULL AND setspec IS NOT NULL 
-ORDER BY setname DESC 
+ORDER BY setname 
 FETCH FIRST ROW ONLY;
- setspec | setname 
----------+---------
- ulbmsz  | ulbmsz
+     setspec      |            setname            
+------------------+-------------------------------
+ fremdbestand_hbz | Fremdbestand (Verbundkatalog)
 (1 row)
 
 SELECT * FROM OAI_ListSets('oai_server_dnb') 
 WHERE setname IS NOT NULL AND setspec IS NOT NULL 
-ORDER BY setname DESC 
+ORDER BY setname 
 FETCH FIRST ROW ONLY;
-  setspec  |                                setname                                 
------------+------------------------------------------------------------------------
- zdb:sg050 | Zeitschriftendatenbank (ZDB) - Zeitschriften, fortlaufende Sammelwerke
+     setspec     |                  setname                   
+-----------------+--------------------------------------------
+ authorities:dif | Bestand Deutsches Filminstitut (DIF e. V.)
 (1 row)
 
 SELECT * FROM OAI_ListSets('oai_server_bjihs') 
 WHERE setname IS NOT NULL AND setspec IS NOT NULL 
-ORDER BY setname DESC 
+ORDER BY setname 
 FETCH FIRST ROW ONLY;
- setspec  |       setname       
-----------+---------------------
- bjihs:RS | Revisão Sistemática
+  setspec  |              setname              
+-----------+-----------------------------------
+ bjihs:ACC | Anais de Conferências Científicas
 (1 row)
 
 SELECT * FROM OAI_ListSets('oai_server_kbnl') 
 WHERE setname IS NOT NULL AND setspec IS NOT NULL 
-ORDER BY setname DESC 
+ORDER BY setname 
 FETCH FIRST ROW ONLY;
  setspec | setname 
 ---------+---------
- WILC    | WILC
+ ALBA    | ALBA
 (1 row)
 
 SELECT * FROM OAI_ListSets('oai_server_davidrumsey') 
 WHERE setname IS NOT NULL AND setspec IS NOT NULL 
-ORDER BY setname DESC 
+ORDER BY setname 
 FETCH FIRST ROW ONLY;
   setspec   |                setname                 
 ------------+----------------------------------------
