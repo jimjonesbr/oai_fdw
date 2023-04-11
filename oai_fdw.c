@@ -1178,7 +1178,13 @@ static int ExecuteOAIRequest(OAIFdwState *state) {
 		errbuf[0] = 0;
 
 		curl_easy_setopt(curl, CURLOPT_URL, state->url);
+
+#if ((LIBCURL_VERSION_MAJOR == 7 && LIBCURL_VERSION_MINOR < 85) || LIBCURL_VERSION_MAJOR < 7 )
 		curl_easy_setopt(curl, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
+#else
+		curl_easy_setopt(curl, CURLOPT_PROTOCOLS_STR, "http,https");
+#endif
+
 		curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, errbuf);
 
 		if(!state->connectTimeout) {
