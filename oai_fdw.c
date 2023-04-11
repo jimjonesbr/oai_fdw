@@ -662,14 +662,9 @@ Datum oai_fdw_validator(PG_FUNCTION_ARGS) {
 
 					if(return_code !=OAI_SUCCESS ) {
 
-						if(return_code == OAI_MALFORMED_URL) {
-
-							ereport(ERROR,
-								(errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
-								 errmsg("invalid %s: '%s'",opt->optname, defGetString(def))));
-
-						}
-
+						ereport(ERROR,
+							(errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
+								errmsg("invalid %s: '%s'",opt->optname, defGetString(def))));
 
 					}
 

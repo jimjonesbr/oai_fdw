@@ -81,6 +81,7 @@ ERROR:  ExecuteOAIRequest => (1) Protocol "ftp" not supported or disabled in lib
 CREATE SERVER oai_server_err14 FOREIGN DATA WRAPPER oai_fdw 
 OPTIONS (url 'foo://services.dnb.de/oai/repository',
          metadataprefix 'oai_dc'); 
+ERROR:  invalid url: 'foo://services.dnb.de/oai/repository'
 -- Empty connect_retry
 CREATE SERVER oai_server_err15 FOREIGN DATA WRAPPER oai_fdw 
 OPTIONS (url 'https://services.dnb.de/oai/repository',
