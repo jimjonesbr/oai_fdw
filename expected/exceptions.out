@@ -18,15 +18,13 @@ ERROR:  invalid oai_fdw option "foo"
 CREATE SERVER oai_server_err5 FOREIGN DATA WRAPPER oai_fdw 
 OPTIONS (url 'a_very_wrong_url',
          metadataprefix 'oai_dc'); 
-ERROR:  malformed URL in option 'url' (3): 'a_very_wrong_url'
-HINT:  make sure the given URL is valid and contains supported protocol (http:// or  https://).
+ERROR:  invalid url: 'a_very_wrong_url'
 -- Wrong proxy URL
 CREATE SERVER oai_server_err6 FOREIGN DATA WRAPPER oai_fdw 
 OPTIONS (url 'https://services.dnb.de/oai/repository',
          metadataprefix 'oai_dc',
          http_proxy 'a_very_wrong_url'); 
-ERROR:  malformed URL in option 'http_proxy' (3): 'a_very_wrong_url'
-HINT:  make sure the given URL is valid and contains supported protocol (http:// or  https://).
+ERROR:  invalid http_proxy: 'a_very_wrong_url'
 -- Empty timeout
 CREATE SERVER oai_server_err7 FOREIGN DATA WRAPPER oai_fdw
 OPTIONS (url 'https://services.dnb.de/oai/repository',
@@ -64,8 +62,7 @@ ERROR:  empty value in option 'url'
 CREATE SERVER oai_server_err12 FOREIGN DATA WRAPPER oai_fdw 
 OPTIONS (url 'services.dnb.de/oai/repository',
          metadataprefix 'oai_dc');  
-ERROR:  malformed URL in option 'url' (3): 'services.dnb.de/oai/repository'
-HINT:  make sure the given URL is valid and contains supported protocol (http:// or  https://).
+ERROR:  invalid url: 'services.dnb.de/oai/repository'
 -- URL with an unsupported protocol
 CREATE SERVER oai_server_err13 FOREIGN DATA WRAPPER oai_fdw 
 OPTIONS (url 'ftp://services.dnb.de/oai/repository',
@@ -84,7 +81,6 @@ ERROR:  ExecuteOAIRequest => (1) Protocol "ftp" not supported or disabled in lib
 CREATE SERVER oai_server_err14 FOREIGN DATA WRAPPER oai_fdw 
 OPTIONS (url 'foo://services.dnb.de/oai/repository',
          metadataprefix 'oai_dc'); 
-ERROR:  invalid url: 'foo://services.dnb.de/oai/repository'
 -- Empty connect_retry
 CREATE SERVER oai_server_err15 FOREIGN DATA WRAPPER oai_fdw 
 OPTIONS (url 'https://services.dnb.de/oai/repository',

@@ -666,13 +666,6 @@ Datum oai_fdw_validator(PG_FUNCTION_ARGS) {
 
 							ereport(ERROR,
 								(errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
-								 errmsg("malformed URL in option '%s' (%d): '%s'",opt->optname,return_code, defGetString(def)),
-								 errhint("make sure the given URL is valid and contains supported protocol (http:// or  https://).")));
-
-						} else {
-
-							ereport(ERROR,
-								(errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
 								 errmsg("invalid %s: '%s'",opt->optname, defGetString(def))));
 
 						}
