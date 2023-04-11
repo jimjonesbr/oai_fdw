@@ -36,15 +36,7 @@ SELECT * FROM OAI_ListMetadataFormats('oai_server_dnb');
 (16 rows)
 
 SELECT * FROM OAI_ListMetadataFormats('oai_server_bioj');
- metadataprefix |                             schema                              |                       metadatanamespace                        
-----------------+-----------------------------------------------------------------+----------------------------------------------------------------
- nlm            | http://dtd.nlm.nih.gov/publishing/2.3/xsd/journalpublishing.xsd | http://td.nlm.nih.gov/publishing/2.3
- oai_marc       | http://www.openarchives.org/OAI/1.1/oai_marc.xsd                | http://www.openarchives.org/OAI/1.1/oai_marc
- rfc1807        | http://www.openarchives.org/OAI/1.1/rfc1807.xsd                 | http://info.internet.isi.edu:80/in-notes/rfc/files/rfc1807.txt
- marcxml        | http://www.loc.gov/standards/marcxml/schema/MARC21slim.xsd      | http://www.loc.gov/MARC21/slim
- oai_dc         | http://www.openarchives.org/OAI/2.0/oai_dc.xsd                  | http://www.openarchives.org/OAI/2.0/oai_dc/
-(5 rows)
-
+ERROR:  invalid ListMetadataFormats response from 'https://www.bioj-online.com/jms/index.php/up/oai/'
 SELECT * FROM OAI_ListMetadataFormats('oai_server_bjihs');
  metadataprefix |                                 schema                                  |                       metadatanamespace                        
 ----------------+-------------------------------------------------------------------------+----------------------------------------------------------------
@@ -81,593 +73,62 @@ SELECT * FROM OAI_ListMetadataFormats('oai_server_davidrumsey');
  oai_dc         | http://www.openarchives.org/OAI/2.0/oai_dc.xsd | http://www.openarchives.org/OAI/2.0/oai_dc/
 (1 row)
 
-SELECT * FROM OAI_ListSets('oai_server_ulb');
-     setspec      |                            setname                            
-------------------+---------------------------------------------------------------
- ulbmshbw         | Historische Bestände in Westfalen (allegro)
- ulbmshs          | Schöpper (HANS)
- ulbmssp          | Schulprogramme (Verbundkatalog)
- ulbmsuo          | Historische Drucke mit URN (Verbundkatalog ohne Lokalbestand)
- ulbmsz           | ulbmsz
- ulbmsum          | Historische Drucke mit URN (Verbundkatalog mit Lokalbestand)
- ulbmsob          | Historische Drucke (Verbundkatalog ohne Lokalbestand)
- ulbmshd          | Historische Drucke (Verbundkatalog)
- ulbmsh           | Handschriften, Nachlässe, Autographen, Sammlungen (HANS)
- fremdbestand_hbz | Fremdbestand (Verbundkatalog)
-(10 rows)
+SELECT * FROM OAI_ListSets('oai_server_ulb') 
+WHERE setname IS NOT NULL AND setspec IS NOT NULL 
+ORDER BY setname DESC 
+FETCH FIRST ROW ONLY;
+ setspec | setname 
+---------+---------
+ ulbmsz  | ulbmsz
+(1 row)
 
--- SELECT * FROM OAI_ListSets('oai_server_dnb');
-SELECT * FROM OAI_ListSets('oai_server_bioj');
-      setspec       |               setname               
---------------------+-------------------------------------
- up                 | British and Irish Orthoptic Journal
- up:RES             | Research
- up:CAS+REP         | Case Report
- up:OART            | Original article
- up:Review          | Review
- up:Letters         | Letters to the Editor
- up:CORR            | Corrigendum
- ec_fundedresources | EC_fundedresources
-(8 rows)
+SELECT * FROM OAI_ListSets('oai_server_dnb') 
+WHERE setname IS NOT NULL AND setspec IS NOT NULL 
+ORDER BY setname DESC 
+FETCH FIRST ROW ONLY;
+  setspec  |                                setname                                 
+-----------+------------------------------------------------------------------------
+ zdb:sg050 | Zeitschriftendatenbank (ZDB) - Zeitschriften, fortlaufende Sammelwerke
+(1 row)
 
-SELECT * FROM OAI_ListSets('oai_server_bjihs');
-     setspec     |                          setname                          
------------------+-----------------------------------------------------------
- bjihs           | Brazilian Journal of Implantology and Health Sciences  
- bjihs:IEC       | Editorial
- bjihs:ART       | Artigo Original
- bjihs:RS        | Revisão Sistemática
- bjihs:RL        | Revisão de Literatura
- bjihs:Cas.+Rep. | Caso Clínico
- bjihs:CC        | Comunicação Curta
- bjihs:CE        | Carta ao editor
- bjihs:ACC       | Anais de Conferências Científicas
- bjihs:CC+BY     | Compartilhamentos, Copias, Adaptações CC BY ou derivados.
- driver          | Open Access DRIVERset
-(11 rows)
+SELECT * FROM OAI_ListSets('oai_server_bjihs') 
+WHERE setname IS NOT NULL AND setspec IS NOT NULL 
+ORDER BY setname DESC 
+FETCH FIRST ROW ONLY;
+ setspec  |       setname       
+----------+---------------------
+ bjihs:RS | Revisão Sistemática
+(1 row)
 
-SELECT * FROM OAI_ListSets('oai_server_kbnl');
-               setspec               |               setname               
--------------------------------------+-------------------------------------
- ALBA                                | ALBA
- anp                                 | anp
- BIBLIOPOLIS                         | BIBLIOPOLIS
- BLTVN                               | BLTVN
- Boekband                            | Boekband
- BOEKEN                              | BOEKEN
- BYVANCK                             | BYVANCK
- ByvanckB                            | ByvanckB
- CONS                                | CONS
- DAREV2                              | DAREV2
- DDD                                 | DDD
- DDDarchief                          | DDDarchief
- DPO                                 | DPO
- DTS                                 | DTS
- EDEPOT                              | EDEPOT
- EUROPEANATRAVEL                     | EUROPEANATRAVEL
- GGC                                 | GGC
- GGC-THES                            | GGC-THES
- GGD                                 | GGD
- GGLKB01                             | GGLKB01
- gvn                                 | gvn
- GVNRC                               | GVNRC
- HBB                                 | HBB
- KRANTEN                             | KRANTEN
- KRUSEMAN                            | KRUSEMAN
- LITERAT                             | LITERAT
- META                                | META
- NGVN                                | NGVN
- POORTMAN                            | POORTMAN
- PTP                                 | PTP
- PTPCERL                             | PTPCERL
- SCHAAK                              | SCHAAK
- sgd                                 | sgd
- TIJDSCHRIFTEN                       | TIJDSCHRIFTEN
- TIJDSCHRIFTEN_GESEGMENTEERD         | TIJDSCHRIFTEN_GESEGMENTEERD
- WILC                                | WILC
- BOEKEN:DEJONG                       | BOEKEN:DEJONG
- BOEKEN:GBR02                        | BOEKEN:GBR02
- BOEKEN:KBEHC01                      | BOEKEN:KBEHC01
- BOEKEN:KBEU7475                     | BOEKEN:KBEU7475
- BOEKEN:KBITA01                      | BOEKEN:KBITA01
- BOEKEN:KBTRES01                     | BOEKEN:KBTRES01
- BOEKEN:KONB10                       | BOEKEN:KONB10
- BOEKEN:KONB15                       | BOEKEN:KONB15
- BOEKEN:MMATR03                      | BOEKEN:MMATR03
- BOEKEN:MMATR08                      | BOEKEN:MMATR08
- BOEKEN:MMCMC01                      | BOEKEN:MMCMC01
- BOEKEN:MMKB02                       | BOEKEN:MMKB02
- BOEKEN:MMKB02A                      | BOEKEN:MMKB02A
- BOEKEN:MMKB02B                      | BOEKEN:MMKB02B
- BOEKEN:MMKB05                       | BOEKEN:MMKB05
- BOEKEN:MMKB06                       | BOEKEN:MMKB06
- BOEKEN:MMKB11                       | BOEKEN:MMKB11
- BOEKEN:MMKB18                       | BOEKEN:MMKB18
- BOEKEN:MMKB18A                      | BOEKEN:MMKB18A
- BOEKEN:MMKB18B                      | BOEKEN:MMKB18B
- BOEKEN:MMKB18C                      | BOEKEN:MMKB18C
- BOEKEN:MMKB18D                      | BOEKEN:MMKB18D
- BOEKEN:MMKB21                       | BOEKEN:MMKB21
- BOEKEN:MMKB22                       | BOEKEN:MMKB22
- BOEKEN:MMKB24                       | BOEKEN:MMKB24
- BOEKEN:MMKB25                       | BOEKEN:MMKB25
- BOEKEN:MMKB28                       | BOEKEN:MMKB28
- BOEKEN:MMKB31                       | BOEKEN:MMKB31
- BOEKEN:MMKIT03                      | BOEKEN:MMKIT03
- BOEKEN:MMMVC01                      | BOEKEN:MMMVC01
- BOEKEN:MMNIOD07                     | BOEKEN:MMNIOD07
- BOEKEN:MMSFKB02                     | BOEKEN:MMSFKB02
- BOEKEN:MMSFUBA02                    | BOEKEN:MMSFUBA02
- BOEKEN:MMSFUBU02                    | BOEKEN:MMSFUBU02
- BOEKEN:MMTSGG01                     | BOEKEN:MMTSGG01
- BOEKEN:MMTUA01                      | BOEKEN:MMTUA01
- BOEKEN:MMTUK01                      | BOEKEN:MMTUK01
- BOEKEN:MMUBA08                      | BOEKEN:MMUBA08
- BOEKEN:MMUBA09                      | BOEKEN:MMUBA09
- BOEKEN:MMUBL07                      | BOEKEN:MMUBL07
- BOEKEN:MMUBVU02                     | BOEKEN:MMUBVU02
- BOEKEN:MMUBVU05                     | BOEKEN:MMUBVU05
- BOEKEN:MULM01                       | BOEKEN:MULM01
- BOEKEN:NIOD02                       | BOEKEN:NIOD02
- BOEKEN:NIOD05                       | BOEKEN:NIOD05
- BOEKEN:NOM01                        | BOEKEN:NOM01
- BOEKEN:PRB01                        | BOEKEN:PRB01
- BOEKEN:ROS01                        | BOEKEN:ROS01
- BOEKEN:SAB01                        | BOEKEN:SAB01
- GGC:                                | GGC:
- GGC:Boeken:DEJONG                   | GGC:Boeken:DEJONG
- GGC:Boeken:EDBO                     | GGC:Boeken:EDBO
- GGC:Boeken:GBR02                    | GGC:Boeken:GBR02
- GGC:Boeken:KBEHC01                  | GGC:Boeken:KBEHC01
- GGC:Boeken:KBEU7475                 | GGC:Boeken:KBEU7475
- GGC:Boeken:KBITA01                  | GGC:Boeken:KBITA01
- GGC:Boeken:KBTRES01                 | GGC:Boeken:KBTRES01
- GGC:Boeken:KONB10                   | GGC:Boeken:KONB10
- GGC:Boeken:KONB15                   | GGC:Boeken:KONB15
- GGC:Boeken:MMATR03                  | GGC:Boeken:MMATR03
- GGC:Boeken:MMATR08                  | GGC:Boeken:MMATR08
- GGC:Boeken:MMCMC01                  | GGC:Boeken:MMCMC01
- GGC:Boeken:MMKB02                   | GGC:Boeken:MMKB02
- GGC:Boeken:MMKB02a                  | GGC:Boeken:MMKB02a
- GGC:Boeken:MMKB02b                  | GGC:Boeken:MMKB02b
- GGC:Boeken:MMKB05                   | GGC:Boeken:MMKB05
- GGC:Boeken:MMKB06                   | GGC:Boeken:MMKB06
- GGC:Boeken:MMKB11                   | GGC:Boeken:MMKB11
- GGC:Boeken:MMKB18                   | GGC:Boeken:MMKB18
- GGC:Boeken:MMKB18A                  | GGC:Boeken:MMKB18A
- GGC:Boeken:MMKB18B                  | GGC:Boeken:MMKB18B
- GGC:Boeken:MMKB18C                  | GGC:Boeken:MMKB18C
- GGC:Boeken:MMKB18D                  | GGC:Boeken:MMKB18D
- GGC:Boeken:MMKB21                   | GGC:Boeken:MMKB21
- GGC:Boeken:MMKB22                   | GGC:Boeken:MMKB22
- GGC:Boeken:MMKB24                   | GGC:Boeken:MMKB24
- GGC:Boeken:MMKB25                   | GGC:Boeken:MMKB25
- GGC:Boeken:MMKB28                   | GGC:Boeken:MMKB28
- GGC:Boeken:MMKB31                   | GGC:Boeken:MMKB31
- GGC:Boeken:MMKIT03                  | GGC:Boeken:MMKIT03
- GGC:Boeken:MMMVC01                  | GGC:Boeken:MMMVC01
- GGC:Boeken:MMNIOD07                 | GGC:Boeken:MMNIOD07
- GGC:Boeken:MMSFKB02                 | GGC:Boeken:MMSFKB02
- GGC:Boeken:MMSFUBA02                | GGC:Boeken:MMSFUBA02
- GGC:Boeken:MMSFUBU02                | GGC:Boeken:MMSFUBU02
- GGC:Boeken:MMTSGG01                 | GGC:Boeken:MMTSGG01
- GGC:Boeken:MMTUA01                  | GGC:Boeken:MMTUA01
- GGC:Boeken:MMTUK01                  | GGC:Boeken:MMTUK01
- GGC:Boeken:MMTUK02                  | GGC:Boeken:MMTUK02
- GGC:Boeken:MMUBA08                  | GGC:Boeken:MMUBA08
- GGC:Boeken:MMUBA09                  | GGC:Boeken:MMUBA09
- GGC:Boeken:MMUBL07                  | GGC:Boeken:MMUBL07
- GGC:Boeken:MMUBVU02                 | GGC:Boeken:MMUBVU02
- GGC:Boeken:MMUBVU05                 | GGC:Boeken:MMUBVU05
- GGC:Boeken:MULM01                   | GGC:Boeken:MULM01
- GGC:Boeken:NIOD02                   | GGC:Boeken:NIOD02
- GGC:Boeken:NIOD05                   | GGC:Boeken:NIOD05
- GGC:Boeken:NOM01                    | GGC:Boeken:NOM01
- GGC:Boeken:PRB01                    | GGC:Boeken:PRB01
- GGC:Boeken:SAB01                    | GGC:Boeken:SAB01
- GGC:Kranten:ABCDDD                  | GGC:Kranten:ABCDDD
- GGC:Kranten:DDD                     | GGC:Kranten:DDD
- GGC:Kranten:KBDDD02                 | GGC:Kranten:KBDDD02
- GGC:Kranten:KBNRC01                 | GGC:Kranten:KBNRC01
- GGC:Kranten:KBPERS01                | GGC:Kranten:KBPERS01
- GGC:Kranten:MMCC01                  | GGC:Kranten:MMCC01
- GGC:Kranten:MMCC02                  | GGC:Kranten:MMCC02
- GGC:Kranten:MMCODA01                | GGC:Kranten:MMCODA01
- GGC:Kranten:MMCODA02                | GGC:Kranten:MMCODA02
- GGC:Kranten:MMDA03                  | GGC:Kranten:MMDA03
- GGC:Kranten:MMDDD02                 | GGC:Kranten:MMDDD02
- GGC:Kranten:MMECAL02                | GGC:Kranten:MMECAL02
- GGC:Kranten:MMGARO01                | GGC:Kranten:MMGARO01
- GGC:Kranten:MMGASL01                | GGC:Kranten:MMGASL01
- GGC:Kranten:MMGAVL01                | GGC:Kranten:MMGAVL01
- GGC:Kranten:MMGAZS01                | GGC:Kranten:MMGAZS01
- GGC:Kranten:MMGEM01                 | GGC:Kranten:MMGEM01
- GGC:Kranten:MMHCO01                 | GGC:Kranten:MMHCO01
- GGC:Kranten:MMHCO02                 | GGC:Kranten:MMHCO02
- GGC:Kranten:MMIISG05                | GGC:Kranten:MMIISG05
- GGC:Kranten:MMIISG07                | GGC:Kranten:MMIISG07
- GGC:Kranten:MMIISG18                | GGC:Kranten:MMIISG18
- GGC:Kranten:MMKB04                  | GGC:Kranten:MMKB04
- GGC:Kranten:MMKB08                  | GGC:Kranten:MMKB08
- GGC:Kranten:MMKB12                  | GGC:Kranten:MMKB12
- GGC:Kranten:MMKB15                  | GGC:Kranten:MMKB15
- GGC:Kranten:MMKB19                  | GGC:Kranten:MMKB19
- GGC:Kranten:MMKB23                  | GGC:Kranten:MMKB23
- GGC:Kranten:MMKB26                  | GGC:Kranten:MMKB26
- GGC:Kranten:MMKB27                  | GGC:Kranten:MMKB27
- GGC:Kranten:MMKB32                  | GGC:Kranten:MMKB32
- GGC:Kranten:MMMAAS01                | GGC:Kranten:MMMAAS01
- GGC:Kranten:MMNHA02                 | GGC:Kranten:MMNHA02
- GGC:Kranten:MMNHA03                 | GGC:Kranten:MMNHA03
- GGC:Kranten:MMNIOD04                | GGC:Kranten:MMNIOD04
- GGC:Kranten:MMNIOD05                | GGC:Kranten:MMNIOD05
- GGC:Kranten:MMPM05                  | GGC:Kranten:MMPM05
- GGC:Kranten:MMRANM02                | GGC:Kranten:MMRANM02
- GGC:Kranten:MMRANM03                | GGC:Kranten:MMRANM03
- GGC:Kranten:MMRANMG01               | GGC:Kranten:MMRANMG01
- GGC:Kranten:MMRAZ02                 | GGC:Kranten:MMRAZ02
- GGC:Kranten:MMRAZ03                 | GGC:Kranten:MMRAZ03
- GGC:Kranten:MMRHCE01                | GGC:Kranten:MMRHCE01
- GGC:Kranten:MMRHCE02                | GGC:Kranten:MMRHCE02
- GGC:Kranten:MMRHCG03                | GGC:Kranten:MMRHCG03
- GGC:Kranten:MMSAA06                 | GGC:Kranten:MMSAA06
- GGC:Kranten:MMSAB03                 | GGC:Kranten:MMSAB03
- GGC:Kranten:MMSAB04                 | GGC:Kranten:MMSAB04
- GGC:Kranten:MMSADB01                | GGC:Kranten:MMSADB01
- GGC:Kranten:MMSAEN01                | GGC:Kranten:MMSAEN01
- GGC:Kranten:MMSAEN02                | GGC:Kranten:MMSAEN02
- GGC:Kranten:MMSAK01                 | GGC:Kranten:MMSAK01
- GGC:Kranten:MMSARO02                | GGC:Kranten:MMSARO02
- GGC:Kranten:MMSAVL02                | GGC:Kranten:MMSAVL02
- GGC:Kranten:MMSHCL03                | GGC:Kranten:MMSHCL03
- GGC:Kranten:MMTELE01                | GGC:Kranten:MMTELE01
- GGC:Kranten:MMTRES02                | GGC:Kranten:MMTRES02
- GGC:Kranten:MMTRES03                | GGC:Kranten:MMTRES03
- GGC:Kranten:MMTRES04                | GGC:Kranten:MMTRES04
- GGC:Kranten:MMUBTB04                | GGC:Kranten:MMUBTB04
- GGC:Kranten:MMUBWA01                | GGC:Kranten:MMUBWA01
- GGC:Kranten:MMVEEN01                | GGC:Kranten:MMVEEN01
- GGC:Kranten:MMVEEN02                | GGC:Kranten:MMVEEN02
- GGC:Kranten:MMWFA01                 | GGC:Kranten:MMWFA01
- GGC:Tijdschriften:GMDH01            | GGC:Tijdschriften:GMDH01
- GGC:Tijdschriften:KBDBNL02          | GGC:Tijdschriften:KBDBNL02
- GGC:Tijdschriften:KBDBVL02          | GGC:Tijdschriften:KBDBVL02
- GGC:Tijdschriften:KBDC001           | GGC:Tijdschriften:KBDC001
- GGC:Tijdschriften:KBKWG02           | GGC:Tijdschriften:KBKWG02
- GGC:Tijdschriften:KBNA001           | GGC:Tijdschriften:KBNA001
- GGC:Tijdschriften:MMAD01            | GGC:Tijdschriften:MMAD01
- GGC:Tijdschriften:MMALET01          | GGC:Tijdschriften:MMALET01
- GGC:Tijdschriften:MMALET02          | GGC:Tijdschriften:MMALET02
- GGC:Tijdschriften:MMATR01           | GGC:Tijdschriften:MMATR01
- GGC:Tijdschriften:MMATR02           | GGC:Tijdschriften:MMATR02
- GGC:Tijdschriften:MMATR05           | GGC:Tijdschriften:MMATR05
- GGC:Tijdschriften:MMATR06           | GGC:Tijdschriften:MMATR06
- GGC:Tijdschriften:MMATR07           | GGC:Tijdschriften:MMATR07
- GGC:Tijdschriften:MMAVB01           | GGC:Tijdschriften:MMAVB01
- GGC:Tijdschriften:MMBOY01           | GGC:Tijdschriften:MMBOY01
- GGC:Tijdschriften:MMBPH01           | GGC:Tijdschriften:MMBPH01
- GGC:Tijdschriften:MMBZK02           | GGC:Tijdschriften:MMBZK02
- GGC:Tijdschriften:MMCBS01           | GGC:Tijdschriften:MMCBS01
- GGC:Tijdschriften:MMCBS02           | GGC:Tijdschriften:MMCBS02
- GGC:Tijdschriften:MMCBS03           | GGC:Tijdschriften:MMCBS03
- GGC:Tijdschriften:MMCMC03           | GGC:Tijdschriften:MMCMC03
- GGC:Tijdschriften:MMCMC05           | GGC:Tijdschriften:MMCMC05
- GGC:Tijdschriften:MMCSS01           | GGC:Tijdschriften:MMCSS01
- GGC:Tijdschriften:MMDA04            | GGC:Tijdschriften:MMDA04
- GGC:Tijdschriften:MMEGG01           | GGC:Tijdschriften:MMEGG01
- GGC:Tijdschriften:MMENLK02          | GGC:Tijdschriften:MMENLK02
- GGC:Tijdschriften:MMENLK03          | GGC:Tijdschriften:MMENLK03
- GGC:Tijdschriften:MMENLK04          | GGC:Tijdschriften:MMENLK04
- GGC:Tijdschriften:MMEYE01           | GGC:Tijdschriften:MMEYE01
- GGC:Tijdschriften:MMEYE02           | GGC:Tijdschriften:MMEYE02
- GGC:Tijdschriften:MMGAMS01          | GGC:Tijdschriften:MMGAMS01
- GGC:Tijdschriften:MMGAMS02          | GGC:Tijdschriften:MMGAMS02
- GGC:Tijdschriften:MMGAZS02          | GGC:Tijdschriften:MMGAZS02
- GGC:Tijdschriften:MMHCC01           | GGC:Tijdschriften:MMHCC01
- GGC:Tijdschriften:MMHFC01           | GGC:Tijdschriften:MMHFC01
- GGC:Tijdschriften:MMHNI01           | GGC:Tijdschriften:MMHNI01
- GGC:Tijdschriften:MMHNI03           | GGC:Tijdschriften:MMHNI03
- GGC:Tijdschriften:MMIISG02          | GGC:Tijdschriften:MMIISG02
- GGC:Tijdschriften:MMIISG06          | GGC:Tijdschriften:MMIISG06
- GGC:Tijdschriften:MMIISG08          | GGC:Tijdschriften:MMIISG08
- GGC:Tijdschriften:MMIISG10          | GGC:Tijdschriften:MMIISG10
- GGC:Tijdschriften:MMIISG13          | GGC:Tijdschriften:MMIISG13
- GGC:Tijdschriften:MMIISG15          | GGC:Tijdschriften:MMIISG15
- GGC:Tijdschriften:MMIISG17          | GGC:Tijdschriften:MMIISG17
- GGC:Tijdschriften:MMIISG20          | GGC:Tijdschriften:MMIISG20
- GGC:Tijdschriften:MMKB07            | GGC:Tijdschriften:MMKB07
- GGC:Tijdschriften:MMKB10            | GGC:Tijdschriften:MMKB10
- GGC:Tijdschriften:MMKB13            | GGC:Tijdschriften:MMKB13
- GGC:Tijdschriften:MMKB14            | GGC:Tijdschriften:MMKB14
- GGC:Tijdschriften:MMKB16            | GGC:Tijdschriften:MMKB16
- GGC:Tijdschriften:MMKB26            | GGC:Tijdschriften:MMKB26
- GGC:Tijdschriften:MMKB30            | GGC:Tijdschriften:MMKB30
- GGC:Tijdschriften:MMKDC03           | GGC:Tijdschriften:MMKDC03
- GGC:Tijdschriften:MMKDC04           | GGC:Tijdschriften:MMKDC04
- GGC:Tijdschriften:MMKDC05           | GGC:Tijdschriften:MMKDC05
- GGC:Tijdschriften:MMKDC07           | GGC:Tijdschriften:MMKDC07
- GGC:Tijdschriften:MMKDC09           | GGC:Tijdschriften:MMKDC09
- GGC:Tijdschriften:MMKIT04           | GGC:Tijdschriften:MMKIT04
- GGC:Tijdschriften:MMKITLV3          | GGC:Tijdschriften:MMKITLV3
- GGC:Tijdschriften:MMKNAU01          | GGC:Tijdschriften:MMKNAU01
- GGC:Tijdschriften:MMKNGU01          | GGC:Tijdschriften:MMKNGU01
- GGC:Tijdschriften:MMKNMP01          | GGC:Tijdschriften:MMKNMP01
- GGC:Tijdschriften:MMKNMP02          | GGC:Tijdschriften:MMKNMP02
- GGC:Tijdschriften:MMKNPSV01         | GGC:Tijdschriften:MMKNPSV01
- GGC:Tijdschriften:MMKNRB01          | GGC:Tijdschriften:MMKNRB01
- GGC:Tijdschriften:MMKNTB01          | GGC:Tijdschriften:MMKNTB01
- GGC:Tijdschriften:MMKNVB01          | GGC:Tijdschriften:MMKNVB01
- GGC:Tijdschriften:MMKVLO01          | GGC:Tijdschriften:MMKVLO01
- GGC:Tijdschriften:MMKWG01           | GGC:Tijdschriften:MMKWG01
- GGC:Tijdschriften:MMKWG02           | GGC:Tijdschriften:MMKWG02
- GGC:Tijdschriften:MMLIND01          | GGC:Tijdschriften:MMLIND01
- GGC:Tijdschriften:MMMHW01           | GGC:Tijdschriften:MMMHW01
- GGC:Tijdschriften:MMMI02            | GGC:Tijdschriften:MMMI02
- GGC:Tijdschriften:MMNA12            | GGC:Tijdschriften:MMNA12
- GGC:Tijdschriften:MMNAT03           | GGC:Tijdschriften:MMNAT03
- GGC:Tijdschriften:MMNDR01           | GGC:Tijdschriften:MMNDR01
- GGC:Tijdschriften:MMNFM01           | GGC:Tijdschriften:MMNFM01
- GGC:Tijdschriften:MMNIBG01          | GGC:Tijdschriften:MMNIBG01
- GGC:Tijdschriften:MMNIOD08          | GGC:Tijdschriften:MMNIOD08
- GGC:Tijdschriften:MMNMM02           | GGC:Tijdschriften:MMNMM02
- GGC:Tijdschriften:MMNPZ01           | GGC:Tijdschriften:MMNPZ01
- GGC:Tijdschriften:MMNVOG01          | GGC:Tijdschriften:MMNVOG01
- GGC:Tijdschriften:MMNVOG02          | GGC:Tijdschriften:MMNVOG02
- GGC:Tijdschriften:MMOHKT01          | GGC:Tijdschriften:MMOHKT01
- GGC:Tijdschriften:MMPM02            | GGC:Tijdschriften:MMPM02
- GGC:Tijdschriften:MMPM03            | GGC:Tijdschriften:MMPM03
- GGC:Tijdschriften:MMPM04            | GGC:Tijdschriften:MMPM04
- GGC:Tijdschriften:MMRAA02           | GGC:Tijdschriften:MMRAA02
- GGC:Tijdschriften:MMRHCG01          | GGC:Tijdschriften:MMRHCG01
- GGC:Tijdschriften:MMRHCG02          | GGC:Tijdschriften:MMRHCG02
- GGC:Tijdschriften:MMRKD09           | GGC:Tijdschriften:MMRKD09
- GGC:Tijdschriften:MMRMO02           | GGC:Tijdschriften:MMRMO02
- GGC:Tijdschriften:MMSARO01          | GGC:Tijdschriften:MMSARO01
- GGC:Tijdschriften:MMSAVL01          | GGC:Tijdschriften:MMSAVL01
- GGC:Tijdschriften:MMSHCL02          | GGC:Tijdschriften:MMSHCL02
- GGC:Tijdschriften:MMSPOM01          | GGC:Tijdschriften:MMSPOM01
- GGC:Tijdschriften:MMTEY01           | GGC:Tijdschriften:MMTEY01
- GGC:Tijdschriften:MMTUK02           | GGC:Tijdschriften:MMTUK02
- GGC:Tijdschriften:MMTUK03           | GGC:Tijdschriften:MMTUK03
- GGC:Tijdschriften:MMUBA10           | GGC:Tijdschriften:MMUBA10
- GGC:Tijdschriften:MMUBA13           | GGC:Tijdschriften:MMUBA13
- GGC:Tijdschriften:MMUBA15           | GGC:Tijdschriften:MMUBA15
- GGC:Tijdschriften:MMUBA16           | GGC:Tijdschriften:MMUBA16
- GGC:Tijdschriften:MMUBL08           | GGC:Tijdschriften:MMUBL08
- GGC:Tijdschriften:MMUBL09           | GGC:Tijdschriften:MMUBL09
- GGC:Tijdschriften:MMUBMA01          | GGC:Tijdschriften:MMUBMA01
- GGC:Tijdschriften:MMUBMA02          | GGC:Tijdschriften:MMUBMA02
- GGC:Tijdschriften:MMUBTB01          | GGC:Tijdschriften:MMUBTB01
- GGC:Tijdschriften:MMUBTB02          | GGC:Tijdschriften:MMUBTB02
- GGC:Tijdschriften:MMUBTB03          | GGC:Tijdschriften:MMUBTB03
- GGC:Tijdschriften:MMUBU02           | GGC:Tijdschriften:MMUBU02
- GGC:Tijdschriften:MMUBVU04          | GGC:Tijdschriften:MMUBVU04
- GGC:Tijdschriften:MMUBVU06          | GGC:Tijdschriften:MMUBVU06
- GGC:Tijdschriften:MMUBVU07          | GGC:Tijdschriften:MMUBVU07
- GGC:Tijdschriften:MMUBVU08          | GGC:Tijdschriften:MMUBVU08
- GGC:Tijdschriften:MMUBWA02          | GGC:Tijdschriften:MMUBWA02
- GGC:Tijdschriften:MMUBWA03          | GGC:Tijdschriften:MMUBWA03
- GGC:Tijdschriften:MMUBWA04          | GGC:Tijdschriften:MMUBWA04
- GGC:Tijdschriften:MMUBWA05          | GGC:Tijdschriften:MMUBWA05
- GGC:Tijdschriften:MMUTRA01          | GGC:Tijdschriften:MMUTRA01
- GGC:Tijdschriften:MMUTRA03          | GGC:Tijdschriften:MMUTRA03
- GGC:Tijdschriften:MMVRED01          | GGC:Tijdschriften:MMVRED01
- GGC:Tijdschriften:MMZAH01           | GGC:Tijdschriften:MMZAH01
- GGC:Tijdschriften:MMZAH03           | GGC:Tijdschriften:MMZAH03
- GGC:Tijdschriften:MMZEND01          | GGC:Tijdschriften:MMZEND01
- GGC:Tijdschriften:MMZEND02          | GGC:Tijdschriften:MMZEND02
- GGC:Tijdschriften:MMZOU01           | GGC:Tijdschriften:MMZOU01
- GGC:Tijdschriften:NIOD07            | GGC:Tijdschriften:NIOD07
- GGC:Tijdschriften:NIOD09            | GGC:Tijdschriften:NIOD09
- GGC:Tijdschriften:OBA01             | GGC:Tijdschriften:OBA01
- GGLKB01:KBNL                        | GGLKB01:KBNL
- GGLKB01:KBNLB                       | GGLKB01:KBNLB
- GGLKB01:UBA                         | GGLKB01:UBA
- GGLKB01:UBL                         | GGLKB01:UBL
- GGLKB01:UBU                         | GGLKB01:UBU
- KRANTEN:DDD                         | KRANTEN:DDD
- KRANTEN:KBDDD02                     | KRANTEN:KBDDD02
- KRANTEN:KBNRC01                     | KRANTEN:KBNRC01
- KRANTEN:KBPERS01                    | KRANTEN:KBPERS01
- KRANTEN:MMCC01                      | KRANTEN:MMCC01
- KRANTEN:MMCC02                      | KRANTEN:MMCC02
- KRANTEN:MMCODA01                    | KRANTEN:MMCODA01
- KRANTEN:MMCODA02                    | KRANTEN:MMCODA02
- KRANTEN:MMDA03                      | KRANTEN:MMDA03
- KRANTEN:MMECAL02                    | KRANTEN:MMECAL02
- KRANTEN:MMGARO01                    | KRANTEN:MMGARO01
- KRANTEN:MMGASL01                    | KRANTEN:MMGASL01
- KRANTEN:MMGAVL01                    | KRANTEN:MMGAVL01
- KRANTEN:MMGAZS01                    | KRANTEN:MMGAZS01
- KRANTEN:MMGEM01                     | KRANTEN:MMGEM01
- KRANTEN:MMHCO01                     | KRANTEN:MMHCO01
- KRANTEN:MMHCO02                     | KRANTEN:MMHCO02
- KRANTEN:MMIISG05                    | KRANTEN:MMIISG05
- KRANTEN:MMIISG07                    | KRANTEN:MMIISG07
- KRANTEN:MMIISG18                    | KRANTEN:MMIISG18
- KRANTEN:MMKB04                      | KRANTEN:MMKB04
- KRANTEN:MMKB08                      | KRANTEN:MMKB08
- KRANTEN:MMKB12                      | KRANTEN:MMKB12
- KRANTEN:MMKB15                      | KRANTEN:MMKB15
- KRANTEN:MMKB19                      | KRANTEN:MMKB19
- KRANTEN:MMKB23                      | KRANTEN:MMKB23
- KRANTEN:MMKB27                      | KRANTEN:MMKB27
- KRANTEN:MMKB32                      | KRANTEN:MMKB32
- KRANTEN:MMMAAS01                    | KRANTEN:MMMAAS01
- KRANTEN:MMMHW01                     | KRANTEN:MMMHW01
- KRANTEN:MMNHA02                     | KRANTEN:MMNHA02
- KRANTEN:MMNHA03                     | KRANTEN:MMNHA03
- KRANTEN:MMNIOD04                    | KRANTEN:MMNIOD04
- KRANTEN:MMNIOD05                    | KRANTEN:MMNIOD05
- KRANTEN:MMPM05                      | KRANTEN:MMPM05
- KRANTEN:MMRANM02                    | KRANTEN:MMRANM02
- KRANTEN:MMRANM03                    | KRANTEN:MMRANM03
- KRANTEN:MMRANMG01                   | KRANTEN:MMRANMG01
- KRANTEN:MMRAZ02                     | KRANTEN:MMRAZ02
- KRANTEN:MMRAZ03                     | KRANTEN:MMRAZ03
- KRANTEN:MMRHCE01                    | KRANTEN:MMRHCE01
- KRANTEN:MMRHCE02                    | KRANTEN:MMRHCE02
- KRANTEN:MMRHCG03                    | KRANTEN:MMRHCG03
- KRANTEN:MMSAA06                     | KRANTEN:MMSAA06
- KRANTEN:MMSAB03                     | KRANTEN:MMSAB03
- KRANTEN:MMSAB04                     | KRANTEN:MMSAB04
- KRANTEN:MMSADB01                    | KRANTEN:MMSADB01
- KRANTEN:MMSAEN01                    | KRANTEN:MMSAEN01
- KRANTEN:MMSAEN02                    | KRANTEN:MMSAEN02
- KRANTEN:MMSAK01                     | KRANTEN:MMSAK01
- KRANTEN:MMSARO02                    | KRANTEN:MMSARO02
- KRANTEN:MMSAVL02                    | KRANTEN:MMSAVL02
- KRANTEN:MMSHCL03                    | KRANTEN:MMSHCL03
- KRANTEN:MMTELE01                    | KRANTEN:MMTELE01
- KRANTEN:MMTRES02                    | KRANTEN:MMTRES02
- KRANTEN:MMTRES03                    | KRANTEN:MMTRES03
- KRANTEN:MMTRES04                    | KRANTEN:MMTRES04
- KRANTEN:MMUBTB04                    | KRANTEN:MMUBTB04
- KRANTEN:MMUBWA01                    | KRANTEN:MMUBWA01
- KRANTEN:MMVEEN01                    | KRANTEN:MMVEEN01
- KRANTEN:MMVEEN02                    | KRANTEN:MMVEEN02
- KRANTEN:MMWFA01                     | KRANTEN:MMWFA01
- sgd:document                        | sgd:document
- sgd:kaarten                         | sgd:kaarten
- sgd:register                        | sgd:register
- TIJDSCHRIFTEN:GMDH01                | TIJDSCHRIFTEN:GMDH01
- TIJDSCHRIFTEN:KBDBNL02              | TIJDSCHRIFTEN:KBDBNL02
- TIJDSCHRIFTEN:KBDBVL02              | TIJDSCHRIFTEN:KBDBVL02
- TIJDSCHRIFTEN:KBDC001               | TIJDSCHRIFTEN:KBDC001
- TIJDSCHRIFTEN:KBKWG02               | TIJDSCHRIFTEN:KBKWG02
- TIJDSCHRIFTEN:KBNA001               | TIJDSCHRIFTEN:KBNA001
- TIJDSCHRIFTEN:MMAD01                | TIJDSCHRIFTEN:MMAD01
- TIJDSCHRIFTEN:MMALET01              | TIJDSCHRIFTEN:MMALET01
- TIJDSCHRIFTEN:MMALET02              | TIJDSCHRIFTEN:MMALET02
- TIJDSCHRIFTEN:MMATR01               | TIJDSCHRIFTEN:MMATR01
- TIJDSCHRIFTEN:MMATR02               | TIJDSCHRIFTEN:MMATR02
- TIJDSCHRIFTEN:MMATR05               | TIJDSCHRIFTEN:MMATR05
- TIJDSCHRIFTEN:MMATR06               | TIJDSCHRIFTEN:MMATR06
- TIJDSCHRIFTEN:MMATR07               | TIJDSCHRIFTEN:MMATR07
- TIJDSCHRIFTEN:MMAVB01               | TIJDSCHRIFTEN:MMAVB01
- TIJDSCHRIFTEN:MMBOY01               | TIJDSCHRIFTEN:MMBOY01
- TIJDSCHRIFTEN:MMBPH01               | TIJDSCHRIFTEN:MMBPH01
- TIJDSCHRIFTEN:MMBZK02               | TIJDSCHRIFTEN:MMBZK02
- TIJDSCHRIFTEN:MMCBS01               | TIJDSCHRIFTEN:MMCBS01
- TIJDSCHRIFTEN:MMCBS02               | TIJDSCHRIFTEN:MMCBS02
- TIJDSCHRIFTEN:MMCBS03               | TIJDSCHRIFTEN:MMCBS03
- TIJDSCHRIFTEN:MMCMC03               | TIJDSCHRIFTEN:MMCMC03
- TIJDSCHRIFTEN:MMCMC05               | TIJDSCHRIFTEN:MMCMC05
- TIJDSCHRIFTEN:MMCSS01               | TIJDSCHRIFTEN:MMCSS01
- TIJDSCHRIFTEN:MMDA04                | TIJDSCHRIFTEN:MMDA04
- TIJDSCHRIFTEN:MMEGG01               | TIJDSCHRIFTEN:MMEGG01
- TIJDSCHRIFTEN:MMENLK02              | TIJDSCHRIFTEN:MMENLK02
- TIJDSCHRIFTEN:MMENLK03              | TIJDSCHRIFTEN:MMENLK03
- TIJDSCHRIFTEN:MMENLK04              | TIJDSCHRIFTEN:MMENLK04
- TIJDSCHRIFTEN:MMEYE01               | TIJDSCHRIFTEN:MMEYE01
- TIJDSCHRIFTEN:MMEYE02               | TIJDSCHRIFTEN:MMEYE02
- TIJDSCHRIFTEN:MMGAMS01              | TIJDSCHRIFTEN:MMGAMS01
- TIJDSCHRIFTEN:MMGAMS02              | TIJDSCHRIFTEN:MMGAMS02
- TIJDSCHRIFTEN:MMGAZS02              | TIJDSCHRIFTEN:MMGAZS02
- TIJDSCHRIFTEN:MMHCC01               | TIJDSCHRIFTEN:MMHCC01
- TIJDSCHRIFTEN:MMHFC01               | TIJDSCHRIFTEN:MMHFC01
- TIJDSCHRIFTEN:MMHNI01               | TIJDSCHRIFTEN:MMHNI01
- TIJDSCHRIFTEN:MMHNI03               | TIJDSCHRIFTEN:MMHNI03
- TIJDSCHRIFTEN:MMIISG02              | TIJDSCHRIFTEN:MMIISG02
- TIJDSCHRIFTEN:MMIISG06              | TIJDSCHRIFTEN:MMIISG06
- TIJDSCHRIFTEN:MMIISG08              | TIJDSCHRIFTEN:MMIISG08
- TIJDSCHRIFTEN:MMIISG10              | TIJDSCHRIFTEN:MMIISG10
- TIJDSCHRIFTEN:MMIISG13              | TIJDSCHRIFTEN:MMIISG13
- TIJDSCHRIFTEN:MMIISG15              | TIJDSCHRIFTEN:MMIISG15
- TIJDSCHRIFTEN:MMIISG17              | TIJDSCHRIFTEN:MMIISG17
- TIJDSCHRIFTEN:MMIISG20              | TIJDSCHRIFTEN:MMIISG20
- TIJDSCHRIFTEN:MMKB07                | TIJDSCHRIFTEN:MMKB07
- TIJDSCHRIFTEN:MMKB10                | TIJDSCHRIFTEN:MMKB10
- TIJDSCHRIFTEN:MMKB13                | TIJDSCHRIFTEN:MMKB13
- TIJDSCHRIFTEN:MMKB14                | TIJDSCHRIFTEN:MMKB14
- TIJDSCHRIFTEN:MMKB16                | TIJDSCHRIFTEN:MMKB16
- TIJDSCHRIFTEN:MMKB26                | TIJDSCHRIFTEN:MMKB26
- TIJDSCHRIFTEN:MMKDC03               | TIJDSCHRIFTEN:MMKDC03
- TIJDSCHRIFTEN:MMKDC04               | TIJDSCHRIFTEN:MMKDC04
- TIJDSCHRIFTEN:MMKDC05               | TIJDSCHRIFTEN:MMKDC05
- TIJDSCHRIFTEN:MMKDC07               | TIJDSCHRIFTEN:MMKDC07
- TIJDSCHRIFTEN:MMKDC09               | TIJDSCHRIFTEN:MMKDC09
- TIJDSCHRIFTEN:MMKIT04               | TIJDSCHRIFTEN:MMKIT04
- TIJDSCHRIFTEN:MMKITLV3              | TIJDSCHRIFTEN:MMKITLV3
- TIJDSCHRIFTEN:MMKNAU01              | TIJDSCHRIFTEN:MMKNAU01
- TIJDSCHRIFTEN:MMKNGU01              | TIJDSCHRIFTEN:MMKNGU01
- TIJDSCHRIFTEN:MMKNMP01              | TIJDSCHRIFTEN:MMKNMP01
- TIJDSCHRIFTEN:MMKNMP02              | TIJDSCHRIFTEN:MMKNMP02
- TIJDSCHRIFTEN:MMKNRB01              | TIJDSCHRIFTEN:MMKNRB01
- TIJDSCHRIFTEN:MMKNTB01              | TIJDSCHRIFTEN:MMKNTB01
- TIJDSCHRIFTEN:MMKNVB01              | TIJDSCHRIFTEN:MMKNVB01
- TIJDSCHRIFTEN:MMKPSV01              | TIJDSCHRIFTEN:MMKPSV01
- TIJDSCHRIFTEN:MMKVLO01              | TIJDSCHRIFTEN:MMKVLO01
- TIJDSCHRIFTEN:MMKVLO02              | TIJDSCHRIFTEN:MMKVLO02
- TIJDSCHRIFTEN:MMKWG01               | TIJDSCHRIFTEN:MMKWG01
- TIJDSCHRIFTEN:MMLIND01              | TIJDSCHRIFTEN:MMLIND01
- TIJDSCHRIFTEN:MMMI02                | TIJDSCHRIFTEN:MMMI02
- TIJDSCHRIFTEN:MMNA12                | TIJDSCHRIFTEN:MMNA12
- TIJDSCHRIFTEN:MMNAT03               | TIJDSCHRIFTEN:MMNAT03
- TIJDSCHRIFTEN:MMNDR01               | TIJDSCHRIFTEN:MMNDR01
- TIJDSCHRIFTEN:MMNFM01               | TIJDSCHRIFTEN:MMNFM01
- TIJDSCHRIFTEN:MMNIBG01              | TIJDSCHRIFTEN:MMNIBG01
- TIJDSCHRIFTEN:MMNIOD08              | TIJDSCHRIFTEN:MMNIOD08
- TIJDSCHRIFTEN:MMNMM02               | TIJDSCHRIFTEN:MMNMM02
- TIJDSCHRIFTEN:MMNPZ01               | TIJDSCHRIFTEN:MMNPZ01
- TIJDSCHRIFTEN:MMNVOG01              | TIJDSCHRIFTEN:MMNVOG01
- TIJDSCHRIFTEN:MMNVOG02              | TIJDSCHRIFTEN:MMNVOG02
- TIJDSCHRIFTEN:MMOHKT01              | TIJDSCHRIFTEN:MMOHKT01
- TIJDSCHRIFTEN:MMPM02                | TIJDSCHRIFTEN:MMPM02
- TIJDSCHRIFTEN:MMPM03                | TIJDSCHRIFTEN:MMPM03
- TIJDSCHRIFTEN:MMPM04                | TIJDSCHRIFTEN:MMPM04
- TIJDSCHRIFTEN:MMRAA02               | TIJDSCHRIFTEN:MMRAA02
- TIJDSCHRIFTEN:MMRHCG01              | TIJDSCHRIFTEN:MMRHCG01
- TIJDSCHRIFTEN:MMRHCG02              | TIJDSCHRIFTEN:MMRHCG02
- TIJDSCHRIFTEN:MMRKD09               | TIJDSCHRIFTEN:MMRKD09
- TIJDSCHRIFTEN:MMRMO02               | TIJDSCHRIFTEN:MMRMO02
- TIJDSCHRIFTEN:MMSARO01              | TIJDSCHRIFTEN:MMSARO01
- TIJDSCHRIFTEN:MMSAVL01              | TIJDSCHRIFTEN:MMSAVL01
- TIJDSCHRIFTEN:MMSHCL02              | TIJDSCHRIFTEN:MMSHCL02
- TIJDSCHRIFTEN:MMSPOM01              | TIJDSCHRIFTEN:MMSPOM01
- TIJDSCHRIFTEN:MMTEY01               | TIJDSCHRIFTEN:MMTEY01
- TIJDSCHRIFTEN:MMTUK02               | TIJDSCHRIFTEN:MMTUK02
- TIJDSCHRIFTEN:MMTUK03               | TIJDSCHRIFTEN:MMTUK03
- TIJDSCHRIFTEN:MMUBA10               | TIJDSCHRIFTEN:MMUBA10
- TIJDSCHRIFTEN:MMUBA13               | TIJDSCHRIFTEN:MMUBA13
- TIJDSCHRIFTEN:MMUBA15               | TIJDSCHRIFTEN:MMUBA15
- TIJDSCHRIFTEN:MMUBA16               | TIJDSCHRIFTEN:MMUBA16
- TIJDSCHRIFTEN:MMUBL08               | TIJDSCHRIFTEN:MMUBL08
- TIJDSCHRIFTEN:MMUBL09               | TIJDSCHRIFTEN:MMUBL09
- TIJDSCHRIFTEN:MMUBMA01              | TIJDSCHRIFTEN:MMUBMA01
- TIJDSCHRIFTEN:MMUBMA02              | TIJDSCHRIFTEN:MMUBMA02
- TIJDSCHRIFTEN:MMUBTB01              | TIJDSCHRIFTEN:MMUBTB01
- TIJDSCHRIFTEN:MMUBTB02              | TIJDSCHRIFTEN:MMUBTB02
- TIJDSCHRIFTEN:MMUBTB03              | TIJDSCHRIFTEN:MMUBTB03
- TIJDSCHRIFTEN:MMUBU02               | TIJDSCHRIFTEN:MMUBU02
- TIJDSCHRIFTEN:MMUBVU04              | TIJDSCHRIFTEN:MMUBVU04
- TIJDSCHRIFTEN:MMUBVU06              | TIJDSCHRIFTEN:MMUBVU06
- TIJDSCHRIFTEN:MMUBVU07              | TIJDSCHRIFTEN:MMUBVU07
- TIJDSCHRIFTEN:MMUBVU08              | TIJDSCHRIFTEN:MMUBVU08
- TIJDSCHRIFTEN:MMUBWA02              | TIJDSCHRIFTEN:MMUBWA02
- TIJDSCHRIFTEN:MMUBWA03              | TIJDSCHRIFTEN:MMUBWA03
- TIJDSCHRIFTEN:MMUBWA04              | TIJDSCHRIFTEN:MMUBWA04
- TIJDSCHRIFTEN:MMUTRA01              | TIJDSCHRIFTEN:MMUTRA01
- TIJDSCHRIFTEN:MMUTRA03              | TIJDSCHRIFTEN:MMUTRA03
- TIJDSCHRIFTEN:MMVRED01              | TIJDSCHRIFTEN:MMVRED01
- TIJDSCHRIFTEN:MMZAH01               | TIJDSCHRIFTEN:MMZAH01
- TIJDSCHRIFTEN:MMZAH03               | TIJDSCHRIFTEN:MMZAH03
- TIJDSCHRIFTEN:MMZEND01              | TIJDSCHRIFTEN:MMZEND01
- TIJDSCHRIFTEN:MMZEND02              | TIJDSCHRIFTEN:MMZEND02
- TIJDSCHRIFTEN:MMZOU01               | TIJDSCHRIFTEN:MMZOU01
- TIJDSCHRIFTEN:NIOD07                | TIJDSCHRIFTEN:NIOD07
- TIJDSCHRIFTEN:NIOD09                | TIJDSCHRIFTEN:NIOD09
- TIJDSCHRIFTEN:OBA01                 | TIJDSCHRIFTEN:OBA01
- TIJDSCHRIFTEN_GESEGMENTEERD:MMNAT03 | TIJDSCHRIFTEN_GESEGMENTEERD:MMNAT03
- TIJDSCHRIFTEN_GESEGMENTEERD:MMZOU01 | TIJDSCHRIFTEN_GESEGMENTEERD:MMZOU01
-(531 rows)
+SELECT * FROM OAI_ListSets('oai_server_kbnl') 
+WHERE setname IS NOT NULL AND setspec IS NOT NULL 
+ORDER BY setname DESC 
+FETCH FIRST ROW ONLY;
+ setspec | setname 
+---------+---------
+ WILC    | WILC
+(1 row)
 
-SELECT * FROM OAI_ListSets('oai_server_davidrumsey');
+SELECT * FROM OAI_ListSets('oai_server_davidrumsey') 
+WHERE setname IS NOT NULL AND setspec IS NOT NULL 
+ORDER BY setname DESC 
+FETCH FIRST ROW ONLY;
   setspec   |                setname                 
 ------------+----------------------------------------
  RUMSEY~8~1 | David Rumsey Historical Map Collection
 (1 row)
 
+SELECT count(*) > 0 
+FROM OAI_ListSets('oai_server_dnb') 
+WHERE setname IS NOT NULL AND setspec IS NOT NULL;
+ ?column? 
+----------
+ t
+(1 row)
+
+-- must fail: repositoriy no longer exists
+SELECT * FROM OAI_ListSets('oai_server_bioj');
+ERROR:  invalid ListSets response from 'https://www.bioj-online.com/jms/index.php/up/oai/'
 SELECT * FROM OAI_Identify('oai_server_ulb');
        name        |                             description                              
 -------------------+----------------------------------------------------------------------
@@ -693,21 +154,7 @@ SELECT * FROM OAI_Identify('oai_server_dnb');
 (7 rows)
 
 SELECT * FROM OAI_Identify('oai_server_bioj');
-       name        |                                          description                                           
--------------------+------------------------------------------------------------------------------------------------
- repositoryName    | British and Irish Orthoptic Journal
- baseURL           | https://www.bioj-online.com/jms/index.php/up/oai/
- protocolVersion   | 2.0
- adminEmail        | editor@orthoptics.org.uk
- earliestDatestamp | 2018-03-12T10:39:41Z
- deletedRecord     | persistent
- granularity       | YYYY-MM-DDThh:mm:ssZ
- compression       | gzip
- compression       | deflate
- description       | oaiojs.bioj-online.com:oai:ojs.bioj-online.com:article/1
- description       | Open Journal SystemsPublic Knowledge Projectpkp.contact@gmail.com2.4.3.0http://pkp.sfu.ca/ojs/
-(11 rows)
-
+ERROR:  invalid Identify response from 'https://www.bioj-online.com/jms/index.php/up/oai/'
 SELECT * FROM OAI_Identify('oai_server_bjihs');
        name        |                                          description                                           
 -------------------+------------------------------------------------------------------------------------------------

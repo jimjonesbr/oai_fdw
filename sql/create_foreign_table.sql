@@ -8,7 +8,7 @@ CREATE FOREIGN TABLE ulb_ulbmsuo_oai_dc (
  ) SERVER oai_server_ulb OPTIONS (setspec 'ulbmsuo', 
                                   metadataPrefix 'oai_dc');
 
-SELECT * FROM ulb_ulbmsuo_oai_dc;
+SELECT * FROM ulb_ulbmsuo_oai_dc FETCH FIRST ROW ONLY;
 
 CREATE FOREIGN TABLE foreign_table_without_oai_option (
   foo text
