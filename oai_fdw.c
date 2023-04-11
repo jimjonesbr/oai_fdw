@@ -411,7 +411,7 @@ OAIFdwState *GetServerInfo(const char *srvname) {
 Datum oai_fdw_identity(PG_FUNCTION_ARGS) {
 
 	text *srvname_text = PG_GETARG_TEXT_P(0);
-	const char * srvname = text_to_cstring(srvname_text);
+	const char  *srvname = text_to_cstring(srvname_text);
 	OAIFdwState *state = GetServerInfo(srvname);
 
 	FuncCallContext     *funcctx;
@@ -782,11 +782,13 @@ static List *GetIdentity(OAIFdwState *state) {
 
 	elog(DEBUG1, "%s called",__func__);
 
-	xmlInitParser();
-
 	state->requestVerb = OAI_REQUEST_IDENTIFY;
 
 	oaiExecuteResponse = ExecuteOAIRequest(state);
+
+	if(!state->xmldoc) elog(ERROR,"invalid %s response from '%s'",state->requestVerb, state->url);
+
+	xmlInitParser();
 
 	if(oaiExecuteResponse == OAI_SUCCESS) {
 
@@ -836,11 +838,13 @@ static List *GetSets(OAIFdwState *state) {
 
 	elog(DEBUG1, "%s called",__func__);
 
-	xmlInitParser();
-
 	state->requestVerb = OAI_REQUEST_LISTSETS;
 
 	oaiExecuteResponse = ExecuteOAIRequest(state);
+
+	if(!state->xmldoc) elog(ERROR,"invalid %s response from '%s'",state->requestVerb, state->url);
+
+	xmlInitParser();
 
 	if(oaiExecuteResponse == OAI_SUCCESS) {
 
@@ -905,11 +909,13 @@ static List *GetMetadataFormats(OAIFdwState *state) {
 
 	elog(DEBUG1, "  %s called",__func__);
 
-	xmlInitParser();
-
 	state->requestVerb = OAI_REQUEST_LISTMETADATAFORMATS;
 
 	oaiExecuteResponse = ExecuteOAIRequest(state);
+
+	if(!state->xmldoc) elog(ERROR,"invalid %s response from '%s'",state->requestVerb, state->url);
+
+	xmlInitParser();
 
 	if(oaiExecuteResponse == OAI_SUCCESS) {
 
