@@ -1012,6 +1012,49 @@ static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, voi
   return realsize;
 }
 
+static size_t HeaderCallbackFunction(char *contents, size_t size, size_t nmemb, void *userp)
+{
+
+	size_t realsize = size * nmemb;
+	struct MemoryStruct *mem = (struct MemoryStruct *) userp;
+	char *ptr;
+	char *textxml = "content-type: text/xml";
+	char *applicationxml = "content-type: application/xml";
+
+	/* is it a "content-type" entry? "*/
+	if (strncasecmp(contents, textxml, 13) == 0) {
+		/*
+		* if the content-type isn't "text/xml" or "application/xml"
+		* return 0 (fail), as other content-types aren't supported
+		* in the OAI 2.0 Standard.
+		*/
+		if(strncasecmp(contents, textxml, strlen(textxml)) != 0 &&
+		   strncasecmp(contents, applicationxml, strlen(applicationxml)) != 0) {
+			 /* remove crlf */
+			contents[strlen(contents)-2] = '\0';
+			elog(WARNING,"%s: unsupported header entry: \"%s\"",__func__,contents);
+			return 0;
+
+		}
+
+	}
+
+	ptr = repalloc(mem->memory, mem->size + realsize + 1);
+
+	if(!ptr) {
+		ereport(ERROR,
+			(errcode(ERRCODE_FDW_OUT_OF_MEMORY),
+			errmsg("[%s] out of memory (repalloc returned NULL)",__func__)));
+	}
+
+	mem->memory = ptr;
+	memcpy(&(mem->memory[mem->size]), contents, realsize);
+	mem->size += realsize;
+	mem->memory[mem->size] = 0;
+
+	return realsize;
+}
+
 /**
  * Executes the HTTP request to the OAI repository using the
  * libcurl library.
@@ -1027,6 +1070,7 @@ static int ExecuteOAIRequest(OAIFdwState *state) {
 
 	char errbuf[CURL_ERROR_SIZE];
 	struct MemoryStruct chunk;
+	struct MemoryStruct chunk_header;
 
 	executorcontext = AllocSetContextCreate(CurrentMemoryContext,
 											   "oai_fdw_executor",
@@ -1036,6 +1080,9 @@ static int ExecuteOAIRequest(OAIFdwState *state) {
 
 	chunk.memory = palloc(1);
 	chunk.size = 0;    /* no data at this point */
+
+	chunk_header.memory = palloc(1);
+	chunk_header.size = 0;    /* no data at this point */
 
 	initStringInfo(&url_buffer);
 
@@ -1227,7 +1274,10 @@ static int ExecuteOAIRequest(OAIFdwState *state) {
 
 		}
 
+		curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
 		curl_easy_setopt(curl, CURLOPT_POSTFIELDS, url_buffer.data);
+		curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, HeaderCallbackFunction);
+		curl_easy_setopt(curl, CURLOPT_HEADERDATA, (void *)&chunk_header);
 		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
 		curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&chunk);
 		curl_easy_setopt(curl, CURLOPT_FAILONERROR, true);
@@ -1240,7 +1290,7 @@ static int ExecuteOAIRequest(OAIFdwState *state) {
 
 			for (long i = 1; i <= state->maxretries && (res = curl_easy_perform(curl)) != CURLE_OK; i++) {
 
-				elog(WARNING, "%s (%s): connection to '%s' failed (%ld)",__func__,state->requestVerb, state->url,i);
+				elog(WARNING, "%s (%s): request to '%s' failed (%ld)",__func__,state->requestVerb, state->url,i);
 
 			}
 
@@ -1251,8 +1301,11 @@ static int ExecuteOAIRequest(OAIFdwState *state) {
 			size_t len = strlen(errbuf);
 			fprintf(stderr, "\nlibcurl: (%d) ", res);
 
-			state->xmldoc = NULL;
+			xmlFreeDoc(state->xmldoc);
+			pfree(chunk.memory);
+			pfree(chunk_header.memory);
 			curl_easy_cleanup(curl);
+			curl_global_cleanup();
 
 			if(len) {
 
@@ -1267,25 +1320,25 @@ static int ExecuteOAIRequest(OAIFdwState *state) {
 						 errmsg("%s => (%u) '%s'\n",__func__, res, curl_easy_strerror(res))));
 			}
 
-
 		} else {
 
 			long response_code;
 			curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
 			state->xmldoc = xmlReadMemory(chunk.memory, chunk.size, NULL, NULL, XML_PARSE_NOBLANKS);
 
-			elog(DEBUG1, "%s (%s) => http response code: %ld",__func__,state->requestVerb,response_code);
-			elog(DEBUG1, "%s (%s) => http response size: %ld",__func__,state->requestVerb,chunk.size);
+			elog(DEBUG1, "%s (%s): http response code = %ld",__func__,state->requestVerb,response_code);
+			elog(DEBUG1, "%s (%s): http response size = %ld",__func__,state->requestVerb,chunk.size);
+			elog(DEBUG1, "%s (%s): http response header = \n%s",__func__,state->requestVerb,chunk_header.memory);
 		}
 
 	}
 
 	pfree(chunk.memory);
+	pfree(chunk_header.memory);
 	curl_easy_cleanup(curl);
 	curl_global_cleanup();
 
 	return OAI_SUCCESS;
-
 }
 
 /**

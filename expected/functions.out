@@ -36,7 +36,15 @@ SELECT * FROM OAI_ListMetadataFormats('oai_server_dnb');
 (16 rows)
 
 SELECT * FROM OAI_ListMetadataFormats('oai_server_bioj');
-ERROR:  invalid ListMetadataFormats response from 'https://www.bioj-online.com/jms/index.php/up/oai/'
+WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain; charset=utf-8"
+WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain; charset=utf-8"
+WARNING:  ExecuteOAIRequest (ListMetadataFormats): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (1)
+WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain; charset=utf-8"
+WARNING:  ExecuteOAIRequest (ListMetadataFormats): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (2)
+WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain; charset=utf-8"
+WARNING:  ExecuteOAIRequest (ListMetadataFormats): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (3)
+ERROR:  ExecuteOAIRequest => (23) Failed writing header
+
 SELECT * FROM OAI_ListMetadataFormats('oai_server_bjihs');
  metadataprefix |                                 schema                                  |                       metadatanamespace                        
 ----------------+-------------------------------------------------------------------------+----------------------------------------------------------------
@@ -128,7 +136,15 @@ WHERE setname IS NOT NULL AND setspec IS NOT NULL;
 
 -- must fail: repositoriy no longer exists
 SELECT * FROM OAI_ListSets('oai_server_bioj');
-ERROR:  invalid ListSets response from 'https://www.bioj-online.com/jms/index.php/up/oai/'
+WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain; charset=utf-8"
+WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain; charset=utf-8"
+WARNING:  ExecuteOAIRequest (ListSets): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (1)
+WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain; charset=utf-8"
+WARNING:  ExecuteOAIRequest (ListSets): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (2)
+WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain; charset=utf-8"
+WARNING:  ExecuteOAIRequest (ListSets): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (3)
+ERROR:  ExecuteOAIRequest => (23) Failed writing header
+
 SELECT * FROM OAI_Identify('oai_server_ulb');
        name        |                             description                              
 -------------------+----------------------------------------------------------------------
@@ -154,7 +170,15 @@ SELECT * FROM OAI_Identify('oai_server_dnb');
 (7 rows)
 
 SELECT * FROM OAI_Identify('oai_server_bioj');
-ERROR:  invalid Identify response from 'https://www.bioj-online.com/jms/index.php/up/oai/'
+WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain; charset=utf-8"
+WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain; charset=utf-8"
+WARNING:  ExecuteOAIRequest (Identify): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (1)
+WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain; charset=utf-8"
+WARNING:  ExecuteOAIRequest (Identify): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (2)
+WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain; charset=utf-8"
+WARNING:  ExecuteOAIRequest (Identify): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (3)
+ERROR:  ExecuteOAIRequest => (23) Failed writing header
+
 SELECT * FROM OAI_Identify('oai_server_bjihs');
        name        |                                          description                                           
 -------------------+------------------------------------------------------------------------------------------------
