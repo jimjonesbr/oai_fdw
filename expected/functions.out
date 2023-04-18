@@ -38,11 +38,11 @@ SELECT * FROM OAI_ListMetadataFormats('oai_server_dnb');
 SELECT * FROM OAI_ListMetadataFormats('oai_server_bioj');
 WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain; charset=utf-8"
 WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain; charset=utf-8"
-WARNING:  ExecuteOAIRequest (ListMetadataFormats): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (1)
+WARNING:    ExecuteOAIRequest (ListMetadataFormats): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (1)
 WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain; charset=utf-8"
-WARNING:  ExecuteOAIRequest (ListMetadataFormats): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (2)
+WARNING:    ExecuteOAIRequest (ListMetadataFormats): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (2)
 WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain; charset=utf-8"
-WARNING:  ExecuteOAIRequest (ListMetadataFormats): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (3)
+WARNING:    ExecuteOAIRequest (ListMetadataFormats): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (3)
 ERROR:  ExecuteOAIRequest => (23) Failed writing header
 
 SELECT * FROM OAI_ListMetadataFormats('oai_server_bjihs');
@@ -138,11 +138,11 @@ WHERE setname IS NOT NULL AND setspec IS NOT NULL;
 SELECT * FROM OAI_ListSets('oai_server_bioj');
 WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain; charset=utf-8"
 WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain; charset=utf-8"
-WARNING:  ExecuteOAIRequest (ListSets): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (1)
+WARNING:    ExecuteOAIRequest (ListSets): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (1)
 WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain; charset=utf-8"
-WARNING:  ExecuteOAIRequest (ListSets): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (2)
+WARNING:    ExecuteOAIRequest (ListSets): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (2)
 WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain; charset=utf-8"
-WARNING:  ExecuteOAIRequest (ListSets): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (3)
+WARNING:    ExecuteOAIRequest (ListSets): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (3)
 ERROR:  ExecuteOAIRequest => (23) Failed writing header
 
 SELECT * FROM OAI_Identify('oai_server_ulb');
@@ -172,11 +172,11 @@ SELECT * FROM OAI_Identify('oai_server_dnb');
 SELECT * FROM OAI_Identify('oai_server_bioj');
 WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain; charset=utf-8"
 WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain; charset=utf-8"
-WARNING:  ExecuteOAIRequest (Identify): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (1)
+WARNING:    ExecuteOAIRequest (Identify): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (1)
 WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain; charset=utf-8"
-WARNING:  ExecuteOAIRequest (Identify): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (2)
+WARNING:    ExecuteOAIRequest (Identify): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (2)
 WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain; charset=utf-8"
-WARNING:  ExecuteOAIRequest (Identify): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (3)
+WARNING:    ExecuteOAIRequest (Identify): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (3)
 ERROR:  ExecuteOAIRequest => (23) Failed writing header
 
 SELECT * FROM OAI_Identify('oai_server_bjihs');

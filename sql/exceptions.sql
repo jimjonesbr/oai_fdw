@@ -110,8 +110,39 @@ OPTIONS (url 'https://services.dnb.de/oai/repository',
          http_proxy 'http://proxy.server.im:8080',
          connect_timeout '1',
          connect_retry '-5');
-         
-                     
+
+-- Invalid 'request_redirect' value
+CREATE SERVER oai_server_err18 FOREIGN DATA WRAPPER oai_fdw 
+OPTIONS (url 'https://services.dnb.de/oai/repository',
+         request_redirect 'foo',
+         request_max_redirect '1');
+
+SELECT * FROM OAI_Identify('oai_server_err18');
+
+-- Invalid 'request_redirect' value (empty)
+CREATE SERVER oai_server_err19 FOREIGN DATA WRAPPER oai_fdw 
+OPTIONS (url 'https://services.dnb.de/oai/repository',
+         request_redirect '',
+         request_max_redirect '1');
+
+SELECT * FROM OAI_Identify('oai_server_err18');
+
+-- Invalid 'request_max_redirect' value
+CREATE SERVER oai_server_err20 FOREIGN DATA WRAPPER oai_fdw 
+OPTIONS (url 'https://services.dnb.de/oai/repository',
+         request_redirect 'true',
+         request_max_redirect 'foo');
+
+SELECT * FROM OAI_Identify('oai_server_err19');
+
+-- Invalid 'request_max_redirect' value (empty)
+CREATE SERVER oai_server_err21 FOREIGN DATA WRAPPER oai_fdw 
+OPTIONS (url 'https://services.dnb.de/oai/repository',
+         request_redirect 'true',
+         request_max_redirect '');
+
+SELECT * FROM OAI_Identify('oai_server_err21');
+
 -- Unknown COLUMN OPTION value
 CREATE FOREIGN TABLE oai_table_err1 (
   id text                OPTIONS (oai_node 'foo'),

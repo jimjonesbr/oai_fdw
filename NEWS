@@ -1,3 +1,21 @@
+oai_fdw 1.6
+2023-04-11
+
+ * New Features *
+   -  Adds `request_redirect` and `request_max_redirect` options (CREATE SERVER).
+      This allows users to enable or disable URL redirects issued by the server
+      and also how many times a redirection may occur in a single http request.
+
+ * Bug Fixes *
+   - This bug fix implements a http response validation to avoid a server crash 
+     when a support function receives an invalid OAI document from the repository.
+
+oai_fdw 1.5.1
+2023-04-11
+
+ * Bug Fixes *
+   - This bug fix implements a http response validation to avoid a server crash 
+     when a support function receives an invalid OAI document from the repository.
 
 oai_fdw 1.5.0
 2022-11-15

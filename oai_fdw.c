@@ -66,7 +66,7 @@
 #include "access/reloptions.h"
 #include "catalog/pg_namespace.h"
 
-#define OAI_FDW_VERSION "1.5.1"
+#define OAI_FDW_VERSION "1.6"
 #define OAI_REQUEST_LISTRECORDS "ListRecords"
 #define OAI_REQUEST_LISTIDENTIFIERS "ListIdentifiers"
 #define OAI_REQUEST_IDENTIFY "Identify"
@@ -102,6 +102,8 @@
 #define OAI_NODE_PROXY_USER_PASSWORD "proxy_user_password"
 #define OAI_NODE_CONNECTTIMEOUT "connect_timeout"
 #define OAI_NODE_CONNECTRETRY "connect_retry"
+#define OAI_NODE_REQUEST_REDIRECT "request_redirect"
+#define OAI_NODE_REQUEST_MAX_REDIRECT "request_max_redirect"
 #define OAI_NODE_CONTENT "content"
 #define OAI_NODE_DATESTAMP "datestamp"
 #define OAI_NODE_SETSPEC "setspec"
@@ -127,6 +129,8 @@ typedef struct OAIFdwState {
 	int 	numcols;
 	int 	numfdwcols;
 	int		rowcount;
+	bool 	requestRedirect;
+	long  	requestMaxRedirect;
 	long    maxretries;
 	long    connectTimeout;
 	char	*completeListSize;
@@ -179,7 +183,9 @@ typedef struct OAIFdwTableOptions {
 	Oid foreigntableid;
 	int numcols;
 	int numfdwcols;
-	long maxretries;
+	bool requestRedirect;
+	long  requestMaxRedirect;
+	long maxretries;	
 	long connectTimeout;
 	char *metadataPrefix;
 	char *from;
@@ -247,6 +253,8 @@ static struct OAIFdwOption valid_options[] =
 	{OAI_NODE_PROXY_USER_PASSWORD, ForeignServerRelationId, false, false},
 	{OAI_NODE_CONNECTTIMEOUT, ForeignServerRelationId, false, false},
 	{OAI_NODE_CONNECTRETRY, ForeignServerRelationId, false, false},
+	{OAI_NODE_REQUEST_REDIRECT, ForeignServerRelationId, false, false},
+	{OAI_NODE_REQUEST_MAX_REDIRECT, ForeignServerRelationId, false, false},
 
 	{OAI_NODE_IDENTIFIER, ForeignTableRelationId, false, false},
 	{OAI_NODE_METADATAPREFIX, ForeignTableRelationId, true, false},
@@ -348,6 +356,9 @@ OAIFdwState *GetServerInfo(const char *srvname) {
 	OAIFdwState *state = (OAIFdwState *) palloc0(sizeof(OAIFdwState));
 	ForeignServer *server = GetForeignServerByName(srvname, true);
 
+	state->requestRedirect = false;
+	state->requestMaxRedirect = 0L;
+
 	elog(DEBUG1,"%s called: '%s'",__func__,srvname);
 
 	if(server) {
@@ -391,6 +402,29 @@ OAIFdwState *GetServerInfo(const char *srvname) {
 				char *timeout_str =  defGetString(def);
 
 				state->connectTimeout = strtol(timeout_str, &tailpt, 0);
+
+			}
+
+			if(strcmp(def->defname,OAI_NODE_REQUEST_REDIRECT)==0) {
+						
+				state->requestRedirect = defGetBoolean(def);
+
+				elog(DEBUG1,"  %s: setting \"%s\": %d",__func__,OAI_NODE_REQUEST_REDIRECT, state->requestRedirect);
+
+			}
+
+			if(strcmp(def->defname,OAI_NODE_REQUEST_MAX_REDIRECT)==0) {
+
+				char *tailpt;
+				char *maxredirect_str =  defGetString(def);
+
+				state->requestMaxRedirect = strtol(maxredirect_str, &tailpt,10);
+
+				elog(DEBUG1,"  %s: setting \"%s\": %ld",__func__,OAI_NODE_REQUEST_MAX_REDIRECT, state->requestMaxRedirect);
+
+				if(strcmp(defGetString(def),"0") != 0 && state->requestMaxRedirect == 0 ) {
+					elog(ERROR,"invalid value for \"%s\"",OAI_NODE_REQUEST_MAX_REDIRECT);
+				}
 
 			}
 
@@ -1274,6 +1308,20 @@ static int ExecuteOAIRequest(OAIFdwState *state) {
 
 		}
 
+		if (state->requestRedirect == true) {
+			
+			elog(DEBUG1, "  %s (%s): setting request redirect: %d",__func__,state->requestVerb,state->requestRedirect);
+			curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+
+			if(state->requestMaxRedirect ) {
+
+				elog(DEBUG1, "  %s (%s): setting maxredirs: %ld",__func__,state->requestVerb,state->requestMaxRedirect);
+				curl_easy_setopt(curl, CURLOPT_MAXREDIRS, state->requestMaxRedirect);
+
+			}
+
+		}
+
 		curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
 		curl_easy_setopt(curl, CURLOPT_POSTFIELDS, url_buffer.data);
 		curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, HeaderCallbackFunction);
@@ -1290,7 +1338,7 @@ static int ExecuteOAIRequest(OAIFdwState *state) {
 
 			for (long i = 1; i <= state->maxretries && (res = curl_easy_perform(curl)) != CURLE_OK; i++) {
 
-				elog(WARNING, "%s (%s): request to '%s' failed (%ld)",__func__,state->requestVerb, state->url,i);
+				elog(WARNING, "  %s (%s): request to '%s' failed (%ld)",__func__,state->requestVerb, state->url,i);
 
 			}
 
@@ -1326,9 +1374,9 @@ static int ExecuteOAIRequest(OAIFdwState *state) {
 			curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
 			state->xmldoc = xmlReadMemory(chunk.memory, chunk.size, NULL, NULL, XML_PARSE_NOBLANKS);
 
-			elog(DEBUG1, "%s (%s): http response code = %ld",__func__,state->requestVerb,response_code);
-			elog(DEBUG1, "%s (%s): http response size = %ld",__func__,state->requestVerb,chunk.size);
-			elog(DEBUG1, "%s (%s): http response header = \n%s",__func__,state->requestVerb,chunk_header.memory);
+			elog(DEBUG1, "  %s (%s): http response code = %ld",__func__,state->requestVerb,response_code);
+			elog(DEBUG1, "  %s (%s): http response size = %ld",__func__,state->requestVerb,chunk.size);
+			elog(DEBUG1, "  %s (%s): http response header = \n%s",__func__,state->requestVerb,chunk_header.memory);
 		}
 
 	}
@@ -1827,6 +1875,9 @@ static void OAIFdwGetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid 
 	OAIFdwTableOptions *opts = (OAIFdwTableOptions *)palloc0(sizeof(OAIFdwTableOptions));
 	ListCell *cell;
 
+	opts->requestRedirect = false;
+	opts->requestMaxRedirect = 0;
+
 	elog(DEBUG1,"%s called",__func__);
 
 	foreach(cell, server->options) {
@@ -1871,6 +1922,16 @@ static void OAIFdwGetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid 
 			char *tailpt;
 			char *maxretry_str =  defGetString(def);
 			opts->maxretries = strtol(maxretry_str, &tailpt, 0);
+
+		} else if (strcmp(OAI_NODE_REQUEST_REDIRECT, def->defname) == 0) {
+
+			opts->requestRedirect = defGetBoolean(def);
+
+		} else if (strcmp(OAI_NODE_REQUEST_MAX_REDIRECT, def->defname) == 0) {
+
+			char *tailpt;
+			char *maxredirect_str =  defGetString(def);
+			opts->requestMaxRedirect = strtol(maxredirect_str, &tailpt, 0);
 
 		} else {
 
@@ -1945,6 +2006,8 @@ static ForeignScan *OAIFdwGetForeignPlan(PlannerInfo *root, RelOptInfo *baserel,
 	state->requestVerb = opts->requestVerb;
 	state->identifier = opts->identifier;
 	state->numfdwcols = opts->numfdwcols;
+	state->requestRedirect = opts->requestRedirect;
+	state->requestMaxRedirect = opts->requestMaxRedirect;
 
 	fdw_private = list_make1(state);
 

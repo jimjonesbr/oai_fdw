@@ -7,23 +7,25 @@ A PostgreSQL Foreign Data Wrapper to access OAI-PMH repositories (Open Archives 
 ![CI](https://github.com/jimjonesbr/oai_fdw/actions/workflows/ci.yml/badge.svg)
 
 ## Index
-
-- [Requirements](#requirements)
-- [Build & Install](#build-and-install)
-- [Update](#update)
-- [Usage](#usage)
-  - [CREATE SERVER](#create-server)
-  - [IMPORT FOREIGN SCHEMA](#import-foreign-schema)
-  - [CREATE FOREIGN TABLE](#create-foreign-table)
-  - [Examples](#examples)
-- [Support Functions](#support-functions)
-  - [OAI_Identify](#oai_identify)
-  - [OAI_ListMetadataFormats](#oai_listmetadataformats)
-  - [OAI_ListSets](#oai_listsets)  
-  - [OAI_Version](#oai_version)
-  - [OAI_HarvestTable](#oai_harvesttable)
-- [Deploy with Docker](#deploy-with-docker) 
-- [Limitations](#limitations)
+- [PostgreSQL Foreign Data Wrapper for OAI-PMH (oai\_fdw)](#postgresql-foreign-data-wrapper-for-oai-pmh-oai_fdw)
+  - [Index](#index)
+  - [Requirements](#requirements)
+  - [Build and Install](#build-and-install)
+  - [Update](#update)
+  - [Usage](#usage)
+    - [CREATE SERVER](#create-server)
+    - [IMPORT FOREIGN SCHEMA](#import-foreign-schema)
+      - [IMPORT FOREIGN SCHEMA Examples](#import-foreign-schema-examples)
+    - [CREATE FOREIGN TABLE](#create-foreign-table)
+      - [Examples](#examples)
+  - [Support Functions](#support-functions)
+    - [OAI\_Identify](#oai_identify)
+    - [OAI\_ListMetadataFormats](#oai_listmetadataformats)
+    - [OAI\_ListSets](#oai_listsets)
+    - [OAI\_Version](#oai_version)
+    - [OAI\_HarvestTable](#oai_harvesttable)
+  - [Deploy with Docker](#deploy-with-docker)
+  - [Limitations](#limitations)
    
 ## [Requirements](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#requirements)
 
@@ -55,7 +57,7 @@ CREATE EXTENSION oai_fdw;
 To install an specific version add the full version number in the `WITH VERSION` clause
 
 ```sql
-CREATE EXTENSION oai_fdw WITH VERSION '1.3';
+CREATE EXTENSION oai_fdw WITH VERSION '1.6';
 ```
 
 To run the predefined regression tests run `make installcheck` with the user `postgres`:
@@ -76,7 +78,7 @@ ALTER EXTENSION oai_fdw UPDATE;
 To update to an specific version use `UPDATE TO` and the full version number
 
 ```sql
-ALTER EXTENSION oai_fdw UPDATE TO '1.4';
+ALTER EXTENSION oai_fdw UPDATE TO '1.6';
 ```
 
 ## [Usage](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#usage)
@@ -98,13 +100,14 @@ OPTIONS (url 'https://sammlungen.ulb.uni-muenster.de/oai');
 
 | Server Option | Type          | Description                                                                                                        |
 |---------------|----------------------|--------------------------------------------------------------------------------------------------------------------|
-| `url`         | **required**            | URL address of the OAI-PMH repository.  
-| `http_proxy` | optional            | Proxy for HTTP requests.  
-| `proxy_user` | optional            | User for proxy server authentication.  
+| `url`         | **required**            | URL address of the OAI-PMH repository.
+| `http_proxy` | optional            | Proxy for HTTP requests.
+| `proxy_user` | optional            | User for proxy server authentication.
 | `proxy_user_password` | optional            | Password for proxy server authentication.
-| `connect_timeout`         | optional            | Connection timeout for HTTP requests in seconds (default 300 seconds). 
-| `connect_retry`         | optional            | Number of attempts to retry a request in case of failure (default 3 times). 
- 
+| `connect_timeout`         | optional            | Connection timeout for HTTP requests in seconds (default 300 seconds).
+| `connect_retry`         | optional            | Number of attempts to retry a request in case of failure (default 3 times).
+| `request_redirect`         | optional            | Enables URL redirect issued by the server (default 'false').
+| `request_max_redirect`         | optional            | Limit of how many times the URL redirection may occur. If that many redirections have been followed, the next redirect will cause an error. Not setting this parameter or setting it to `0` will allow an infinite number of redirects.
 
 ### [IMPORT FOREIGN SCHEMA](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#import-foreign-schema)
 
@@ -268,7 +271,6 @@ The following example creates a `FOREIGN TABLE` connected to the server `oai_ser
 
 
 ```sql
-
 CREATE SERVER oai_server_dnb FOREIGN DATA WRAPPER oai_fdw
 OPTIONS (url 'https://services.dnb.de/oai/repository');
 

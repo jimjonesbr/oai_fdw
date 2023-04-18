@@ -72,9 +72,9 @@ CREATE FOREIGN TABLE oai_table_err13 (
 ) 
 SERVER oai_server_err13 OPTIONS (metadataPrefix 'oai_dc');
 SELECT * FROM oai_table_err13 LIMIT 1;
-WARNING:  ExecuteOAIRequest (ListIdentifiers): request to 'ftp://services.dnb.de/oai/repository' failed (1)
-WARNING:  ExecuteOAIRequest (ListIdentifiers): request to 'ftp://services.dnb.de/oai/repository' failed (2)
-WARNING:  ExecuteOAIRequest (ListIdentifiers): request to 'ftp://services.dnb.de/oai/repository' failed (3)
+WARNING:    ExecuteOAIRequest (ListIdentifiers): request to 'ftp://services.dnb.de/oai/repository' failed (1)
+WARNING:    ExecuteOAIRequest (ListIdentifiers): request to 'ftp://services.dnb.de/oai/repository' failed (2)
+WARNING:    ExecuteOAIRequest (ListIdentifiers): request to 'ftp://services.dnb.de/oai/repository' failed (3)
 ERROR:  ExecuteOAIRequest => (1) Protocol "ftp" not supported or disabled in libcurl
 
 -- URL with an invalid protocol
@@ -107,11 +107,11 @@ CREATE FOREIGN TABLE oai_table_err16 (
   id text OPTIONS (oai_node 'identifier')
 ) SERVER oai_server_err16 OPTIONS (metadataPrefix 'oai_dc');
 SELECT * FROM oai_table_err16 LIMIT 1;
-WARNING:  ExecuteOAIRequest (ListIdentifiers): request to 'https://services.dnb.de/oai/repository' failed (1)
-WARNING:  ExecuteOAIRequest (ListIdentifiers): request to 'https://services.dnb.de/oai/repository' failed (2)
-WARNING:  ExecuteOAIRequest (ListIdentifiers): request to 'https://services.dnb.de/oai/repository' failed (3)
-WARNING:  ExecuteOAIRequest (ListIdentifiers): request to 'https://services.dnb.de/oai/repository' failed (4)
-WARNING:  ExecuteOAIRequest (ListIdentifiers): request to 'https://services.dnb.de/oai/repository' failed (5)
+WARNING:    ExecuteOAIRequest (ListIdentifiers): request to 'https://services.dnb.de/oai/repository' failed (1)
+WARNING:    ExecuteOAIRequest (ListIdentifiers): request to 'https://services.dnb.de/oai/repository' failed (2)
+WARNING:    ExecuteOAIRequest (ListIdentifiers): request to 'https://services.dnb.de/oai/repository' failed (3)
+WARNING:    ExecuteOAIRequest (ListIdentifiers): request to 'https://services.dnb.de/oai/repository' failed (4)
+WARNING:    ExecuteOAIRequest (ListIdentifiers): request to 'https://services.dnb.de/oai/repository' failed (5)
 ERROR:  ExecuteOAIRequest => (5) Could not resolve proxy: proxy.server.im
 
 -- Unreachable proxy server
@@ -124,8 +124,36 @@ OPTIONS (url 'https://services.dnb.de/oai/repository',
          connect_retry '-5');
 ERROR:  invalid connect_retry: -5
 HINT:  expected values are positive integers (retry attempts in case of failure)
-         
-                     
+-- Invalid 'request_redirect' value
+CREATE SERVER oai_server_err18 FOREIGN DATA WRAPPER oai_fdw 
+OPTIONS (url 'https://services.dnb.de/oai/repository',
+         request_redirect 'foo',
+         request_max_redirect '1');
+SELECT * FROM OAI_Identify('oai_server_err18');
+ERROR:  request_redirect requires a Boolean value
+-- Invalid 'request_redirect' value (empty)
+CREATE SERVER oai_server_err19 FOREIGN DATA WRAPPER oai_fdw 
+OPTIONS (url 'https://services.dnb.de/oai/repository',
+         request_redirect '',
+         request_max_redirect '1');
+ERROR:  empty value in option 'request_redirect'
+SELECT * FROM OAI_Identify('oai_server_err18');
+ERROR:  request_redirect requires a Boolean value
+-- Invalid 'request_max_redirect' value
+CREATE SERVER oai_server_err20 FOREIGN DATA WRAPPER oai_fdw 
+OPTIONS (url 'https://services.dnb.de/oai/repository',
+         request_redirect 'true',
+         request_max_redirect 'foo');
+SELECT * FROM OAI_Identify('oai_server_err19');
+ERROR:  FOREIGN SERVER does not exist: 'oai_server_err19'
+-- Invalid 'request_max_redirect' value (empty)
+CREATE SERVER oai_server_err21 FOREIGN DATA WRAPPER oai_fdw 
+OPTIONS (url 'https://services.dnb.de/oai/repository',
+         request_redirect 'true',
+         request_max_redirect '');
+ERROR:  empty value in option 'request_max_redirect'
+SELECT * FROM OAI_Identify('oai_server_err21');
+ERROR:  FOREIGN SERVER does not exist: 'oai_server_err21'
 -- Unknown COLUMN OPTION value
 CREATE FOREIGN TABLE oai_table_err1 (
   id text                OPTIONS (oai_node 'foo'),
