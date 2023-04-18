@@ -35,7 +35,6 @@
 #include "foreign/foreign.h"
 #include "commands/defrem.h"
 #include "nodes/pg_list.h"
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <curl/curl.h>
@@ -44,19 +43,14 @@
 #include <commands/explain.h>
 #include <libxml/tree.h>
 #include <catalog/pg_collation.h>
-
 #include <funcapi.h>
-
 #include "lib/stringinfo.h"
-
 #include <utils/lsyscache.h>
-
 #include "nodes/nodes.h"
 #include "nodes/primnodes.h"
 #include "utils/datetime.h"
 #include "utils/timestamp.h"
 #include "utils/formatting.h"
-
 #include "catalog/pg_operator.h"
 #include "utils/syscache.h"
 #include "catalog/pg_foreign_table.h"

@@ -5,7 +5,6 @@ EXTENSION = oai_fdw
 DATA = oai_fdw--1.6.sql oai_fdw--1.5--1.6.sql oai_fdw--1.4--1.5.sql oai_fdw--1.3--1.5.sql oai_fdw--1.2--1.5.sql oai_fdw--1.1--1.5.sql
 REGRESS = create_server import_foreign_schema create_foreign_table select_statements exceptions functions harvest
 
-
 CURL_CONFIG = curl-config
 PG_CONFIG = pg_config
 

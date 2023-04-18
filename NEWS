@@ -7,14 +7,14 @@ oai_fdw 1.6
       and also how many times a redirection may occur in a single http request.
 
  * Bug Fixes *
-   - This bug fix implements a http response validation to avoid a server crash 
+   - This bug fix implements a http response validation to avoid a server crash
      when a support function receives an invalid OAI document from the repository.
 
 oai_fdw 1.5.1
 2023-04-11
 
  * Bug Fixes *
-   - This bug fix implements a http response validation to avoid a server crash 
+   - This bug fix implements a http response validation to avoid a server crash
      when a support function receives an invalid OAI document from the repository.
 
 oai_fdw 1.5.0
@@ -24,7 +24,7 @@ oai_fdw 1.5.0
    - add number of inserted and updated records in the harvester log messages
     
  * Bug Fixes *
-   - clean up parser in support function calls (libxml2) 
+   - clean up parser in support function calls (libxml2)
    - fix wrong initial page size in the logs for debug1 sessions
    - add missing memory contexts for oai loader and parser.
 
@@ -50,7 +50,7 @@ oai_fdw 1.2.0
 
  * New Features *
    - OAI_HarvestTable: new procedure to harvest data from OAI foreign tables and store them into a 
-     local table.  
+     local table.
    - Connection retry option for HTTP requests (CREATE SERVER).
 
  * Bug Fixes *
@@ -59,7 +59,7 @@ oai_fdw 1.2.0
    
 * Enhancements *
    - Add regression tests for PostgreSQL 15.
-   
+
 oai_fdw 1.1.0
 2022-10-01
 
@@ -74,8 +74,8 @@ oai_fdw 1.1.0
  * Enhancements *
    - URL validator no longer checks if the URL is reachable. It now only checks the URL's syntax.
    - URls with protocols other than HTTP and HTTPS are now rejected before execution, as other
-     protocols are not supported in the OAI-PMH Standard. 
-  
+     protocols are not supported in the OAI-PMH Standard.
+
 oai_fdw 1.0.0
 2022-09-05
 
