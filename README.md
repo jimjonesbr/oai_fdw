@@ -744,13 +744,13 @@ INFO:  90 records from "public.ulb_oai_dc" successfully inserted into "public.cl
 
 ## [Deploy with Docker](#deploy-with-docker)
 
-To deploy oai_fdw with docker just pick one of the supported PostgreSQL versions, install the [requirements](#requirements) and [compile](#build-and-install) the [source code](https://github.com/jimjonesbr/oai_fdw/releases). For instance, a oai_fdw `Dockerfile` for PostgreSQL 15 should look like this (minimal example):
+To deploy oai_fdw with docker just pick one of the supported PostgreSQL versions, install the [requirements](#requirements) and [compile](#build-and-install) the [source code](https://github.com/jimjonesbr/oai_fdw/releases). For instance, a oai_fdw `Dockerfile` for PostgreSQL 16 should look like this (minimal example):
 
 ```docker
-FROM postgres:15
+FROM postgres:16
 
 RUN apt-get update && \
-    apt-get install -y make gcc postgresql-server-dev-15 libxml2-dev libcurl4-openssl-dev
+    apt-get install -y make gcc postgresql-server-dev-16 libxml2-dev libcurl4-openssl-dev
 
 RUN tar xvzf oai_fdw-1.2.0.tar.gz && \
     cd oai_fdw-1.2.0 && \
