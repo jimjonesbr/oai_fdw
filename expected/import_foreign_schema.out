@@ -17,9 +17,9 @@ WHERE foreign_table_schema = 'ulb_schema';
  contrib_regression    | ulb_schema           | ulbmsz             | contrib_regression     | oai_server_ulb
  contrib_regression    | ulb_schema           | ulbmsum            | contrib_regression     | oai_server_ulb
  contrib_regression    | ulb_schema           | ulbmsob            | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | nachlass_scholz    | contrib_regression     | oai_server_ulb
  contrib_regression    | ulb_schema           | ulbmshd            | contrib_regression     | oai_server_ulb
  contrib_regression    | ulb_schema           | ulbmsh             | contrib_regression     | oai_server_ulb
- contrib_regression    | ulb_schema           | fremdbestand_hbz   | contrib_regression     | oai_server_ulb
 (10 rows)
 
 -- Importing schema 'oai_repository'
@@ -39,9 +39,9 @@ WHERE foreign_table_schema = 'ulb_schema';
  contrib_regression    | ulb_schema           | ulbmsz                    | contrib_regression     | oai_server_ulb
  contrib_regression    | ulb_schema           | ulbmsum                   | contrib_regression     | oai_server_ulb
  contrib_regression    | ulb_schema           | ulbmsob                   | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | nachlass_scholz           | contrib_regression     | oai_server_ulb
  contrib_regression    | ulb_schema           | ulbmshd                   | contrib_regression     | oai_server_ulb
  contrib_regression    | ulb_schema           | ulbmsh                    | contrib_regression     | oai_server_ulb
- contrib_regression    | ulb_schema           | fremdbestand_hbz          | contrib_regression     | oai_server_ulb
  contrib_regression    | ulb_schema           | oai_server_ulb_repository | contrib_regression     | oai_server_ulb
 (11 rows)
 
@@ -78,9 +78,9 @@ WHERE foreign_table_schema = 'ulb_schema2';
  contrib_regression    | ulb_schema2          | ulbmsz             | contrib_regression     | oai_server_ulb
  contrib_regression    | ulb_schema2          | ulbmsum            | contrib_regression     | oai_server_ulb
  contrib_regression    | ulb_schema2          | ulbmsob            | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema2          | nachlass_scholz    | contrib_regression     | oai_server_ulb
  contrib_regression    | ulb_schema2          | ulbmshd            | contrib_regression     | oai_server_ulb
  contrib_regression    | ulb_schema2          | ulbmsh             | contrib_regression     | oai_server_ulb
- contrib_regression    | ulb_schema2          | fremdbestand_hbz   | contrib_regression     | oai_server_ulb
 (10 rows)
 
 -- Importing schema 'oai_sets' (DNB)

@@ -60,7 +60,7 @@
 #include "access/reloptions.h"
 #include "catalog/pg_namespace.h"
 
-#define OAI_FDW_VERSION "1.6"
+#define OAI_FDW_VERSION "1.7"
 #define OAI_REQUEST_LISTRECORDS "ListRecords"
 #define OAI_REQUEST_LISTIDENTIFIERS "ListIdentifiers"
 #define OAI_REQUEST_IDENTIFY "Identify"
@@ -2424,7 +2424,7 @@ static void CreateOAITuple(TupleTableSlot *slot, OAIFdwState *state, OAIRecord *
 					elog(DEBUG2,"  %s: setting column %d option '%s'",__func__,i,option_value);
 
 					slot->tts_isnull[i] = false;
-					slot->tts_values[i] = (Datum) DatumGetArrayTypeP(oai->setsArray);
+					slot->tts_values[i] = (Datum) DatumGetArrayTypeP((Datum)oai->setsArray);
 
 				}  else if (strcmp(option_value,OAI_NODE_DATESTAMP)==0 && oai->datestamp) {
 
@@ -2444,7 +2444,12 @@ static void CreateOAITuple(TupleTableSlot *slot, OAIFdwState *state, OAIRecord *
 						fsec_t fsec = 0;
 						int tz = 0;
 
+#if PG_VERSION_NUM < 160000
 						int decodeError = DecodeDateTime(field, ftype, nf, &dtype, &date, &fsec, &tz);
+#else
+						DateTimeErrorExtra extra;
+						int decodeError = DecodeDateTime(field, ftype, nf, &dtype, &date, &fsec, &tz, &extra);
+#endif
 
 						Timestamp tmsp;
 						tm2timestamp(&date, fsec, &tz, &tmsp);

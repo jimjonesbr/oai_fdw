@@ -30,10 +30,11 @@ SELECT * FROM OAI_ListMetadataFormats('oai_server_dnb');
  xMetaDiss        | http://www.d-nb.de/standards/xmetadiss/xmetadiss.xsd                        | http://www.d-nb.de/standards/xMetaDiss/
  oai_dc           | http://www.openarchives.org/OAI/2.0/oai_dc.xsd                              | http://www.openarchives.org/OAI/2.0/oai_dc
  mods-xml         | http://www.loc.gov/standards/mods/v3/mods-3-6.xsd                           | http://www.loc.gov/mods/v3
+ DDEX-xml         | http://ddex.net/xml/ern/42/release-notification.xsd                         | http://ddex.net/xml/ern/42
  MARC21-xml       | http://www.loc.gov/standards/marcxml/schema/MARC21slim.xsd                  | http://www.loc.gov/MARC21/slim
  ONIX-xml         | http://www.editeur.org/onix/2.1/short/ONIX_BookProduct_Release2.1_short.xsd | http://www.editeur.org/onix/2.1/short/ONIX_BookProduct_Release2.1_short
  sync-repo-xml    | http://files.dnb.de/standards/formate/syncrepo.xsd                          | http://www.d-nb.de/schemas/syncrepo
-(16 rows)
+(17 rows)
 
 SELECT * FROM OAI_ListMetadataFormats('oai_server_bioj');
 WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain; charset=utf-8"
@@ -46,13 +47,13 @@ WARNING:    ExecuteOAIRequest (ListMetadataFormats): request to 'https://www.bio
 ERROR:  ExecuteOAIRequest => (23) Failed writing header
 
 SELECT * FROM OAI_ListMetadataFormats('oai_server_bjihs');
- metadataprefix |                                 schema                                  |                       metadatanamespace                        
-----------------+-------------------------------------------------------------------------+----------------------------------------------------------------
- oai_dc         | http://www.openarchives.org/OAI/2.0/oai_dc.xsd                          | http://www.openarchives.org/OAI/2.0/oai_dc/
- rfc1807        | http://www.openarchives.org/OAI/1.1/rfc1807.xsd                         | http://info.internet.isi.edu:80/in-notes/rfc/files/rfc1807.txt
- oai_marc       | http://www.openarchives.org/OAI/1.1/oai_marc.xsd                        | http://www.openarchives.org/OAI/1.1/oai_marc
- marcxml        | http://www.loc.gov/standards/marcxml/schema/MARC21slim.xsd              | http://www.loc.gov/MARC21/slim
- jats           | https://jats.nlm.nih.gov/publishing/0.4/xsd/JATS-journalpublishing0.xsd | http://jats.nlm.nih.gov
+ metadataprefix |                           schema                           |                       metadatanamespace                        
+----------------+------------------------------------------------------------+----------------------------------------------------------------
+ oai_dc         | http://www.openarchives.org/OAI/2.0/oai_dc.xsd             | http://www.openarchives.org/OAI/2.0/oai_dc/
+ rfc1807        | http://www.openarchives.org/OAI/1.1/rfc1807.xsd            | http://info.internet.isi.edu:80/in-notes/rfc/files/rfc1807.txt
+ oai_marc       | http://www.openarchives.org/OAI/1.1/oai_marc.xsd           | http://www.openarchives.org/OAI/1.1/oai_marc
+ marcxml        | http://www.loc.gov/standards/marcxml/schema/MARC21slim.xsd | http://www.loc.gov/MARC21/slim
+ oai_biblat     | https://biblat.unam.mx                                     | oai_biblat_330v16
 (5 rows)
 
 SELECT * FROM OAI_ListMetadataFormats('oai_server_kbnl');
@@ -85,9 +86,9 @@ SELECT * FROM OAI_ListSets('oai_server_ulb')
 WHERE setname IS NOT NULL AND setspec IS NOT NULL 
 ORDER BY setname 
 FETCH FIRST ROW ONLY;
-     setspec      |            setname            
-------------------+-------------------------------
- fremdbestand_hbz | Fremdbestand (Verbundkatalog)
+ setspec |                         setname                          
+---------+----------------------------------------------------------
+ ulbmsh  | Handschriften, Nachlässe, Autographen, Sammlungen (HANS)
 (1 row)
 
 SELECT * FROM OAI_ListSets('oai_server_dnb') 
@@ -180,8 +181,8 @@ WARNING:    ExecuteOAIRequest (Identify): request to 'https://www.bioj-online.co
 ERROR:  ExecuteOAIRequest => (23) Failed writing header
 
 SELECT * FROM OAI_Identify('oai_server_bjihs');
-       name        |                                          description                                           
--------------------+------------------------------------------------------------------------------------------------
+       name        |                                           description                                           
+-------------------+-------------------------------------------------------------------------------------------------
  repositoryName    | Brazilian Journal of Implantology and Health Sciences  
  baseURL           | https://bjihs.emnuvens.com.br/bjihs/oai
  protocolVersion   | 2.0
@@ -192,7 +193,7 @@ SELECT * FROM OAI_Identify('oai_server_bjihs');
  compression       | gzip
  compression       | deflate
  description       | oaiojs.bjihs.emnuvens.com.br:oai:ojs.bjihs.emnuvens.com.br:article/1
- description       | Open Journal SystemsPublic Knowledge Projectpkp.contact@gmail.com3.2.1.1http://pkp.sfu.ca/ojs/
+ description       | Open Journal SystemsPublic Knowledge Projectpkp.contact@gmail.com3.3.0.14http://pkp.sfu.ca/ojs/
 (11 rows)
 
 SELECT * FROM OAI_Identify('oai_server_kbnl');

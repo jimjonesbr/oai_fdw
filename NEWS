@@ -1,3 +1,9 @@
+oai_fdw 1.7
+2023-09-22
+
+ * New Features *
+   -  Adds PostgreSQL 16 support
+
 oai_fdw 1.6
 2023-04-11
 
