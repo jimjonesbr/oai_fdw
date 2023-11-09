@@ -56,26 +56,7 @@ SELECT * FROM OAI_ListMetadataFormats('oai_server_bjihs');
  oai_biblat     | https://biblat.unam.mx                                     | oai_biblat_330v16
 (5 rows)
 
-SELECT * FROM OAI_ListMetadataFormats('oai_server_kbnl');
- metadataprefix | schema | metadatanamespace 
-----------------+--------+-------------------
- admin          |        | 
- dc             |        | 
- dcx            |        | 
- didl           |        | 
- didle          |        | 
- index          |        | 
- INDEXING       |        | 
- marc21         |        | 
- mods           |        | 
- nl_didl        |        | 
- pica           |        | 
- picaplus       |        | 
- schema         |        | 
- clarin         |        | 
- rdf            |        | 
-(15 rows)
-
+--SELECT * FROM OAI_ListMetadataFormats('oai_server_kbnl');
 SELECT * FROM OAI_ListMetadataFormats('oai_server_davidrumsey');
  metadataprefix |                     schema                     |              metadatanamespace              
 ----------------+------------------------------------------------+---------------------------------------------
@@ -109,15 +90,10 @@ FETCH FIRST ROW ONLY;
  bjihs:ACC | Anais de Conferências Científicas
 (1 row)
 
-SELECT * FROM OAI_ListSets('oai_server_kbnl') 
-WHERE setname IS NOT NULL AND setspec IS NOT NULL 
-ORDER BY setname 
-FETCH FIRST ROW ONLY;
- setspec | setname 
----------+---------
- ALBA    | ALBA
-(1 row)
-
+--SELECT * FROM OAI_ListSets('oai_server_kbnl') 
+--WHERE setname IS NOT NULL AND setspec IS NOT NULL 
+--ORDER BY setname 
+--FETCH FIRST ROW ONLY;
 SELECT * FROM OAI_ListSets('oai_server_davidrumsey') 
 WHERE setname IS NOT NULL AND setspec IS NOT NULL 
 ORDER BY setname 
@@ -196,18 +172,7 @@ SELECT * FROM OAI_Identify('oai_server_bjihs');
  description       | Open Journal SystemsPublic Knowledge Projectpkp.contact@gmail.com3.3.0.14http://pkp.sfu.ca/ojs/
 (11 rows)
 
-SELECT * FROM OAI_Identify('oai_server_kbnl');
-       name        |          description          
--------------------+-------------------------------
- repositoryName    | KB-MDO
- baseURL           | http://services.kb.nl/mdo/oai
- protocolVersion   | 2.0
- adminEmail        | dataservices@kb.nl
- earliestDatestamp | 1970-01-01T00:00:00Z
- deletedRecord     | transient
- granularity       | YYYY-MM-DDThh:mm:ssZ
-(7 rows)
-
+--SELECT * FROM OAI_Identify('oai_server_kbnl');
 SELECT * FROM OAI_Identify('oai_server_davidrumsey');
        name        |                 description                 
 -------------------+---------------------------------------------
