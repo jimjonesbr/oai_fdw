@@ -90,9 +90,9 @@ FETCH FIRST ROW ONLY;
  bjihs:ACC | Anais de Conferências Científicas
 (1 row)
 
---SELECT * FROM OAI_ListSets('oai_server_kbnl') 
---WHERE setname IS NOT NULL AND setspec IS NOT NULL 
---ORDER BY setname 
+--SELECT * FROM OAI_ListSets('oai_server_kbnl')
+--WHERE setname IS NOT NULL AND setspec IS NOT NULL
+--ORDER BY setname
 --FETCH FIRST ROW ONLY;
 SELECT * FROM OAI_ListSets('oai_server_davidrumsey') 
 WHERE setname IS NOT NULL AND setspec IS NOT NULL 
