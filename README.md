@@ -57,7 +57,7 @@ CREATE EXTENSION oai_fdw;
 To install an specific version add the full version number in the `WITH VERSION` clause
 
 ```sql
-CREATE EXTENSION oai_fdw WITH VERSION '1.6';
+CREATE EXTENSION oai_fdw WITH VERSION '1.7';
 ```
 
 To run the predefined regression tests run `make installcheck` with the user `postgres`:
@@ -78,7 +78,7 @@ ALTER EXTENSION oai_fdw UPDATE;
 To update to an specific version use `UPDATE TO` and the full version number
 
 ```sql
-ALTER EXTENSION oai_fdw UPDATE TO '1.6';
+ALTER EXTENSION oai_fdw UPDATE TO '1.7';
 ```
 
 ## [Usage](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#usage)
@@ -752,8 +752,8 @@ FROM postgres:16
 RUN apt-get update && \
     apt-get install -y make gcc postgresql-server-dev-16 libxml2-dev libcurl4-openssl-dev
 
-RUN tar xvzf oai_fdw-1.2.0.tar.gz && \
-    cd oai_fdw-1.2.0 && \
+RUN tar xvzf oai_fdw-1.7.0.tar.gz && \
+    cd oai_fdw-1.7.0 && \
     make -j && \
     make install
 ```
