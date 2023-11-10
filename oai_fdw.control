@@ -1,4 +1,4 @@
 comment = 'Foreign-data wrapper for OAI-PMH 2.0 servers'
-default_version = '1.7'
+default_version = '1.8'
 module_pathname = '$libdir/oai_fdw'
 relocatable = true
