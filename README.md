@@ -25,6 +25,7 @@ A PostgreSQL Foreign Data Wrapper to access OAI-PMH repositories (Open Archives 
     - [OAI\_Version](#oai_version)
     - [OAI\_HarvestTable](#oai_harvesttable)
   - [Deploy with Docker](#deploy-with-docker)
+  - [Error Handling](#error-handling)
   - [Limitations](#limitations)
    
 ## [Requirements](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#requirements)
@@ -57,7 +58,7 @@ CREATE EXTENSION oai_fdw;
 To install an specific version add the full version number in the `WITH VERSION` clause
 
 ```sql
-CREATE EXTENSION oai_fdw WITH VERSION '1.7';
+CREATE EXTENSION oai_fdw WITH VERSION '1.8';
 ```
 
 To run the predefined regression tests run `make installcheck` with the user `postgres`:
@@ -78,16 +79,16 @@ ALTER EXTENSION oai_fdw UPDATE;
 To update to an specific version use `UPDATE TO` and the full version number
 
 ```sql
-ALTER EXTENSION oai_fdw UPDATE TO '1.7';
+ALTER EXTENSION oai_fdw UPDATE TO '1.8';
 ```
 
 ## [Usage](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#usage)
 
-To use the OAI-PMH Foreign Data Wrapper you must first create a `SERVER` to connect to an OAI-PMH repository. After that, you can either automatically generate foreign tables using `IMPORT FOREIGN SCHEMA` or create them manually using `CREATE FOREIGN TABLE`.
+To use the OAI Foreign Data Wrapper you must first create a `SERVER` to connect to an OAI-PMH repository. After that, you can either automatically generate foreign tables using `IMPORT FOREIGN SCHEMA` or create them manually using `CREATE FOREIGN TABLE`.
 
 ### [CREATE SERVER](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#create_server)
 
-The SQL command [CREATE SERVER](https://www.postgresql.org/docs/current/sql-createserver.html) defines a new foreign server. The user who defines the server becomes its owner. An OAI Foreign Server requires an `url`, so that the Foreign Data Wrapper knows where to sent the http requests.
+The SQL command [CREATE SERVER](https://www.postgresql.org/docs/current/sql-createserver.html) defines a new foreign server. The user who defines the server becomes its owner. An OAI Foreign repository requires an `url`, so that the Foreign Data Wrapper knows where to sent the http requests.
 
 The following example creates a `SERVER` that connects to the OAI-PMH repository of the Münster University Library:
 
@@ -111,7 +112,7 @@ OPTIONS (url 'https://sammlungen.ulb.uni-muenster.de/oai');
 
 ### [IMPORT FOREIGN SCHEMA](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#import-foreign-schema)
 
-The [IMPORT FOREIGN SCHEMA](https://www.postgresql.org/docs/current/sql-importforeignschema.html) command creates `FOREIGN TABLES` that represent [sets](http://www.openarchives.org/OAI/openarchivesprotocol.html#Set) existing on an OAI foreign server. The OAI Foreign Data Wrapper offers the following `FOREIGN SCHEMAS` to automatically generate `FOREIGN TABLES`:
+The [IMPORT FOREIGN SCHEMA](https://www.postgresql.org/docs/current/sql-importforeignschema.html) command creates `FOREIGN TABLES` that represent [sets](http://www.openarchives.org/OAI/openarchivesprotocol.html#Set) existing on an OAI [SERVER](#create_server). The OAI Foreign Data Wrapper offers the following `FOREIGN SCHEMAS` to automatically generate `FOREIGN TABLES`:
 
  | Foreign Schema | Description          |
 |---------------|--------------------------|
@@ -320,6 +321,8 @@ CREATE FOREIGN TABLE ulb_oai_dc (
   updatedate timestamp   OPTIONS (oai_node 'datestamp'),
   format text            OPTIONS (oai_node 'metadataprefix')
  ) SERVER oai_server_ulb OPTIONS (metadataprefix 'oai_dc');
+
+ SELECT * FROM ulb_oai_dc;
  
                    id                    |                                                           xmldoc                                                            |       sets        |     updatedate      | format 
 -----------------------------------------+-----------------------------------------------------------------------------------------------------------------------------+-------------------+---------------------+--------
@@ -559,7 +562,7 @@ These support functions help to retrieve additional information from an OAI Serv
 *SETOF OAI_IdentityNode* **OAI_Identify**(server_name *text*);
 
 
-`server_name`: Name of a previously created OAI Foreign Data Wrapper Server
+`server_name`: Name of a previously created OAI Foreign Data Wrapper `SERVER`
 
 -------
 
@@ -634,7 +637,7 @@ SELECT * FROM OAI_ListMetadataFormats('oai_server_ulb');
 
 *SETOF OAI_Set* **OAI_ListSets**(server_name *text*);
 
-`server_name`: Name of a previously created OAI Foreign Data Wrapper Server
+`server_name`: Name of a previously created OAI Foreign Data Wrapper `SERVER``
 
 -------
 
@@ -710,7 +713,7 @@ oai fdw = 1.2.0, libxml = 2.9.10, libcurl = libcurl/7.74.0 OpenSSL/1.1.1n zlib/1
 
 `target_table`: Local table where the data from the OAI foreign table will be imported to. If the `target_table` does not exist, a new table with the given name will be automatically created - unless explicitly configured otherwise in the parameter `create_table`. The `target_table` will be appended if it already exists. If the `oai_table`, and consequently the `target_table`, have an `identifier` column, the system will ensure that records are not duplicated in the `target_table` by updating the records in case of a conflict (upsert). 
 
-`page_size`: Page size (time interval) in which oai_fdw will request data from the OAI Server. For instance, setting this parameter to `1 day` within a time window from `2022-01-01` until `2022-01-10` will be translated into 10 distinct requests to the OAI repository.
+`page_size`: Page size (time interval) in which the OAI Foreign Data Wrapper will request data from the OAI repository. For instance, setting this parameter to `1 day` within a time window from `2022-01-01` until `2022-01-10` will be translated into 10 distinct requests to the OAI repository.
 
 `start_date`:  Start date from the time window.
 
@@ -726,7 +729,7 @@ oai fdw = 1.2.0, libxml = 2.9.10, libcurl = libcurl/7.74.0 OpenSSL/1.1.1n zlib/1
 
 **Description**
 
-Often it is the case that a OAI repository contains so much data, that a requests over large time windows become just too expensive and end up being rejected by the server. This stored procedure addresses this issue by internally partitioning a single request into several small ones using the a given [time interval](https://www.postgresql.org/docs/current/datatype-datetime.html) as partition unit - parameter `page_size`. 
+Often it is the case that a OAI repository contains so much data, that a requests over large time intervals become just too expensive and end up being denied by the server. This stored procedure addresses this issue by internally partitioning a single request into several small ones using the a given [time interval](https://www.postgresql.org/docs/current/datatype-datetime.html) as partition unit - parameter `page_size`. 
 
 For instance, an OAI ListRecords request for all records from the year 2021 (`2021-01-01` to `2021-12-31`) can be split into 12 smaller requests by setting the `page_size` parameter to `interval '1 month'`. Although in the end the result sets from both approaches are pretty much the same, both client and server may significantly profit from having  smaller result sets instead of single large one.
 
@@ -752,8 +755,8 @@ FROM postgres:16
 RUN apt-get update && \
     apt-get install -y make gcc postgresql-server-dev-16 libxml2-dev libcurl4-openssl-dev
 
-RUN tar xvzf oai_fdw-1.7.0.tar.gz && \
-    cd oai_fdw-1.7.0 && \
+RUN tar xvzf oai_fdw-1.8.0.tar.gz && \
+    cd oai_fdw-1.8.0 && \
     make -j && \
     make install
 ```
@@ -774,8 +777,15 @@ $ docker run --name my_oai_container -e POSTGRES_HOST_AUTH_METHOD=trust oai_fdw_
 .. and then finally you're able to create and use the extension!
 
 ```bash
-$ docker exec -u postgres my_oai_container psql -c "CREATE EXTENSION oai_fdw"
+$ docker exec -u postgres my_oai_container psql -d mydatabase-c "CREATE EXTENSION oai_fdw"
 ```
+## [Error Handling](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#error-handling)
+
+If there is a network error or other condition that results in the loss of an incomplete list response, the OAI Foreign Data Wrapper will re-issue the most recent call, including the last resumptionToken to continue the list request sequence. The number of attempts and their interval are defined by the `connect_retry` and `connect_timeout` defined at the [CREATE SERVER](#create-server) statement.
+
+If the OAI Foreign Data Wrapper receives a `badResumptionToken` error during a sequence of incomplete list requests it will assume that the `resumptionToken` has either expired or is invalid in some other way. There is no way to resume the list request sequence in this case; the user must start the list request again.
+
+If a harvester receives some other error then there is an unrecoverable problem with the list request sequence; the user must start the list request again.
 
 ## [Limitations](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#limitations)
 
@@ -792,6 +802,6 @@ $ docker exec -u postgres my_oai_container psql -c "CREATE EXTENSION oai_fdw"
 | `identifier` | `=`                          |
 | `metadataprefix`       | `=`                          |
 |              |                              |
-
+* **Response Compression**: Response compression from OAI-PMH servers is currently not supported. 
 
 Note that all operators supported in PostgreSQL can be used to filter result sets, but only the supported operators listed above will be used in the OAI-PMH requests. In other words, non supported filters will be performed **locally** in the client.

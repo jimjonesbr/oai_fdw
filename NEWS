@@ -1,8 +1,6 @@
 oai_fdw 1.8
 2023-11-15
 
- * New Features *
-   -
  * Performance improvements
    -  This intoduces a new pagination logic to go through the result
       sets from OAI requests. It no longer iterates over the xml document

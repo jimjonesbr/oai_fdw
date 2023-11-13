@@ -2165,20 +2165,23 @@ static TupleTableSlot *OAIFdwIterateForeignScan(ForeignScanState *node)
 	if (record != NULL)
 	{
 
-		elog(DEBUG1, "  %s: creating OAI tuple", __func__);
+		elog(DEBUG2, "  %s: creating OAI tuple", __func__);
 		CreateOAITuple(slot, state, record);
 
-		elog(DEBUG1, "  %s: storing virtual tuple", __func__);
+		elog(DEBUG2, "  %s: storing virtual tuple", __func__);
 		ExecStoreVirtualTuple(slot);
 	}
 	else
 	{
-
+		/*
+		 * No further records to be retrieved. Let's clean up the XML parser 
+		 * before ending the query.
+		 */
 		xmlFreeDoc(state->xmldoc);
 		xmlCleanupParser();
 	}
 
-	elog(DEBUG2, "%s => returning tuple (rowcount: %d)", __func__, state->rowcount);
+	elog(DEBUG1, "%s => returning tuple (rowcount: %d)", __func__, state->rowcount);
 
 	return slot;
 }
@@ -2222,7 +2225,7 @@ static void LoadOAIRecords(struct OAIFdwState **state)
 		/*
 		 * After executing an OAI request the resumption token is no longer
 		 * needed. A new resumption token will be loaded in case there are
-		 * still records left.
+		 * still records left to be retrieved.
 		 */
 		(*state)->resumptionToken = NULL;
 
@@ -2342,7 +2345,7 @@ static void LoadOAIRecords(struct OAIFdwState **state)
 							if (xmlStrcmp(record->name, (xmlChar *)OAI_RESPONSE_ELEMENT_METADATA) == 0)
 							{
 
-								/*copy necessary to get include the namespaces in the buffer output*/
+								/* Copy necessary to include the namespaces in the buffer output */
 								xmlNodePtr copy = xmlCopyNode(record->children, 1);
 
 								xmlBufferPtr buffer = xmlBufferCreate();
