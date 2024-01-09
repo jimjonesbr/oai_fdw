@@ -4,7 +4,8 @@ SELECT OAI_Version() IS NULL;
  f
 (1 row)
 
-SELECT * FROM OAI_ListMetadataFormats('oai_server_ulb') ORDER BY metadataprefix;
+SELECT * FROM OAI_ListMetadataFormats('oai_server_ulb') 
+ORDER BY metadataprefix;
  metadataprefix |                               schema                               |              metadatanamespace              
 ----------------+--------------------------------------------------------------------+---------------------------------------------
  epicur         | http://www.persistent-identifier.de/xepicur/version1.0/xepicur.xsd | urn:nbn:de:1111-2004033116
@@ -14,7 +15,8 @@ SELECT * FROM OAI_ListMetadataFormats('oai_server_ulb') ORDER BY metadataprefix;
  rawmods        | http://www.loc.gov/standards/mods/v3/mods-3-0.xsd                  | http://www.loc.gov/mods/v3
 (5 rows)
 
-SELECT * FROM OAI_ListMetadataFormats('oai_server_dnb') ORDER BY metadataprefix;
+SELECT * FROM OAI_ListMetadataFormats('oai_server_dnb') 
+ORDER BY metadataprefix;
   metadataprefix  |                                   schema                                    |                            metadatanamespace                            
 ------------------+-----------------------------------------------------------------------------+-------------------------------------------------------------------------
  baseDc-xml       | http://oai.base-search.net/base_dc/base_dc.xsd                              | http://oai.base-search.net/base_dc
@@ -36,7 +38,8 @@ SELECT * FROM OAI_ListMetadataFormats('oai_server_dnb') ORDER BY metadataprefix;
  xMetaDiss        | http://www.d-nb.de/standards/xmetadiss/xmetadiss.xsd                        | http://www.d-nb.de/standards/xMetaDiss/
 (17 rows)
 
-SELECT * FROM OAI_ListMetadataFormats('oai_server_bioj') ORDER BY metadataprefix;
+SELECT * FROM OAI_ListMetadataFormats('oai_server_bioj') 
+ORDER BY metadataprefix;
 WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain; charset=utf-8"
 WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain; charset=utf-8"
 WARNING:    ExecuteOAIRequest (ListMetadataFormats): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (1)
@@ -46,7 +49,8 @@ WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/
 WARNING:    ExecuteOAIRequest (ListMetadataFormats): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (3)
 ERROR:  ExecuteOAIRequest => (23) Failed writing header
 
-SELECT * FROM OAI_ListMetadataFormats('oai_server_bjihs') ORDER BY metadataprefix;
+SELECT * FROM OAI_ListMetadataFormats('oai_server_bjihs') 
+ORDER BY metadataprefix;
  metadataprefix |                           schema                           |                       metadatanamespace                        
 ----------------+------------------------------------------------------------+----------------------------------------------------------------
  marcxml        | http://www.loc.gov/standards/marcxml/schema/MARC21slim.xsd | http://www.loc.gov/MARC21/slim
@@ -56,8 +60,8 @@ SELECT * FROM OAI_ListMetadataFormats('oai_server_bjihs') ORDER BY metadataprefi
  rfc1807        | http://www.openarchives.org/OAI/1.1/rfc1807.xsd            | http://info.internet.isi.edu:80/in-notes/rfc/files/rfc1807.txt
 (5 rows)
 
---SELECT * FROM OAI_ListMetadataFormats('oai_server_kbnl');
-SELECT * FROM OAI_ListMetadataFormats('oai_server_davidrumsey');
+SELECT * FROM OAI_ListMetadataFormats('oai_server_davidrumsey') 
+ORDER BY metadataprefix;
  metadataprefix |                     schema                     |              metadatanamespace              
 ----------------+------------------------------------------------+---------------------------------------------
  oai_dc         | http://www.openarchives.org/OAI/2.0/oai_dc.xsd | http://www.openarchives.org/OAI/2.0/oai_dc/
@@ -90,10 +94,6 @@ FETCH FIRST ROW ONLY;
  bjihs:ACC | Anais de Conferências Científicas
 (1 row)
 
---SELECT * FROM OAI_ListSets('oai_server_kbnl')
---WHERE setname IS NOT NULL AND setspec IS NOT NULL
---ORDER BY setname
---FETCH FIRST ROW ONLY;
 SELECT * FROM OAI_ListSets('oai_server_davidrumsey') 
 WHERE setname IS NOT NULL AND setspec IS NOT NULL 
 ORDER BY setname 
@@ -111,8 +111,8 @@ WHERE setname IS NOT NULL AND setspec IS NOT NULL;
  t
 (1 row)
 
--- must fail: repositoriy no longer exists
-SELECT * FROM OAI_ListSets('oai_server_bioj');
+SELECT * FROM OAI_ListSets('oai_server_bioj')
+ORDER BY 1;
 WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain; charset=utf-8"
 WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain; charset=utf-8"
 WARNING:    ExecuteOAIRequest (ListSets): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (1)
@@ -122,31 +122,34 @@ WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/
 WARNING:    ExecuteOAIRequest (ListSets): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (3)
 ERROR:  ExecuteOAIRequest => (23) Failed writing header
 
-SELECT * FROM OAI_Identify('oai_server_ulb');
+SELECT * FROM OAI_Identify('oai_server_ulb')
+ORDER BY 1;
        name        |                             description                              
 -------------------+----------------------------------------------------------------------
- repositoryName    | Visual Library Server der Universitäts- und Landesbibliothek Münster
- baseURL           | http://sammlungen.ulb.uni-muenster.de/oai/
- protocolVersion   | 2.0
  adminEmail        | vl-support@semantics.de
- earliestDatestamp | 2011-02-22T15:12:26Z
+ baseURL           | http://sammlungen.ulb.uni-muenster.de/oai/
  deletedRecord     | no
+ earliestDatestamp | 2011-02-22T15:12:26Z
  granularity       | YYYY-MM-DDThh:mm:ssZ
+ protocolVersion   | 2.0
+ repositoryName    | Visual Library Server der Universitäts- und Landesbibliothek Münster
 (7 rows)
 
-SELECT * FROM OAI_Identify('oai_server_dnb');
+SELECT * FROM OAI_Identify('oai_server_dnb')
+ORDER BY 1;
        name        |                     description                      
 -------------------+------------------------------------------------------
- repositoryName    | OAI-Repository of the German National Library V2.0.9
- baseURL           | https://services.dnb.de/oai/repository
- protocolVersion   | 2.0
  adminEmail        | oai-repository@dnb.de
- earliestDatestamp | 1945-01-01T00:00:00Z
+ baseURL           | https://services.dnb.de/oai/repository
  deletedRecord     | transient
+ earliestDatestamp | 1945-01-01T00:00:00Z
  granularity       | YYYY-MM-DDThh:mm:ssZ
+ protocolVersion   | 2.0
+ repositoryName    | OAI-Repository of the German National Library V2.0.9
 (7 rows)
 
-SELECT * FROM OAI_Identify('oai_server_bioj');
+SELECT * FROM OAI_Identify('oai_server_bioj')
+ORDER BY 1;
 WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain; charset=utf-8"
 WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain; charset=utf-8"
 WARNING:    ExecuteOAIRequest (Identify): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (1)
@@ -156,32 +159,33 @@ WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/
 WARNING:    ExecuteOAIRequest (Identify): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (3)
 ERROR:  ExecuteOAIRequest => (23) Failed writing header
 
-SELECT * FROM OAI_Identify('oai_server_bjihs');
+SELECT * FROM OAI_Identify('oai_server_bjihs')
+ORDER BY 1;
        name        |                                           description                                           
 -------------------+-------------------------------------------------------------------------------------------------
- repositoryName    | Brazilian Journal of Implantology and Health Sciences  
- baseURL           | https://bjihs.emnuvens.com.br/bjihs/oai
- protocolVersion   | 2.0
  adminEmail        | journalbjihs@gmail.com
- earliestDatestamp | 2020-04-18T03:05:46Z
- deletedRecord     | persistent
- granularity       | YYYY-MM-DDThh:mm:ssZ
- compression       | gzip
+ baseURL           | https://bjihs.emnuvens.com.br/bjihs/oai
  compression       | deflate
- description       | oaiojs.bjihs.emnuvens.com.br:oai:ojs.bjihs.emnuvens.com.br:article/1
+ compression       | gzip
+ deletedRecord     | persistent
  description       | Open Journal SystemsPublic Knowledge Projectpkp.contact@gmail.com3.3.0.14http://pkp.sfu.ca/ojs/
+ description       | oaiojs.bjihs.emnuvens.com.br:oai:ojs.bjihs.emnuvens.com.br:article/1
+ earliestDatestamp | 2020-04-18T03:05:46Z
+ granularity       | YYYY-MM-DDThh:mm:ssZ
+ protocolVersion   | 2.0
+ repositoryName    | Brazilian Journal of Implantology and Health Sciences  
 (11 rows)
 
---SELECT * FROM OAI_Identify('oai_server_kbnl');
-SELECT * FROM OAI_Identify('oai_server_davidrumsey');
+SELECT * FROM OAI_Identify('oai_server_davidrumsey')
+ORDER BY 1;
        name        |                 description                 
 -------------------+---------------------------------------------
- repositoryName    | David Rumsey Historical Maps
- baseURL           | http://www.davidrumsey.com/luna/servlet/oai
- protocolVersion   | 2.0
  adminEmail        | carto@davidrumsey.com
- earliestDatestamp | 1979-01-01T00:00:00Z
+ baseURL           | http://www.davidrumsey.com/luna/servlet/oai
  deletedRecord     | no
+ earliestDatestamp | 1979-01-01T00:00:00Z
  granularity       | YYYY-MM-DDThh:mm:ssZ
+ protocolVersion   | 2.0
+ repositoryName    | David Rumsey Historical Maps
 (7 rows)
 
