@@ -777,7 +777,7 @@ $ docker run --name my_oai_container -e POSTGRES_HOST_AUTH_METHOD=trust oai_fdw_
 .. and then finally you're able to create and use the extension!
 
 ```bash
-$ docker exec -u postgres my_oai_container psql -d mydatabase-c "CREATE EXTENSION oai_fdw"
+$ docker exec -u postgres my_oai_container psql -d mydatabase -c "CREATE EXTENSION oai_fdw"
 ```
 ## [Error Handling](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#error-handling)
 

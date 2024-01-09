@@ -60,7 +60,7 @@
 #include "access/reloptions.h"
 #include "catalog/pg_namespace.h"
 
-#define OAI_FDW_VERSION "1.8"
+#define OAI_FDW_VERSION "1.9"
 #define OAI_REQUEST_LISTRECORDS "ListRecords"
 #define OAI_REQUEST_LISTIDENTIFIERS "ListIdentifiers"
 #define OAI_REQUEST_IDENTIFY "Identify"
@@ -2003,7 +2003,7 @@ static void CreateOAITuple(TupleTableSlot *slot, OAIFdwState *state, OAIRecord *
 	elog(DEBUG2, "%s called", __func__);
 
 	tmp_cxt = AllocSetContextCreate(CurrentMemoryContext,
-									"oracle_fdw temporary data",
+									"oai_fdw temporary data",
 									ALLOCSET_SMALL_SIZES);
 
 	old_cxt = MemoryContextSwitchTo(tmp_cxt);
