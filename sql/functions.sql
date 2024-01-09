@@ -1,18 +1,18 @@
 SELECT OAI_Version() IS NULL;
 SELECT * FROM OAI_ListMetadataFormats('oai_server_ulb') 
-ORDER BY metadataprefix;
+ORDER BY schema;
 
 SELECT * FROM OAI_ListMetadataFormats('oai_server_dnb') 
-ORDER BY metadataprefix;
+ORDER BY schema;
 
 SELECT * FROM OAI_ListMetadataFormats('oai_server_bioj') 
-ORDER BY metadataprefix;
+ORDER BY schema;
 
 SELECT * FROM OAI_ListMetadataFormats('oai_server_bjihs') 
-ORDER BY metadataprefix;
+ORDER BY schema;
 
 SELECT * FROM OAI_ListMetadataFormats('oai_server_davidrumsey') 
-ORDER BY metadataprefix;
+ORDER BY schema;
 
 SELECT * FROM OAI_ListSets('oai_server_ulb') 
 WHERE setname IS NOT NULL AND setspec IS NOT NULL 
@@ -39,20 +39,20 @@ FROM OAI_ListSets('oai_server_dnb')
 WHERE setname IS NOT NULL AND setspec IS NOT NULL;
 
 SELECT * FROM OAI_ListSets('oai_server_bioj')
-ORDER BY 1;
+ORDER BY setspec;
 
 SELECT * FROM OAI_Identify('oai_server_ulb')
-ORDER BY 1;
+ORDER BY name;
 
 SELECT * FROM OAI_Identify('oai_server_dnb')
-ORDER BY 1;
+ORDER BY name;
 
 SELECT * FROM OAI_Identify('oai_server_bioj')
-ORDER BY 1;
+ORDER BY name;
 
 SELECT * FROM OAI_Identify('oai_server_bjihs')
-ORDER BY 1;
+ORDER BY name;
 
 SELECT * FROM OAI_Identify('oai_server_davidrumsey')
-ORDER BY 1;
+ORDER BY name;
 

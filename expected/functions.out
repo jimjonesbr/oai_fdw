@@ -5,41 +5,41 @@ SELECT OAI_Version() IS NULL;
 (1 row)
 
 SELECT * FROM OAI_ListMetadataFormats('oai_server_ulb') 
-ORDER BY metadataprefix;
+ORDER BY schema;
  metadataprefix |                               schema                               |              metadatanamespace              
 ----------------+--------------------------------------------------------------------+---------------------------------------------
- epicur         | http://www.persistent-identifier.de/xepicur/version1.0/xepicur.xsd | urn:nbn:de:1111-2004033116
  mets           | http://www.loc.gov/standards/mets/mets.xsd                         | http://www.loc.gov/METS/
  mods           | http://www.loc.gov/standards/mods/v3/mods-3-0.xsd                  | http://www.loc.gov/mods/v3
- oai_dc         | http://www.openarchives.org/OAI/2.0/oai_dc.xsd                     | http://www.openarchives.org/OAI/2.0/oai_dc/
  rawmods        | http://www.loc.gov/standards/mods/v3/mods-3-0.xsd                  | http://www.loc.gov/mods/v3
+ oai_dc         | http://www.openarchives.org/OAI/2.0/oai_dc.xsd                     | http://www.openarchives.org/OAI/2.0/oai_dc/
+ epicur         | http://www.persistent-identifier.de/xepicur/version1.0/xepicur.xsd | urn:nbn:de:1111-2004033116
 (5 rows)
 
 SELECT * FROM OAI_ListMetadataFormats('oai_server_dnb') 
-ORDER BY metadataprefix;
+ORDER BY schema;
   metadataprefix  |                                   schema                                    |                            metadatanamespace                            
 ------------------+-----------------------------------------------------------------------------+-------------------------------------------------------------------------
- baseDc-xml       | http://oai.base-search.net/base_dc/base_dc.xsd                              | http://oai.base-search.net/base_dc
- BibframeRDFxml   | http://www.w3.org/2000/07/rdf.xsd                                           | http://www.w3.org/1999/02/22-rdf-syntax-ns
- crossref-xml     | https://www.crossref.org/schema/crossref4.4.0.xsd                           | http://www.crossref.org/schema/4.4.0
  DDEX-xml         | http://ddex.net/xml/ern/42/release-notification.xsd                         | http://ddex.net/xml/ern/42
+ sync-repo-xml    | http://files.dnb.de/standards/formate/syncrepo.xsd                          | http://www.d-nb.de/schemas/syncrepo
  JATS-xml         | http://jats.nlm.nih.gov/publishing/1.0/xsd/JATS-journalpublishing.xsd       | http://jats.nlm.nih.gov/publishing/1.0
+ baseDc-xml       | http://oai.base-search.net/base_dc/base_dc.xsd                              | http://oai.base-search.net/base_dc
+ crossref-xml     | https://www.crossref.org/schema/crossref4.4.0.xsd                           | http://www.crossref.org/schema/4.4.0
+ xMetaDiss        | http://www.d-nb.de/standards/xmetadiss/xmetadiss.xsd                        | http://www.d-nb.de/standards/xMetaDiss/
+ ONIX-xml         | http://www.editeur.org/onix/2.1/short/ONIX_BookProduct_Release2.1_short.xsd | http://www.editeur.org/onix/2.1/short/ONIX_BookProduct_Release2.1_short
  MARC21plus-1-xml | http://www.loc.gov/standards/marcxml/schema/MARC21slim.xsd                  | http://www.loc.gov/MARC21/slim
  MARC21plus-xml   | http://www.loc.gov/standards/marcxml/schema/MARC21slim.xsd                  | http://www.ddb.de/professionell/MARC21/plus
  MARC21-xml       | http://www.loc.gov/standards/marcxml/schema/MARC21slim.xsd                  | http://www.loc.gov/MARC21/slim
  mods-xml         | http://www.loc.gov/standards/mods/v3/mods-3-6.xsd                           | http://www.loc.gov/mods/v3
- oai_dc           | http://www.openarchives.org/OAI/2.0/oai_dc.xsd                              | http://www.openarchives.org/OAI/2.0/oai_dc
- ONIX-xml         | http://www.editeur.org/onix/2.1/short/ONIX_BookProduct_Release2.1_short.xsd | http://www.editeur.org/onix/2.1/short/ONIX_BookProduct_Release2.1_short
  PicaPlus-xml     | http://www.oclcpica.org/xmlns/ppxml-1.0.xsd                                 | http://www.oclcpica.org/xmlns/ppxml-1.0
- RDFprovPlus-xml  | http://www.w3.org/2000/07/rdf.xsd                                           | http://www.w3.org/1999/02/22-rdf-syntax-ns
- RDFprov-xml      | http://www.w3.org/2000/07/rdf.xsd                                           | http://www.w3.org/1999/02/22-rdf-syntax-ns
+ oai_dc           | http://www.openarchives.org/OAI/2.0/oai_dc.xsd                              | http://www.openarchives.org/OAI/2.0/oai_dc
  RDFxml           | http://www.w3.org/2000/07/rdf.xsd                                           | http://www.w3.org/1999/02/22-rdf-syntax-ns
- sync-repo-xml    | http://files.dnb.de/standards/formate/syncrepo.xsd                          | http://www.d-nb.de/schemas/syncrepo
- xMetaDiss        | http://www.d-nb.de/standards/xmetadiss/xmetadiss.xsd                        | http://www.d-nb.de/standards/xMetaDiss/
+ RDFprovPlus-xml  | http://www.w3.org/2000/07/rdf.xsd                                           | http://www.w3.org/1999/02/22-rdf-syntax-ns
+ BibframeRDFxml   | http://www.w3.org/2000/07/rdf.xsd                                           | http://www.w3.org/1999/02/22-rdf-syntax-ns
+ RDFprov-xml      | http://www.w3.org/2000/07/rdf.xsd                                           | http://www.w3.org/1999/02/22-rdf-syntax-ns
 (17 rows)
 
 SELECT * FROM OAI_ListMetadataFormats('oai_server_bioj') 
-ORDER BY metadataprefix;
+ORDER BY schema;
 WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain; charset=utf-8"
 WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain; charset=utf-8"
 WARNING:    ExecuteOAIRequest (ListMetadataFormats): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (1)
@@ -50,18 +50,18 @@ WARNING:    ExecuteOAIRequest (ListMetadataFormats): request to 'https://www.bio
 ERROR:  ExecuteOAIRequest => (23) Failed writing header
 
 SELECT * FROM OAI_ListMetadataFormats('oai_server_bjihs') 
-ORDER BY metadataprefix;
+ORDER BY schema;
  metadataprefix |                           schema                           |                       metadatanamespace                        
 ----------------+------------------------------------------------------------+----------------------------------------------------------------
- marcxml        | http://www.loc.gov/standards/marcxml/schema/MARC21slim.xsd | http://www.loc.gov/MARC21/slim
  oai_biblat     | https://biblat.unam.mx                                     | oai_biblat_330v16
- oai_dc         | http://www.openarchives.org/OAI/2.0/oai_dc.xsd             | http://www.openarchives.org/OAI/2.0/oai_dc/
+ marcxml        | http://www.loc.gov/standards/marcxml/schema/MARC21slim.xsd | http://www.loc.gov/MARC21/slim
  oai_marc       | http://www.openarchives.org/OAI/1.1/oai_marc.xsd           | http://www.openarchives.org/OAI/1.1/oai_marc
  rfc1807        | http://www.openarchives.org/OAI/1.1/rfc1807.xsd            | http://info.internet.isi.edu:80/in-notes/rfc/files/rfc1807.txt
+ oai_dc         | http://www.openarchives.org/OAI/2.0/oai_dc.xsd             | http://www.openarchives.org/OAI/2.0/oai_dc/
 (5 rows)
 
 SELECT * FROM OAI_ListMetadataFormats('oai_server_davidrumsey') 
-ORDER BY metadataprefix;
+ORDER BY schema;
  metadataprefix |                     schema                     |              metadatanamespace              
 ----------------+------------------------------------------------+---------------------------------------------
  oai_dc         | http://www.openarchives.org/OAI/2.0/oai_dc.xsd | http://www.openarchives.org/OAI/2.0/oai_dc/
@@ -112,7 +112,7 @@ WHERE setname IS NOT NULL AND setspec IS NOT NULL;
 (1 row)
 
 SELECT * FROM OAI_ListSets('oai_server_bioj')
-ORDER BY 1;
+ORDER BY setspec;
 WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain; charset=utf-8"
 WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain; charset=utf-8"
 WARNING:    ExecuteOAIRequest (ListSets): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (1)
@@ -123,7 +123,7 @@ WARNING:    ExecuteOAIRequest (ListSets): request to 'https://www.bioj-online.co
 ERROR:  ExecuteOAIRequest => (23) Failed writing header
 
 SELECT * FROM OAI_Identify('oai_server_ulb')
-ORDER BY 1;
+ORDER BY name;
        name        |                             description                              
 -------------------+----------------------------------------------------------------------
  adminEmail        | vl-support@semantics.de
@@ -136,7 +136,7 @@ ORDER BY 1;
 (7 rows)
 
 SELECT * FROM OAI_Identify('oai_server_dnb')
-ORDER BY 1;
+ORDER BY name;
        name        |                     description                      
 -------------------+------------------------------------------------------
  adminEmail        | oai-repository@dnb.de
@@ -149,7 +149,7 @@ ORDER BY 1;
 (7 rows)
 
 SELECT * FROM OAI_Identify('oai_server_bioj')
-ORDER BY 1;
+ORDER BY name;
 WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain; charset=utf-8"
 WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain; charset=utf-8"
 WARNING:    ExecuteOAIRequest (Identify): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (1)
@@ -160,7 +160,7 @@ WARNING:    ExecuteOAIRequest (Identify): request to 'https://www.bioj-online.co
 ERROR:  ExecuteOAIRequest => (23) Failed writing header
 
 SELECT * FROM OAI_Identify('oai_server_bjihs')
-ORDER BY 1;
+ORDER BY name;
        name        |                                           description                                           
 -------------------+-------------------------------------------------------------------------------------------------
  adminEmail        | journalbjihs@gmail.com
@@ -177,7 +177,7 @@ ORDER BY 1;
 (11 rows)
 
 SELECT * FROM OAI_Identify('oai_server_davidrumsey')
-ORDER BY 1;
+ORDER BY name;
        name        |                 description                 
 -------------------+---------------------------------------------
  adminEmail        | carto@davidrumsey.com
