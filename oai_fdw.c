@@ -373,7 +373,7 @@ OAIFdwState *GetServerInfo(const char *srvname)
 
 			if (strcmp(def->defname, OAI_NODE_PROXY_USER_PASSWORD) == 0)
 			{
-				state->proxy = defGetString(def);
+				state->proxyUserPassword = defGetString(def);
 			}
 
 			if (strcmp(def->defname, OAI_NODE_CONNECTTIMEOUT) == 0)
