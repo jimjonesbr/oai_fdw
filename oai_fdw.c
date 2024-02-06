@@ -298,6 +298,7 @@ static List *GetMetadataFormats(OAIFdwState *state);
 static List *GetIdentity(OAIFdwState *state);
 static List *GetSets(OAIFdwState *state);
 static void RaiseOAIException(xmlNodePtr error);
+static Datum CreateDatum(HeapTuple tuple, int pgtype, int pgtypmod, char *value);
 
 Datum oai_fdw_handler(PG_FUNCTION_ARGS)
 {
@@ -419,7 +420,6 @@ OAIFdwState *GetServerInfo(const char *srvname)
 
 Datum oai_fdw_identity(PG_FUNCTION_ARGS)
 {
-
 	text *srvname_text = PG_GETARG_TEXT_P(0);
 	const char *srvname = text_to_cstring(srvname_text);
 	OAIFdwState *state = GetServerInfo(srvname);
@@ -459,24 +459,32 @@ Datum oai_fdw_identity(PG_FUNCTION_ARGS)
 
 	if (call_cntr < max_calls)
 	{
-		char **values;
-		HeapTuple tuple;
-		Datum result;
-		int MAX_SIZE = 512;
+		Datum values[23];
+        bool nulls[23];
+        HeapTuple tuple;
+        Datum result;
+        OAIFdwIdentityNode *identity_node = (OAIFdwIdentityNode *)list_nth((List *)funcctx->user_fctx, call_cntr);
 
-		OAIFdwIdentityNode *set = (OAIFdwIdentityNode *)list_nth((List *)funcctx->user_fctx, call_cntr);
+		memset(nulls, 0, sizeof(nulls));
 
-		values = (char **)palloc(2 * sizeof(char *));
-		values[0] = (char *)palloc(MAX_SIZE * sizeof(char));
-		values[1] = (char *)palloc(MAX_SIZE * sizeof(char));
+		for (size_t i = 0; i < funcctx->attinmeta->tupdesc->natts; i++)
+        {
+			Form_pg_attribute att = TupleDescAttr(funcctx->attinmeta->tupdesc, i);
+            
+			if(strcmp(NameStr(att->attname),"name")==0)
+				values[i] = CreateDatum(tuple, att->atttypid, att->atttypmod, identity_node->name);
+			else if(strcmp(NameStr(att->attname),"description")==0)
+				values[i] = CreateDatum(tuple, att->atttypid, att->atttypmod, identity_node->description);
+			else
+				nulls[i] = true;
+        }
 
-		snprintf(values[0], MAX_SIZE, "%s", set->name);
-		snprintf(values[1], MAX_SIZE, "%s", set->description);
+		elog(DEBUG2, "  %s: creating heap tuple", __func__);
 
-		tuple = BuildTupleFromCStrings(attinmeta, values);
-		result = HeapTupleGetDatum(tuple);
+        tuple = heap_form_tuple(funcctx->attinmeta->tupdesc, values, nulls);
+        result = HeapTupleGetDatum(tuple);
 
-		SRF_RETURN_NEXT(funcctx, result);
+        SRF_RETURN_NEXT(funcctx, result);
 	}
 	else
 	{
@@ -526,25 +534,32 @@ Datum oai_fdw_listSets(PG_FUNCTION_ARGS)
 
 	if (call_cntr < max_calls)
 	{
-		char **values;
-		HeapTuple tuple;
-		Datum result;
+		Datum values[23];
+        bool nulls[23];
+        HeapTuple tuple;
+        Datum result;
+		OAISet *set_node = (OAISet *)list_nth((List *)funcctx->user_fctx, call_cntr);
 
-		OAISet *set = (OAISet *)list_nth((List *)funcctx->user_fctx, call_cntr);
+		memset(nulls, 0, sizeof(nulls));
 
-		int MAX_SIZE = 512;
+		for (size_t i = 0; i < funcctx->attinmeta->tupdesc->natts; i++)
+        {
+			Form_pg_attribute att = TupleDescAttr(funcctx->attinmeta->tupdesc, i);
+            
+			if(strcmp(NameStr(att->attname),"setname")==0)
+				values[i] = CreateDatum(tuple, att->atttypid, att->atttypmod, set_node->setName);
+			else if(strcmp(NameStr(att->attname),"setspec")==0)
+				values[i] = CreateDatum(tuple, att->atttypid, att->atttypmod, set_node->setSpec);
+			else
+				nulls[i] = true;
+        }
 
-		values = (char **)palloc(2 * sizeof(char *));
-		values[0] = (char *)palloc(MAX_SIZE * sizeof(char));
-		values[1] = (char *)palloc(MAX_SIZE * sizeof(char));
+		elog(DEBUG2, "  %s: creating heap tuple", __func__);
 
-		snprintf(values[0], MAX_SIZE, "%s", set->setSpec);
-		snprintf(values[1], MAX_SIZE, "%s", set->setName);
+        tuple = heap_form_tuple(funcctx->attinmeta->tupdesc, values, nulls);
+        result = HeapTupleGetDatum(tuple);
 
-		tuple = BuildTupleFromCStrings(attinmeta, values);
-		result = HeapTupleGetDatum(tuple);
-
-		SRF_RETURN_NEXT(funcctx, result);
+        SRF_RETURN_NEXT(funcctx, result);
 	}
 	else
 	{
@@ -599,27 +614,34 @@ Datum oai_fdw_listMetadataFormats(PG_FUNCTION_ARGS)
 	/* do when there is more left to send */
 	if (call_cntr < max_calls)
 	{
-		char **values;
-		HeapTuple tuple;
-		Datum result;
+		Datum values[23];
+        bool nulls[23];
+        HeapTuple tuple;
+        Datum result;
 		OAIMetadataFormat *format = (OAIMetadataFormat *)list_nth((List *)funcctx->user_fctx, call_cntr);
-		const size_t MAX_SIZE = 512;
+		
+		memset(nulls, 0, sizeof(nulls));
 
-		values = (char **)palloc(3 * sizeof(char *));
-		values[0] = (char *)palloc(MAX_SIZE * sizeof(char));
-		values[1] = (char *)palloc(MAX_SIZE * sizeof(char));
-		values[2] = (char *)palloc(MAX_SIZE * sizeof(char));
+		for (size_t i = 0; i < funcctx->attinmeta->tupdesc->natts; i++)
+        {
+			Form_pg_attribute att = TupleDescAttr(funcctx->attinmeta->tupdesc, i);
+            
+			if(strcmp(NameStr(att->attname),"metadataprefix")==0)
+				values[i] = CreateDatum(tuple, att->atttypid, att->atttypmod, format->metadataPrefix);
+			else if(strcmp(NameStr(att->attname),"schema")==0)
+				values[i] = CreateDatum(tuple, att->atttypid, att->atttypmod, format->schema);
+			else if(strcmp(NameStr(att->attname),"metadatanamespace")==0)
+				values[i] = CreateDatum(tuple, att->atttypid, att->atttypmod, format->metadataNamespace);
+			else
+				nulls[i] = true;
+        }
 
-		snprintf(values[0], MAX_SIZE, "%s", format->metadataPrefix);
-		snprintf(values[1], MAX_SIZE, "%s", format->schema);
-		snprintf(values[2], MAX_SIZE, "%s", format->metadataNamespace);
+		elog(DEBUG2, "  %s: creating heap tuple", __func__);
 
-		tuple = BuildTupleFromCStrings(attinmeta, values);
+        tuple = heap_form_tuple(funcctx->attinmeta->tupdesc, values, nulls);
+        result = HeapTupleGetDatum(tuple);
 
-		/* make the tuple into a datum */
-		result = HeapTupleGetDatum(tuple);
-
-		SRF_RETURN_NEXT(funcctx, result);
+        SRF_RETURN_NEXT(funcctx, result);
 	}
 	else /* do when there is no more left */
 	{
@@ -2656,4 +2678,49 @@ static List *OAIFdwImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid server
 	}
 
 	return sql_commands;
+}
+
+/*
+ * CreateDatum
+ * ----------
+ * 
+ * Creates a Datum from a given value based on the postgres types and modifiers.
+ * 
+ * tuple: a Heaptuple 
+ * pgtype: postgres type
+ * pgtypemod: postgres type modifier
+ * value: value to be converted
+ *
+ * returns Datum
+ */
+static Datum CreateDatum(HeapTuple tuple, int pgtype, int pgtypmod, char *value)
+{
+
+    regproc typinput;
+
+    tuple = SearchSysCache1(TYPEOID, ObjectIdGetDatum(pgtype));
+
+    if (!HeapTupleIsValid(tuple))
+    {
+        ereport(ERROR,
+                (errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
+                 errmsg("cache lookup failed for type %u (osm_id)", pgtype)));
+    }
+
+    typinput = ((Form_pg_type)GETSTRUCT(tuple))->typinput;
+    ReleaseSysCache(tuple);
+
+    if (pgtype == FLOAT4OID ||
+        pgtype == FLOAT8OID ||
+        pgtype == NUMERICOID ||
+        pgtype == TIMESTAMPOID ||
+        pgtype == TIMESTAMPTZOID ||
+        pgtype == VARCHAROID)
+        return OidFunctionCall3(
+            typinput,
+            CStringGetDatum(value),
+            ObjectIdGetDatum(InvalidOid),
+            Int32GetDatum(pgtypmod));
+    else
+        return OidFunctionCall1(typinput, CStringGetDatum(value));
 }
