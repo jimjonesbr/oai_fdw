@@ -1,5 +1,17 @@
 name: CI
-on: [push, pull_request]
+on: 
+  push:
+    paths-ignore:
+      - '*.md'
+      - '*.json'
+      - 'NEWS'
+      - 'LICENSE'
+  pull_request:
+    paths-ignore:
+      - '*.md'
+      - '*.json'
+      - 'NEWS'
+      - 'LICENSE'
 jobs:
   test:
     strategy:
