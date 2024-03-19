@@ -12,6 +12,7 @@ A PostgreSQL Foreign Data Wrapper to access OAI-PMH repositories (Open Archives 
   - [Update](#update)
   - [Usage](#usage)
     - [CREATE SERVER](#create-server)
+    - [CREATE USER MAPPING](#create-user-mapping)
     - [IMPORT FOREIGN SCHEMA](#import-foreign-schema)
       - [IMPORT FOREIGN SCHEMA Examples](#import-foreign-schema-examples)
     - [CREATE FOREIGN TABLE](#create-foreign-table)
@@ -91,7 +92,8 @@ The SQL command [CREATE SERVER](https://www.postgresql.org/docs/current/sql-crea
 The following example creates a `SERVER` that connects to the OAI-PMH repository of the Münster University Library:
 
 ```sql
-CREATE SERVER oai_server_ulb FOREIGN DATA WRAPPER oai_fdw 
+CREATE SERVER oai_server_ulb 
+FOREIGN DATA WRAPPER oai_fdw 
 OPTIONS (url 'https://sammlungen.ulb.uni-muenster.de/oai'); 
 ```
 
@@ -107,6 +109,28 @@ OPTIONS (url 'https://sammlungen.ulb.uni-muenster.de/oai');
 | `connect_retry`         | optional            | Number of attempts to retry a request in case of failure (default 3 times).
 | `request_redirect`         | optional            | Enables URL redirect issued by the server (default 'false').
 | `request_max_redirect`         | optional            | Limit of how many times the URL redirection may occur. If that many redirections have been followed, the next redirect will cause an error. Not setting this parameter or setting it to `0` will allow an infinite number of redirects.
+
+### [CREATE USER MAPPING](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#create-user-mapping)
+
+Availability: **1.9**
+
+[CREATE USER MAPPING](https://www.postgresql.org/docs/current/sql-createusermapping.html) defines a mapping of a PostgreSQL user to an user in the target OAI repository. For instance, to map the PostgreSQL user `postgres` to the user `admin` in the `SERVER` named `my_protected_oai`:
+
+```sql
+CREATE SERVER my_protected_oai
+FOREIGN DATA WRAPPER oai_fdw 
+OPTIONS (url 'https://my.proteceted.oai.de/oai'); 
+
+CREATE USER MAPPING FOR postgres
+SERVER my_protected_oai OPTIONS (user 'admin', password 'secret');
+```
+
+| Option | Type | Description |
+|---|---|---|
+| `user` | **required** | name of the user for authentication |
+| `password` | optional |   password of the user set in the option `user` |
+
+The `oai_fdw` will try to authenticate the user using HTTP Basic Authentication - no other authentication method is currently supported. This feature can be ignored if the OAI repository does not require user authentication.
 
 ### [IMPORT FOREIGN SCHEMA](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#import-foreign-schema)
 

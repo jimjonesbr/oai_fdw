@@ -279,3 +279,11 @@ INSERT INTO ulb_ulbmsuo_oai_dc (status) VALUES (false);
 -- DELETE query
 DELETE FROM ulb_ulbmsuo_oai_dc;
 
+-- empty user name
+CREATE USER MAPPING FOR postgres SERVER oai_server_ulb OPTIONS (user '', password 'foo');
+
+-- empty password
+CREATE USER MAPPING FOR postgres SERVER oai_server_ulb OPTIONS (user 'foo', password '');
+
+-- invalid option
+CREATE USER MAPPING FOR postgres SERVER oai_server_ulb OPTIONS (user 'jim', foo 'bar');

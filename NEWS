@@ -1,6 +1,10 @@
 oai_fdw 1.9
 yyyy-mm-dd
 
+ * New Features *
+   - This feature defines a mapping of a PostgreSQL user to an user in the target 
+     triplestore - `user` and `password`, so that the user can be authenticated.
+
  * Bug Fixes *
    - This fix a fixed string length limit in the support functions (512 bytes). I
      mistakenly assumed that it was defined like that in the OAI-PMH Standard.

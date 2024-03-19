@@ -1,6 +1,6 @@
 /**********************************************************************
  *
- * oai_fdw - Open Archive Initiative Foreign Data Wrapper for PostgreSQL
+ * oai_fdw -  PostgreSQL Foreign Data Wrapper for OAI-PMH Repositories
  *
  * oai_fdw is free software: you can redistribute it and/or modify
  * it under the terms of the MIT Licence.
@@ -17,6 +17,7 @@
 #include "optimizer/restrictinfo.h"
 #include "optimizer/planmain.h"
 #include "utils/rel.h"
+#include "miscadmin.h"
 
 #if PG_VERSION_NUM < 120000
 #include "optimizer/var.h"
@@ -70,6 +71,9 @@
 #define OAI_REQUEST_LISTSETS "ListSets"
 #define OAI_REQUEST_CONNECTTIMEOUT 300
 #define OAI_REQUEST_MAXRETRY 3
+
+#define OAI_USERMAPPING_OPTION_USER "user"
+#define OAI_USERMAPPING_OPTION_PASSWORD "password"
 
 #define OAI_RESPONSE_ELEMENT_RECORD "record"
 #define OAI_RESPONSE_ELEMENT_METADATA "metadata"
@@ -147,6 +151,8 @@ typedef struct OAIFdwState
 	int pagesize;		  /* Number of OAI records retrieved. */
 	ForeignTable *foreign_table;
 	ForeignServer *foreign_server;
+	char *user;
+	char *password;
 } OAIFdwState;
 
 typedef struct OAIRecord
@@ -227,7 +233,9 @@ static struct OAIFdwOption valid_options[] =
 		{OAI_NODE_UNTIL, ForeignTableRelationId, false, false},
 
 		{OAI_NODE_OPTION, AttributeRelationId, true, false},
-
+		/* User Mapping */
+		{OAI_USERMAPPING_OPTION_USER, UserMappingRelationId, false, false},
+		{OAI_USERMAPPING_OPTION_PASSWORD, UserMappingRelationId, false, false},
 		/* EOList option */
 		{NULL, InvalidOid, false, false}};
 
@@ -278,10 +286,11 @@ static List *GetIdentity(OAIFdwState *state);
 static List *GetSets(OAIFdwState *state);
 static void RaiseOAIException(xmlNodePtr error);
 static Datum CreateDatum(HeapTuple tuple, int pgtype, int pgtypmod, char *value);
+static void LoadOAIUserMapping(OAIFdwState *state);
+static void InitSession(OAIFdwState *state, RelOptInfo *baserel);
 
 Datum oai_fdw_handler(PG_FUNCTION_ARGS)
 {
-
 	FdwRoutine *fdwroutine = makeNode(FdwRoutine);
 	fdwroutine->GetForeignRelSize = OAIFdwGetForeignRelSize;
 	fdwroutine->GetForeignPaths = OAIFdwGetForeignPaths;
@@ -1252,6 +1261,18 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 		curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&chunk);
 		curl_easy_setopt(curl, CURLOPT_FAILONERROR, true);
 
+		if(state->user && state->password)
+		{
+			curl_easy_setopt(curl, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
+			curl_easy_setopt(curl, CURLOPT_USERNAME, state->user);
+			curl_easy_setopt(curl, CURLOPT_PASSWORD, state->password);
+		}
+		else if(state->user && !state->password)
+		{
+			curl_easy_setopt(curl, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
+			curl_easy_setopt(curl, CURLOPT_USERNAME, state->user);
+		}
+
 		elog(DEBUG2, "  %s (%s): performing cURL request ... ", __func__, state->requestVerb);
 
 		res = curl_easy_perform(curl);
@@ -1754,96 +1775,98 @@ static void deparseWhereClause(OAIFdwState *state, List *conditions)
 static void OAIFdwGetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid)
 {
 	OAIFdwState *state = (OAIFdwState *)palloc0(sizeof(OAIFdwState));
-	ListCell *cell;
+	// ListCell *cell;
 
 	state->foreign_table = GetForeignTable(foreigntableid);
 	state->foreign_server = GetForeignServer(state->foreign_table->serverid);
-	state->requestRedirect = false;
-	state->requestMaxRedirect = 0;
 
-	elog(DEBUG1, "%s called", __func__);
+	InitSession(state, baserel);
+	// state->requestRedirect = false;
+	// state->requestMaxRedirect = 0;
 
-	foreach (cell, state->foreign_server->options)
-	{
-		DefElem *def = lfirst_node(DefElem, cell);
+	// elog(DEBUG1, "%s called", __func__);
 
-		if (strcmp(OAI_NODE_URL, def->defname) == 0)
-		{
-			state->url = defGetString(def);
-		}
-		else if (strcmp(OAI_NODE_METADATAPREFIX, def->defname) == 0)
-		{
-			state->metadataPrefix = defGetString(def);
-		}
-		else if (strcmp(OAI_NODE_HTTP_PROXY, def->defname) == 0)
-		{
-			state->proxy = defGetString(def);
-			state->proxyType = OAI_NODE_HTTP_PROXY;
-		}
-		else if (strcmp(OAI_NODE_HTTPS_PROXY, def->defname) == 0)
-		{
-			state->proxy = defGetString(def);
-			state->proxyType = OAI_NODE_HTTPS_PROXY;
-		}
-		else if (strcmp(OAI_NODE_PROXY_USER, def->defname) == 0)
-		{
-			state->proxyUser = defGetString(def);
-		}
-		else if (strcmp(OAI_NODE_PROXY_USER_PASSWORD, def->defname) == 0)
-		{
-			state->proxyUserPassword = defGetString(def);
-		}
-		else if (strcmp(OAI_NODE_CONNECTTIMEOUT, def->defname) == 0)
-		{
-			char *tailpt;
-			char *timeout_str = defGetString(def);
-			state->connectTimeout = strtol(timeout_str, &tailpt, 0);
-		}
-		else if (strcmp(OAI_NODE_CONNECTRETRY, def->defname) == 0)
-		{
-			char *tailpt;
-			char *maxretry_str = defGetString(def);
-			state->maxretries = strtol(maxretry_str, &tailpt, 0);
-		}
-		else if (strcmp(OAI_NODE_REQUEST_REDIRECT, def->defname) == 0)
-		{
-			state->requestRedirect = defGetBoolean(def);
-		}
-		else if (strcmp(OAI_NODE_REQUEST_MAX_REDIRECT, def->defname) == 0)
-		{
-			char *tailpt;
-			char *maxredirect_str = defGetString(def);
-			state->requestMaxRedirect = strtol(maxredirect_str, &tailpt, 0);
-		}
-		else
-		{
-			elog(WARNING, "Invalid SERVER OPTION > '%s'", def->defname);
-		}
-	}
+	// foreach (cell, state->foreign_server->options)
+	// {
+	// 	DefElem *def = lfirst_node(DefElem, cell);
 
-	foreach (cell, state->foreign_table->options)
-	{
-		DefElem *def = lfirst_node(DefElem, cell);
+	// 	if (strcmp(OAI_NODE_URL, def->defname) == 0)
+	// 	{
+	// 		state->url = defGetString(def);
+	// 	}
+	// 	else if (strcmp(OAI_NODE_METADATAPREFIX, def->defname) == 0)
+	// 	{
+	// 		state->metadataPrefix = defGetString(def);
+	// 	}
+	// 	else if (strcmp(OAI_NODE_HTTP_PROXY, def->defname) == 0)
+	// 	{
+	// 		state->proxy = defGetString(def);
+	// 		state->proxyType = OAI_NODE_HTTP_PROXY;
+	// 	}
+	// 	else if (strcmp(OAI_NODE_HTTPS_PROXY, def->defname) == 0)
+	// 	{
+	// 		state->proxy = defGetString(def);
+	// 		state->proxyType = OAI_NODE_HTTPS_PROXY;
+	// 	}
+	// 	else if (strcmp(OAI_NODE_PROXY_USER, def->defname) == 0)
+	// 	{
+	// 		state->proxyUser = defGetString(def);
+	// 	}
+	// 	else if (strcmp(OAI_NODE_PROXY_USER_PASSWORD, def->defname) == 0)
+	// 	{
+	// 		state->proxyUserPassword = defGetString(def);
+	// 	}
+	// 	else if (strcmp(OAI_NODE_CONNECTTIMEOUT, def->defname) == 0)
+	// 	{
+	// 		char *tailpt;
+	// 		char *timeout_str = defGetString(def);
+	// 		state->connectTimeout = strtol(timeout_str, &tailpt, 0);
+	// 	}
+	// 	else if (strcmp(OAI_NODE_CONNECTRETRY, def->defname) == 0)
+	// 	{
+	// 		char *tailpt;
+	// 		char *maxretry_str = defGetString(def);
+	// 		state->maxretries = strtol(maxretry_str, &tailpt, 0);
+	// 	}
+	// 	else if (strcmp(OAI_NODE_REQUEST_REDIRECT, def->defname) == 0)
+	// 	{
+	// 		state->requestRedirect = defGetBoolean(def);
+	// 	}
+	// 	else if (strcmp(OAI_NODE_REQUEST_MAX_REDIRECT, def->defname) == 0)
+	// 	{
+	// 		char *tailpt;
+	// 		char *maxredirect_str = defGetString(def);
+	// 		state->requestMaxRedirect = strtol(maxredirect_str, &tailpt, 0);
+	// 	}
+	// 	else
+	// 	{
+	// 		elog(WARNING, "Invalid SERVER OPTION > '%s'", def->defname);
+	// 	}
+	// }
 
-		if (strcmp(OAI_NODE_METADATAPREFIX, def->defname) == 0)
-		{
-			state->metadataPrefix = defGetString(def);
-		}
-		else if (strcmp(OAI_NODE_SETSPEC, def->defname) == 0)
-		{
-			state->set = defGetString(def);
-		}
-		else if (strcmp(OAI_NODE_FROM, def->defname) == 0)
-		{
-			state->from = defGetString(def);
-		}
-		else if (strcmp(OAI_NODE_UNTIL, def->defname) == 0)
-		{
-			state->until = defGetString(def);
-		}
-	}
+	// foreach (cell, state->foreign_table->options)
+	// {
+	// 	DefElem *def = lfirst_node(DefElem, cell);
 
-	OAIRequestPlanner(state, baserel);
+	// 	if (strcmp(OAI_NODE_METADATAPREFIX, def->defname) == 0)
+	// 	{
+	// 		state->metadataPrefix = defGetString(def);
+	// 	}
+	// 	else if (strcmp(OAI_NODE_SETSPEC, def->defname) == 0)
+	// 	{
+	// 		state->set = defGetString(def);
+	// 	}
+	// 	else if (strcmp(OAI_NODE_FROM, def->defname) == 0)
+	// 	{
+	// 		state->from = defGetString(def);
+	// 	}
+	// 	else if (strcmp(OAI_NODE_UNTIL, def->defname) == 0)
+	// 	{
+	// 		state->until = defGetString(def);
+	// 	}
+	// }
+
+	// OAIRequestPlanner(state, baserel);
 	baserel->fdw_private = state;
 }
 
@@ -2604,4 +2627,179 @@ static Datum CreateDatum(HeapTuple tuple, int pgtype, int pgtypmod, char *value)
             Int32GetDatum(pgtypmod));
     else
         return OidFunctionCall1(typinput, CStringGetDatum(value));
+}
+
+static void LoadOAIUserMapping(OAIFdwState *state)
+{
+	Datum		datum;
+	HeapTuple	tp;
+	bool		isnull;
+	UserMapping *um;
+	List *options = NIL;
+	ListCell *cell;
+	bool usermatch = true;
+
+	elog(DEBUG1, "%s called", __func__);
+
+	tp = SearchSysCache2(USERMAPPINGUSERSERVER,
+						 ObjectIdGetDatum(GetUserId()),
+						 ObjectIdGetDatum(state->foreign_server->serverid));
+
+	if (!HeapTupleIsValid(tp))
+	{
+		elog(DEBUG2, "%s: not found for the specific user -- try PUBLIC",__func__);
+		tp = SearchSysCache2(USERMAPPINGUSERSERVER,
+							 ObjectIdGetDatum(InvalidOid),
+							 ObjectIdGetDatum(state->foreign_server->serverid));
+	}
+
+	if (!HeapTupleIsValid(tp))
+	{
+		elog(DEBUG2, "%s: user mapping not found for user \"%s\", server \"%s\"",
+			 __func__, MappingUserName(GetUserId()), state->foreign_server->servername);
+
+		usermatch = false;
+	}
+
+	if (usermatch)
+	{
+		elog(DEBUG2, "%s: setting UserMapping*", __func__);
+		um = (UserMapping *)palloc(sizeof(UserMapping));
+#if PG_VERSION_NUM < 120000
+		um->umid = HeapTupleGetOid(tp);
+#else
+		um->umid = ((Form_pg_user_mapping)GETSTRUCT(tp))->oid;
+#endif		
+		um->userid = GetUserId();
+		um->serverid = state->foreign_server->serverid;
+
+		elog(DEBUG2, "%s: extract the umoptions", __func__);
+		datum = SysCacheGetAttr(USERMAPPINGUSERSERVER,
+								tp,
+								Anum_pg_user_mapping_umoptions,
+								&isnull);
+		if (isnull)
+			um->options = NIL;
+		else
+			um->options = untransformRelOptions(datum);
+
+		if (um->options != NIL)
+		{
+			options = list_concat(options, um->options);
+
+			foreach (cell, options)
+			{
+				DefElem *def = (DefElem *)lfirst(cell);
+
+				if (strcmp(def->defname, OAI_USERMAPPING_OPTION_USER) == 0)
+				{
+					state->user = pstrdup(strVal(def->arg));
+					elog(DEBUG1, "%s: %s '%s'", __func__, def->defname, state->user);
+				}
+
+				if (strcmp(def->defname, OAI_USERMAPPING_OPTION_PASSWORD) == 0)
+				{					
+					state->password = pstrdup(strVal(def->arg));
+					elog(DEBUG1, "%s: %s '*******'", __func__, def->defname);
+				}
+			}
+		}
+
+		ReleaseSysCache(tp);
+	}
+
+}
+
+static void InitSession(OAIFdwState *state, RelOptInfo *baserel)
+{
+	ListCell *cell;
+
+	state->requestRedirect = false;
+	state->requestMaxRedirect = 0;
+
+	elog(DEBUG1, "%s called", __func__);
+
+	foreach (cell, state->foreign_server->options)
+	{
+		DefElem *def = lfirst_node(DefElem, cell);
+
+		if (strcmp(OAI_NODE_URL, def->defname) == 0)
+		{
+			state->url = defGetString(def);
+		}
+		else if (strcmp(OAI_NODE_METADATAPREFIX, def->defname) == 0)
+		{
+			state->metadataPrefix = defGetString(def);
+		}
+		else if (strcmp(OAI_NODE_HTTP_PROXY, def->defname) == 0)
+		{
+			state->proxy = defGetString(def);
+			state->proxyType = OAI_NODE_HTTP_PROXY;
+		}
+		else if (strcmp(OAI_NODE_HTTPS_PROXY, def->defname) == 0)
+		{
+			state->proxy = defGetString(def);
+			state->proxyType = OAI_NODE_HTTPS_PROXY;
+		}
+		else if (strcmp(OAI_NODE_PROXY_USER, def->defname) == 0)
+		{
+			state->proxyUser = defGetString(def);
+		}
+		else if (strcmp(OAI_NODE_PROXY_USER_PASSWORD, def->defname) == 0)
+		{
+			state->proxyUserPassword = defGetString(def);
+		}
+		else if (strcmp(OAI_NODE_CONNECTTIMEOUT, def->defname) == 0)
+		{
+			char *tailpt;
+			char *timeout_str = defGetString(def);
+			state->connectTimeout = strtol(timeout_str, &tailpt, 0);
+		}
+		else if (strcmp(OAI_NODE_CONNECTRETRY, def->defname) == 0)
+		{
+			char *tailpt;
+			char *maxretry_str = defGetString(def);
+			state->maxretries = strtol(maxretry_str, &tailpt, 0);
+		}
+		else if (strcmp(OAI_NODE_REQUEST_REDIRECT, def->defname) == 0)
+		{
+			state->requestRedirect = defGetBoolean(def);
+		}
+		else if (strcmp(OAI_NODE_REQUEST_MAX_REDIRECT, def->defname) == 0)
+		{
+			char *tailpt;
+			char *maxredirect_str = defGetString(def);
+			state->requestMaxRedirect = strtol(maxredirect_str, &tailpt, 0);
+		}
+		else
+		{
+			elog(WARNING, "Invalid SERVER OPTION > '%s'", def->defname);
+		}
+	}
+
+	foreach (cell, state->foreign_table->options)
+	{
+		DefElem *def = lfirst_node(DefElem, cell);
+
+		if (strcmp(OAI_NODE_METADATAPREFIX, def->defname) == 0)
+		{
+			state->metadataPrefix = defGetString(def);
+		}
+		else if (strcmp(OAI_NODE_SETSPEC, def->defname) == 0)
+		{
+			state->set = defGetString(def);
+		}
+		else if (strcmp(OAI_NODE_FROM, def->defname) == 0)
+		{
+			state->from = defGetString(def);
+		}
+		else if (strcmp(OAI_NODE_UNTIL, def->defname) == 0)
+		{
+			state->until = defGetString(def);
+		}
+	}
+
+	LoadOAIUserMapping(state);
+
+	OAIRequestPlanner(state, baserel);
 }

@@ -322,3 +322,12 @@ HINT:  The OAI Foreign Data Wrapper does not support INSERT queries.
 DELETE FROM ulb_ulbmsuo_oai_dc;
 ERROR:  Operation not supported.
 HINT:  The OAI Foreign Data Wrapper does not support DELETE queries.
+-- empty user name
+CREATE USER MAPPING FOR postgres SERVER oai_server_ulb OPTIONS (user '', password 'foo');
+ERROR:  empty value in option 'user'
+-- empty password
+CREATE USER MAPPING FOR postgres SERVER oai_server_ulb OPTIONS (user 'foo', password '');
+ERROR:  empty value in option 'password'
+-- invalid option
+CREATE USER MAPPING FOR postgres SERVER oai_server_ulb OPTIONS (user 'jim', foo 'bar');
+ERROR:  invalid oai_fdw option "foo"
