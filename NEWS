@@ -1,9 +1,5 @@
-
-oai_fdw 1.10
-yyyy-mm-dd
-
 oai_fdw 1.9
-2024-02-06
+yyyy-mm-dd
 
  * Bug Fixes *
    - This fix a fixed string length limit in the support functions (512 bytes). I

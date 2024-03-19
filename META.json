@@ -21,7 +21,7 @@
    },
    "provides": {
      "oai_fdw": {
-       "file": "oai_fdw--1.8.sql",
+       "file": "oai_fdw--1.9.sql",
        "docfile": "README.md",
        "version": "1.9.0",
        "abstract": "OAI FDW wrapper"
@@ -45,7 +45,7 @@
    },
    "tags": [
       "oai-pmh",
-      "libraries",
+      "digital libraries",
       "metadata",
       "fdw"
    ]
