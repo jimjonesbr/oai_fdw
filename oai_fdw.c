@@ -5,7 +5,7 @@
  * oai_fdw is free software: you can redistribute it and/or modify
  * it under the terms of the MIT Licence.
  *
- * Copyright (C) 2021-2023 University of Münster, Germany
+ * Copyright (C) 2021-2024 University of Münster, Germany
  * Written by Jim Jones <jim.jones@uni-muenster.de>
  *
  **********************************************************************/
@@ -145,7 +145,8 @@ typedef struct OAIFdwState
 	List *records;		  /* List of OAI records retrieved. */
 	int pageindex;		  /* Index of a record within a retrieved page (list). */
 	int pagesize;		  /* Number of OAI records retrieved. */
-
+	ForeignTable *foreign_table;
+	ForeignServer *foreign_server;
 } OAIFdwState;
 
 typedef struct OAIRecord
@@ -165,28 +166,6 @@ typedef struct OAIColumn
 	char *label;
 	char *function;
 } OAIColumn;
-
-typedef struct OAIFdwTableOptions
-{
-	Oid foreigntableid;
-	int numcols;
-	int numfdwcols;
-	bool requestRedirect;
-	long requestMaxRedirect;
-	long maxretries;
-	long connectTimeout;
-	char *metadataPrefix;
-	char *from;
-	char *until;
-	char *url;
-	char *proxy;
-	char *proxyType;
-	char *proxyUser;
-	char *proxyUserPassword;
-	char *set;
-	char *identifier;
-	char *requestVerb;
-} OAIFdwTableOptions;
 
 typedef struct OAIMetadataFormat
 {
@@ -285,12 +264,12 @@ static int ExecuteOAIRequest(OAIFdwState *state);
 static void CreateOAITuple(TupleTableSlot *slot, OAIFdwState *state, OAIRecord *oai);
 static OAIRecord *FetchNextOAIRecord(OAIFdwState **state);
 static void LoadOAIRecords(struct OAIFdwState **state);
-static void deparseExpr(Expr *expr, OAIFdwTableOptions *opts);
+static void deparseExpr(Expr *expr, OAIFdwState *state);
 static char *datumToString(Datum datum, Oid type);
 static char *GetOAINodeFromColumn(Oid foreigntableid, int16 attnum);
-static void deparseWhereClause(List *conditions, OAIFdwTableOptions *opts);
-static void deparseSelectColumns(OAIFdwTableOptions *opts, List *exprs);
-static void OAIRequestPlanner(OAIFdwTableOptions *opts, ForeignTable *ft, RelOptInfo *baserel);
+static void deparseWhereClause(OAIFdwState *state, List *conditions);
+static void deparseSelectColumns(OAIFdwState *state, List *exprs);
+static void OAIRequestPlanner(OAIFdwState *state, RelOptInfo *baserel);
 static char *deparseTimestamp(Datum datum);
 static int CheckURL(char *url);
 static OAIFdwState *GetServerInfo(const char *srvname);
@@ -1339,16 +1318,15 @@ static int ExecuteOAIRequest(OAIFdwState *state)
  * ListRecords:     https://www.openarchives.org/OAI/openarchivesprotocol.html#ListRecords
  * ListIdentifiers: https://www.openarchives.org/OAI/openarchivesprotocol.html#ListIdentifiers
  */
-static void OAIRequestPlanner(OAIFdwTableOptions *opts, ForeignTable *ft, RelOptInfo *baserel)
+static void OAIRequestPlanner(OAIFdwState *state, RelOptInfo *baserel)
 {
 	List *conditions = baserel->baserestrictinfo;
 	bool hasContentForeignColumn = false;
 
 #if PG_VERSION_NUM < 130000
-	Relation rel = heap_open(ft->relid, NoLock);
+	Relation rel = heap_open(state->foreign_table->relid, NoLock);
 #else
-	Relation rel = table_open(ft->relid, NoLock);
-	;
+	Relation rel = table_open(state->foreign_table->relid, NoLock);
 #endif
 
 	elog(DEBUG1, "%s called.", __func__);
@@ -1356,25 +1334,22 @@ static void OAIRequestPlanner(OAIFdwTableOptions *opts, ForeignTable *ft, RelOpt
 	/* The default request type is OAI_REQUEST_LISTRECORDS.
 	 * This can be altered depending on the columns used
 	 * in the WHERE and SELECT clauses */
-	opts->requestVerb = OAI_REQUEST_LISTRECORDS;
-	opts->numcols = rel->rd_att->natts;
-	opts->foreigntableid = ft->relid;
+	state->requestVerb = OAI_REQUEST_LISTRECORDS;
+	state->numcols = rel->rd_att->natts;
+	state->foreigntableid = state->foreign_table->relid;
 
 	for (int i = 0; i < rel->rd_att->natts; i++)
 	{
-
-		List *options = GetForeignColumnOptions(ft->relid, i + 1);
+		List *options = GetForeignColumnOptions(state->foreign_table->relid, i + 1);
 		ListCell *lc;
 
 		foreach (lc, options)
 		{
-
 			DefElem *def = (DefElem *)lfirst(lc);
-			opts->numfdwcols++;
+			state->numfdwcols++;
 
 			if (strcmp(def->defname, OAI_NODE_OPTION) == 0)
 			{
-
 				char *option_value = defGetString(def);
 
 				if (strcmp(option_value, OAI_NODE_STATUS) == 0)
@@ -1382,7 +1357,6 @@ static void OAIRequestPlanner(OAIFdwTableOptions *opts, ForeignTable *ft, RelOpt
 
 					if (rel->rd_att->attrs[i].atttypid != BOOLOID)
 					{
-
 						ereport(ERROR,
 								(errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
 								 errmsg("invalid data type for '%s.%s': %d",
@@ -1395,11 +1369,9 @@ static void OAIRequestPlanner(OAIFdwTableOptions *opts, ForeignTable *ft, RelOpt
 				}
 				else if (strcmp(option_value, OAI_NODE_IDENTIFIER) == 0 || strcmp(option_value, OAI_NODE_METADATAPREFIX) == 0)
 				{
-
 					if (rel->rd_att->attrs[i].atttypid != TEXTOID &&
 						rel->rd_att->attrs[i].atttypid != VARCHAROID)
 					{
-
 						ereport(ERROR,
 								(errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
 								 errmsg("invalid data type for '%s.%s': %d",
@@ -1412,14 +1384,12 @@ static void OAIRequestPlanner(OAIFdwTableOptions *opts, ForeignTable *ft, RelOpt
 				}
 				else if (strcmp(option_value, OAI_NODE_CONTENT) == 0)
 				{
-
 					hasContentForeignColumn = true;
 
 					if (rel->rd_att->attrs[i].atttypid != TEXTOID &&
 						rel->rd_att->attrs[i].atttypid != VARCHAROID &&
 						rel->rd_att->attrs[i].atttypid != XMLOID)
 					{
-
 						ereport(ERROR,
 								(errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
 								 errmsg("invalid data type for '%s.%s': %d",
@@ -1432,11 +1402,9 @@ static void OAIRequestPlanner(OAIFdwTableOptions *opts, ForeignTable *ft, RelOpt
 				}
 				else if (strcmp(option_value, OAI_NODE_SETSPEC) == 0)
 				{
-
 					if (rel->rd_att->attrs[i].atttypid != TEXTARRAYOID &&
 						rel->rd_att->attrs[i].atttypid != VARCHARARRAYOID)
 					{
-
 						ereport(ERROR,
 								(errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
 								 errmsg("invalid data type for '%s.%s': %d",
@@ -1449,10 +1417,8 @@ static void OAIRequestPlanner(OAIFdwTableOptions *opts, ForeignTable *ft, RelOpt
 				}
 				else if (strcmp(option_value, OAI_NODE_DATESTAMP) == 0)
 				{
-
 					if (rel->rd_att->attrs[i].atttypid != TIMESTAMPOID)
 					{
-
 						ereport(ERROR,
 								(errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
 								 errmsg("invalid data type for '%s.%s': %d",
@@ -1472,16 +1438,15 @@ static void OAIRequestPlanner(OAIFdwTableOptions *opts, ForeignTable *ft, RelOpt
 	 * whole OAI header */
 	if (!hasContentForeignColumn)
 	{
-
-		opts->requestVerb = OAI_REQUEST_LISTIDENTIFIERS;
+		state->requestVerb = OAI_REQUEST_LISTIDENTIFIERS;
 		elog(DEBUG1, "  %s: the foreign table '%s' has no 'content' OAI node. Request type set to '%s'",
 			 __func__, NameStr(rel->rd_rel->relname), OAI_REQUEST_LISTIDENTIFIERS);
 	}
 
-	if (opts->numfdwcols != 0)
-		deparseSelectColumns(opts, baserel->reltarget->exprs);
+	if (state->numfdwcols != 0)
+		deparseSelectColumns(state, baserel->reltarget->exprs);
 
-	deparseWhereClause(conditions, opts);
+	deparseWhereClause(state, conditions);
 
 #if PG_VERSION_NUM < 130000
 	heap_close(rel, NoLock);
@@ -1608,9 +1573,8 @@ static char *datumToString(Datum datum, Oid type)
 	return result;
 }
 
-static void deparseExpr(Expr *expr, OAIFdwTableOptions *opts)
+static void deparseExpr(Expr *expr, OAIFdwState *state)
 {
-
 	OpExpr *oper;
 	Var *var;
 	HeapTuple tuple;
@@ -1639,69 +1603,59 @@ static void deparseExpr(Expr *expr, OAIFdwTableOptions *opts)
 		elog(DEBUG2, "  %s: opername > %s", __func__, operName);
 
 		var = (Var *)linitial(oper->args);
-		oaiNode = GetOAINodeFromColumn(opts->foreigntableid, var->varattno);
+		oaiNode = GetOAINodeFromColumn(state->foreign_table->relid, var->varattno);
 
 		if (strcmp(operName, "=") == 0)
 		{
-
 			if (strcmp(oaiNode, OAI_NODE_IDENTIFIER) == 0 && (var->vartype == TEXTOID || var->vartype == VARCHAROID))
 			{
-
 				Const *constant = (Const *)lsecond(oper->args);
 
-				opts->requestVerb = OAI_REQUEST_GETRECORD;
-				opts->identifier = datumToString(constant->constvalue, constant->consttype);
+				state->requestVerb = OAI_REQUEST_GETRECORD;
+				state->identifier = datumToString(constant->constvalue, constant->consttype);
 
-				elog(DEBUG2, "  %s: request type set to '%s' with identifier '%s'", __func__, OAI_REQUEST_GETRECORD, opts->identifier);
+				elog(DEBUG2, "  %s: request type set to '%s' with identifier '%s'", __func__, OAI_REQUEST_GETRECORD, state->identifier);
 			}
 
 			if (strcmp(oaiNode, OAI_NODE_DATESTAMP) == 0 && (var->vartype == TIMESTAMPOID))
 			{
-
 				Const *constant = (Const *)lsecond(oper->args);
-				opts->from = deparseTimestamp(constant->constvalue);
-				opts->until = deparseTimestamp(constant->constvalue);
+				state->from = deparseTimestamp(constant->constvalue);
+				state->until = deparseTimestamp(constant->constvalue);
 			}
 
 			if (strcmp(oaiNode, OAI_NODE_METADATAPREFIX) == 0 && (var->vartype == TEXTOID || var->vartype == VARCHAROID))
 			{
-
 				Const *constant = (Const *)lsecond(oper->args);
 
-				opts->metadataPrefix = datumToString(constant->constvalue, constant->consttype);
+				state->metadataPrefix = datumToString(constant->constvalue, constant->consttype);
 
-				elog(DEBUG2, "  %s: metadataPrefix set to '%s'", __func__, opts->metadataPrefix);
+				elog(DEBUG2, "  %s: metadataPrefix set to '%s'", __func__, state->metadataPrefix);
 			}
 		}
 
 		if (strcmp(operName, ">=") == 0 || strcmp(operName, ">") == 0)
 		{
-
 			if (strcmp(oaiNode, OAI_NODE_DATESTAMP) == 0 && (var->vartype == TIMESTAMPOID))
 			{
-
 				Const *constant = (Const *)lsecond(oper->args);
-				opts->from = deparseTimestamp(constant->constvalue);
+				state->from = deparseTimestamp(constant->constvalue);
 			}
 		}
 
 		if (strcmp(operName, "<=") == 0 || strcmp(operName, "<") == 0)
 		{
-
 			if (strcmp(oaiNode, OAI_NODE_DATESTAMP) == 0 && (var->vartype == TIMESTAMPOID))
 			{
-
 				Const *constant = (Const *)lsecond(oper->args);
-				opts->until = deparseTimestamp(constant->constvalue);
+				state->until = deparseTimestamp(constant->constvalue);
 			}
 		}
 
 		if (strcmp(operName, "<@") == 0 || strcmp(operName, "@>") == 0 || strcmp(operName, "&&") == 0)
 		{
-
 			if (strcmp(oaiNode, OAI_NODE_SETSPEC) == 0 && (var->vartype == TEXTARRAYOID || var->vartype == VARCHARARRAYOID))
 			{
-
 				Const *constant = (Const *)lsecond(oper->args);
 				ArrayType *array = (ArrayType *)constant->constvalue;
 
@@ -1709,14 +1663,12 @@ static void deparseExpr(Expr *expr, OAIFdwTableOptions *opts)
 
 				if (numitems > 1)
 				{
-
 					elog(WARNING, "The OAI standard requests do not support multiple '%s' attributes. This filter will be applied AFTER the OAI request.", OAI_NODE_SETSPEC);
 					elog(DEBUG2, "  %s: clearing '%s' attribute.", __func__, OAI_NODE_SETSPEC);
-					opts->set = NULL;
+					state->set = NULL;
 				}
 				else if (numitems == 1)
 				{
-
 					bool isnull;
 					Datum value;
 
@@ -1724,9 +1676,8 @@ static void deparseExpr(Expr *expr, OAIFdwTableOptions *opts)
 
 					while (array_iterate(iterator, &value, &isnull))
 					{
-
 						elog(DEBUG2, "  %s: setSpec set to '%s'", __func__, datumToString(value, TEXTOID));
-						opts->set = datumToString(value, TEXTOID);
+						state->set = datumToString(value, TEXTOID);
 					}
 
 					array_free_iterator(iterator);
@@ -1742,21 +1693,19 @@ static void deparseExpr(Expr *expr, OAIFdwTableOptions *opts)
 	}
 }
 
-static void deparseSelectColumns(OAIFdwTableOptions *opts, List *exprs)
+static void deparseSelectColumns(OAIFdwState *state, List *exprs)
 {
-
 	ListCell *cell;
 
 	elog(DEBUG2, "%s called", __func__);
 
 	foreach (cell, exprs)
 	{
-
 		Expr *expr = (Expr *)lfirst(cell);
 
 		elog(DEBUG2, "  %s: evaluating expr->type = %u", __func__, expr->type);
 
-		deparseExpr(expr, opts);
+		deparseExpr(expr, state);
 	}
 }
 
@@ -1783,141 +1732,119 @@ static char *deparseTimestamp(Datum datum)
 	return s.data;
 }
 
-static void deparseWhereClause(List *conditions, OAIFdwTableOptions *opts)
+static void deparseWhereClause(OAIFdwState *state, List *conditions)
 {
-
 	ListCell *cell;
 
 	foreach (cell, conditions)
 	{
-
 		Expr *expr = (Expr *)lfirst(cell);
 
 		/* extract WHERE clause from RestrictInfo */
 		if (IsA(expr, RestrictInfo))
 		{
-
 			RestrictInfo *ri = (RestrictInfo *)expr;
 			expr = ri->clause;
 		}
 
-		deparseExpr(expr, opts);
+		deparseExpr(expr, state);
 	}
 }
 
 static void OAIFdwGetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid)
 {
-
-	ForeignTable *ft = GetForeignTable(foreigntableid);
-	ForeignServer *server = GetForeignServer(ft->serverid);
-	OAIFdwTableOptions *opts = (OAIFdwTableOptions *)palloc0(sizeof(OAIFdwTableOptions));
+	OAIFdwState *state = (OAIFdwState *)palloc0(sizeof(OAIFdwState));
 	ListCell *cell;
 
-	opts->requestRedirect = false;
-	opts->requestMaxRedirect = 0;
+	state->foreign_table = GetForeignTable(foreigntableid);
+	state->foreign_server = GetForeignServer(state->foreign_table->serverid);
+	state->requestRedirect = false;
+	state->requestMaxRedirect = 0;
 
 	elog(DEBUG1, "%s called", __func__);
 
-	foreach (cell, server->options)
+	foreach (cell, state->foreign_server->options)
 	{
-
 		DefElem *def = lfirst_node(DefElem, cell);
 
 		if (strcmp(OAI_NODE_URL, def->defname) == 0)
 		{
-
-			opts->url = defGetString(def);
+			state->url = defGetString(def);
 		}
 		else if (strcmp(OAI_NODE_METADATAPREFIX, def->defname) == 0)
 		{
-
-			opts->metadataPrefix = defGetString(def);
+			state->metadataPrefix = defGetString(def);
 		}
 		else if (strcmp(OAI_NODE_HTTP_PROXY, def->defname) == 0)
 		{
-
-			opts->proxy = defGetString(def);
-			opts->proxyType = OAI_NODE_HTTP_PROXY;
+			state->proxy = defGetString(def);
+			state->proxyType = OAI_NODE_HTTP_PROXY;
 		}
 		else if (strcmp(OAI_NODE_HTTPS_PROXY, def->defname) == 0)
 		{
-
-			opts->proxy = defGetString(def);
-			opts->proxyType = OAI_NODE_HTTPS_PROXY;
+			state->proxy = defGetString(def);
+			state->proxyType = OAI_NODE_HTTPS_PROXY;
 		}
 		else if (strcmp(OAI_NODE_PROXY_USER, def->defname) == 0)
 		{
-
-			opts->proxyUser = defGetString(def);
+			state->proxyUser = defGetString(def);
 		}
 		else if (strcmp(OAI_NODE_PROXY_USER_PASSWORD, def->defname) == 0)
 		{
-
-			opts->proxyUserPassword = defGetString(def);
+			state->proxyUserPassword = defGetString(def);
 		}
 		else if (strcmp(OAI_NODE_CONNECTTIMEOUT, def->defname) == 0)
 		{
-
 			char *tailpt;
 			char *timeout_str = defGetString(def);
-
-			opts->connectTimeout = strtol(timeout_str, &tailpt, 0);
+			state->connectTimeout = strtol(timeout_str, &tailpt, 0);
 		}
 		else if (strcmp(OAI_NODE_CONNECTRETRY, def->defname) == 0)
 		{
-
 			char *tailpt;
 			char *maxretry_str = defGetString(def);
-			opts->maxretries = strtol(maxretry_str, &tailpt, 0);
+			state->maxretries = strtol(maxretry_str, &tailpt, 0);
 		}
 		else if (strcmp(OAI_NODE_REQUEST_REDIRECT, def->defname) == 0)
 		{
-
-			opts->requestRedirect = defGetBoolean(def);
+			state->requestRedirect = defGetBoolean(def);
 		}
 		else if (strcmp(OAI_NODE_REQUEST_MAX_REDIRECT, def->defname) == 0)
 		{
-
 			char *tailpt;
 			char *maxredirect_str = defGetString(def);
-			opts->requestMaxRedirect = strtol(maxredirect_str, &tailpt, 0);
+			state->requestMaxRedirect = strtol(maxredirect_str, &tailpt, 0);
 		}
 		else
 		{
-
 			elog(WARNING, "Invalid SERVER OPTION > '%s'", def->defname);
 		}
 	}
 
-	foreach (cell, ft->options)
+	foreach (cell, state->foreign_table->options)
 	{
-
 		DefElem *def = lfirst_node(DefElem, cell);
 
 		if (strcmp(OAI_NODE_METADATAPREFIX, def->defname) == 0)
 		{
-
-			opts->metadataPrefix = defGetString(def);
+			state->metadataPrefix = defGetString(def);
 		}
 		else if (strcmp(OAI_NODE_SETSPEC, def->defname) == 0)
 		{
-
-			opts->set = defGetString(def);
+			state->set = defGetString(def);
 		}
 		else if (strcmp(OAI_NODE_FROM, def->defname) == 0)
 		{
-
-			opts->from = defGetString(def);
+			state->from = defGetString(def);
 		}
 		else if (strcmp(OAI_NODE_UNTIL, def->defname) == 0)
 		{
-
-			opts->until = defGetString(def);
+			state->until = defGetString(def);
 		}
 	}
 
-	OAIRequestPlanner(opts, ft, baserel);
-	baserel->fdw_private = opts;
+	OAIRequestPlanner(state, baserel);
+	baserel->fdw_private = state;
 }
 
 static void OAIFdwGetForeignPaths(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid)
@@ -1937,29 +1864,8 @@ static void OAIFdwGetForeignPaths(PlannerInfo *root, RelOptInfo *baserel, Oid fo
 
 static ForeignScan *OAIFdwGetForeignPlan(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid, ForeignPath *best_path, List *tlist, List *scan_clauses, Plan *outer_plan)
 {
-
+	OAIFdwState *state = baserel->fdw_private;
 	List *fdw_private;
-	OAIFdwTableOptions *opts = baserel->fdw_private;
-	OAIFdwState *state = (OAIFdwState *)palloc0(sizeof(OAIFdwState));
-
-	state->url = opts->url;
-	state->proxy = opts->proxy;
-	state->proxyType = opts->proxyType;
-	state->proxyUser = opts->proxyUser;
-	state->proxyUserPassword = opts->proxyUserPassword;
-	state->connectTimeout = opts->connectTimeout;
-	state->maxretries = opts->maxretries;
-	state->set = opts->set;
-	state->from = opts->from;
-	state->until = opts->until;
-	state->metadataPrefix = opts->metadataPrefix;
-	state->foreigntableid = opts->foreigntableid;
-	state->numcols = opts->numcols;
-	state->requestVerb = opts->requestVerb;
-	state->identifier = opts->identifier;
-	state->numfdwcols = opts->numfdwcols;
-	state->requestRedirect = opts->requestRedirect;
-	state->requestMaxRedirect = opts->requestMaxRedirect;
 
 	fdw_private = list_make1(state);
 
@@ -1977,7 +1883,6 @@ static ForeignScan *OAIFdwGetForeignPlan(PlannerInfo *root, RelOptInfo *baserel,
 
 static void OAIFdwBeginForeignScan(ForeignScanState *node, int eflags)
 {
-
 	ForeignScan *fs = (ForeignScan *)node->ss.ps.plan;
 	OAIFdwState *state = (OAIFdwState *)linitial(fs->fdw_private);
 	EState *estate = node->ss.ps.state;
@@ -1996,7 +1901,6 @@ static void OAIFdwBeginForeignScan(ForeignScanState *node, int eflags)
 
 static OAIRecord *FetchNextOAIRecord(OAIFdwState **state)
 {
-
 	if ((*state)->pageindex == (*state)->pagesize)
 	{
 		elog(DEBUG1, "%s: EOF > %d/%d", __func__, (*state)->pageindex, (*state)->pagesize);
@@ -2186,7 +2090,6 @@ static TupleTableSlot *OAIFdwIterateForeignScan(ForeignScanState *node)
 
 	if (record != NULL)
 	{
-
 		elog(DEBUG2, "  %s: creating OAI tuple", __func__);
 		CreateOAITuple(slot, state, record);
 
@@ -2228,7 +2131,6 @@ static void RaiseOAIException(xmlNodePtr error)
 
 static void LoadOAIRecords(struct OAIFdwState **state)
 {
-
 	xmlNodePtr xmlroot;
 	xmlNodePtr oaipmh;
 	xmlNodePtr headerElements;
@@ -2455,7 +2357,6 @@ static void appendTextArray(ArrayType **array, char *text_element)
 
 	if (*array == NULL)
 	{
-
 		/*Array has no elements */
 		arr_elems[arr_nelems] = CStringGetTextDatum(text_element);
 		elog(DEBUG3, "    %s: array empty! adding value at arr_elems[%ld]", __func__, arr_nelems);
@@ -2463,7 +2364,6 @@ static void appendTextArray(ArrayType **array, char *text_element)
 	}
 	else
 	{
-
 		bool isnull;
 		Datum value;
 		ArrayIterator iterator = array_create_iterator(*array, 0, NULL);
@@ -2474,7 +2374,6 @@ static void appendTextArray(ArrayType **array, char *text_element)
 
 		while (array_iterate(iterator, &value, &isnull))
 		{
-
 			if (isnull)
 				continue;
 
@@ -2504,7 +2403,6 @@ static void OAIFdwEndForeignScan(ForeignScanState *node)
 
 static List *OAIFdwImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid serverOid)
 {
-
 	ListCell *cell;
 	List *sql_commands = NIL;
 	List *all_sets = NIL;
@@ -2522,11 +2420,9 @@ static List *OAIFdwImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid server
 
 	foreach (cell, stmt->options)
 	{
-
 		DefElem *def = lfirst_node(DefElem, cell);
 		if (strcmp(def->defname, OAI_NODE_METADATAPREFIX) == 0)
 		{
-
 			ListCell *cell_formats;
 			List *formats = NIL;
 			bool found = false;
@@ -2534,7 +2430,6 @@ static List *OAIFdwImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid server
 
 			foreach (cell_formats, formats)
 			{
-
 				OAIMetadataFormat *format = (OAIMetadataFormat *)lfirst(cell_formats);
 
 				if (strcmp(format->metadataPrefix, defGetString(def)) == 0)
@@ -2545,7 +2440,6 @@ static List *OAIFdwImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid server
 
 			if (!found)
 			{
-
 				ereport(ERROR,
 						(errcode(ERRCODE_FDW_OPTION_NAME_NOT_FOUND),
 						 errmsg("invalid 'metadataprefix': '%s'", defGetString(def))));
@@ -2556,7 +2450,6 @@ static List *OAIFdwImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid server
 		}
 		else
 		{
-
 			ereport(ERROR,
 					(errcode(ERRCODE_FDW_OPTION_NAME_NOT_FOUND),
 					 errmsg("invalid FOREIGN SCHEMA OPTION: '%s'", def->defname)));
@@ -2574,17 +2467,14 @@ static List *OAIFdwImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid server
 
 	if (strcmp(stmt->remote_schema, "oai_sets") == 0)
 	{
-
 		List *tables = NIL;
 
 		if (stmt->list_type == FDW_IMPORT_SCHEMA_LIMIT_TO)
 		{
-
 			ListCell *cell_limit_to;
 
 			foreach (cell_limit_to, stmt->table_list)
 			{
-
 				RangeVar *rv = (RangeVar *)lfirst(cell_limit_to);
 				OAISet *set = (OAISet *)palloc0(sizeof(OAISet));
 				set->setSpec = rv->relname;
@@ -2594,12 +2484,10 @@ static List *OAIFdwImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid server
 		}
 		else if (stmt->list_type == FDW_IMPORT_SCHEMA_EXCEPT)
 		{
-
 			ListCell *cell_sets;
 
 			foreach (cell_sets, all_sets)
 			{
-
 				ListCell *cell_except;
 				bool found = false;
 				OAISet *set = (OAISet *)palloc0(sizeof(OAISet));
@@ -2607,11 +2495,9 @@ static List *OAIFdwImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid server
 
 				foreach (cell_except, stmt->table_list)
 				{
-
 					RangeVar *rv = (RangeVar *)lfirst(cell_except);
 					if (strcmp(rv->relname, set->setSpec) == 0)
 					{
-
 						found = true;
 						break;
 					}
@@ -2623,13 +2509,11 @@ static List *OAIFdwImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid server
 		}
 		else if (stmt->list_type == FDW_IMPORT_SCHEMA_ALL)
 		{
-
 			tables = all_sets;
 		}
 
 		foreach (cell, tables)
 		{
-
 			StringInfoData buffer;
 			OAISet *set = (OAISet *)lfirst(cell);
 			initStringInfo(&buffer);
@@ -2652,7 +2536,6 @@ static List *OAIFdwImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid server
 	}
 	else if (strcmp(stmt->remote_schema, "oai_repository") == 0)
 	{
-
 		StringInfoData buffer;
 		initStringInfo(&buffer);
 
@@ -2671,7 +2554,6 @@ static List *OAIFdwImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid server
 	}
 	else
 	{
-
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_SCHEMA_NAME),
 				 errmsg("invalid FOREIGN SCHEMA: '%s'", stmt->remote_schema)));
@@ -2695,7 +2577,6 @@ static List *OAIFdwImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid server
  */
 static Datum CreateDatum(HeapTuple tuple, int pgtype, int pgtypmod, char *value)
 {
-
     regproc typinput;
 
     tuple = SearchSysCache1(TYPEOID, ObjectIdGetDatum(pgtype));
