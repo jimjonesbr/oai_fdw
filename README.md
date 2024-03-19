@@ -7,8 +7,6 @@ A PostgreSQL Foreign Data Wrapper to access OAI-PMH repositories (Open Archives 
 ![CI](https://github.com/jimjonesbr/oai_fdw/actions/workflows/ci.yml/badge.svg)
 
 ## Index
-- [PostgreSQL Foreign Data Wrapper for OAI-PMH (oai\_fdw)](#postgresql-foreign-data-wrapper-for-oai-pmh-oai_fdw)
-  - [Index](#index)
   - [Requirements](#requirements)
   - [Build and Install](#build-and-install)
   - [Update](#update)
