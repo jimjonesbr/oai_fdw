@@ -2115,9 +2115,9 @@ static TupleTableSlot *OAIFdwIterateForeignScan(ForeignScanState *node)
 	{
 		elog(DEBUG2, "  %s: creating OAI tuple", __func__);
 		CreateOAITuple(slot, state, record);
-
 		elog(DEBUG2, "  %s: storing virtual tuple", __func__);
 		ExecStoreVirtualTuple(slot);
+		pfree(record);
 	}
 	else
 	{
@@ -2127,6 +2127,7 @@ static TupleTableSlot *OAIFdwIterateForeignScan(ForeignScanState *node)
 		 */
 		xmlFreeDoc(state->xmldoc);
 		xmlCleanupParser();
+		MemoryContextDelete(state->oaicxt);
 	}
 
 	elog(DEBUG1, "%s => returning tuple (rowcount: %d)", __func__, state->rowcount);
