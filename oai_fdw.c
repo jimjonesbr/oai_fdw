@@ -1775,98 +1775,10 @@ static void deparseWhereClause(OAIFdwState *state, List *conditions)
 static void OAIFdwGetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid)
 {
 	OAIFdwState *state = (OAIFdwState *)palloc0(sizeof(OAIFdwState));
-	// ListCell *cell;
-
 	state->foreign_table = GetForeignTable(foreigntableid);
 	state->foreign_server = GetForeignServer(state->foreign_table->serverid);
 
 	InitSession(state, baserel);
-	// state->requestRedirect = false;
-	// state->requestMaxRedirect = 0;
-
-	// elog(DEBUG1, "%s called", __func__);
-
-	// foreach (cell, state->foreign_server->options)
-	// {
-	// 	DefElem *def = lfirst_node(DefElem, cell);
-
-	// 	if (strcmp(OAI_NODE_URL, def->defname) == 0)
-	// 	{
-	// 		state->url = defGetString(def);
-	// 	}
-	// 	else if (strcmp(OAI_NODE_METADATAPREFIX, def->defname) == 0)
-	// 	{
-	// 		state->metadataPrefix = defGetString(def);
-	// 	}
-	// 	else if (strcmp(OAI_NODE_HTTP_PROXY, def->defname) == 0)
-	// 	{
-	// 		state->proxy = defGetString(def);
-	// 		state->proxyType = OAI_NODE_HTTP_PROXY;
-	// 	}
-	// 	else if (strcmp(OAI_NODE_HTTPS_PROXY, def->defname) == 0)
-	// 	{
-	// 		state->proxy = defGetString(def);
-	// 		state->proxyType = OAI_NODE_HTTPS_PROXY;
-	// 	}
-	// 	else if (strcmp(OAI_NODE_PROXY_USER, def->defname) == 0)
-	// 	{
-	// 		state->proxyUser = defGetString(def);
-	// 	}
-	// 	else if (strcmp(OAI_NODE_PROXY_USER_PASSWORD, def->defname) == 0)
-	// 	{
-	// 		state->proxyUserPassword = defGetString(def);
-	// 	}
-	// 	else if (strcmp(OAI_NODE_CONNECTTIMEOUT, def->defname) == 0)
-	// 	{
-	// 		char *tailpt;
-	// 		char *timeout_str = defGetString(def);
-	// 		state->connectTimeout = strtol(timeout_str, &tailpt, 0);
-	// 	}
-	// 	else if (strcmp(OAI_NODE_CONNECTRETRY, def->defname) == 0)
-	// 	{
-	// 		char *tailpt;
-	// 		char *maxretry_str = defGetString(def);
-	// 		state->maxretries = strtol(maxretry_str, &tailpt, 0);
-	// 	}
-	// 	else if (strcmp(OAI_NODE_REQUEST_REDIRECT, def->defname) == 0)
-	// 	{
-	// 		state->requestRedirect = defGetBoolean(def);
-	// 	}
-	// 	else if (strcmp(OAI_NODE_REQUEST_MAX_REDIRECT, def->defname) == 0)
-	// 	{
-	// 		char *tailpt;
-	// 		char *maxredirect_str = defGetString(def);
-	// 		state->requestMaxRedirect = strtol(maxredirect_str, &tailpt, 0);
-	// 	}
-	// 	else
-	// 	{
-	// 		elog(WARNING, "Invalid SERVER OPTION > '%s'", def->defname);
-	// 	}
-	// }
-
-	// foreach (cell, state->foreign_table->options)
-	// {
-	// 	DefElem *def = lfirst_node(DefElem, cell);
-
-	// 	if (strcmp(OAI_NODE_METADATAPREFIX, def->defname) == 0)
-	// 	{
-	// 		state->metadataPrefix = defGetString(def);
-	// 	}
-	// 	else if (strcmp(OAI_NODE_SETSPEC, def->defname) == 0)
-	// 	{
-	// 		state->set = defGetString(def);
-	// 	}
-	// 	else if (strcmp(OAI_NODE_FROM, def->defname) == 0)
-	// 	{
-	// 		state->from = defGetString(def);
-	// 	}
-	// 	else if (strcmp(OAI_NODE_UNTIL, def->defname) == 0)
-	// 	{
-	// 		state->until = defGetString(def);
-	// 	}
-	// }
-
-	// OAIRequestPlanner(state, baserel);
 	baserel->fdw_private = state;
 }
 
@@ -1931,7 +1843,7 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState **state)
 	}
 	else
 	{
-		OAIRecord *record = (OAIRecord *)palloc(sizeof(OAIRecord));
+		OAIRecord *record;
 		ListCell *cell;
 
 		cell = list_nth_cell((*state)->records, (*state)->pageindex);
@@ -2087,7 +1999,7 @@ static TupleTableSlot *OAIFdwIterateForeignScan(ForeignScanState *node)
 
 	TupleTableSlot *slot = node->ss.ss_ScanTupleSlot;
 	struct OAIFdwState *state = (struct OAIFdwState *)node->fdw_state;
-	OAIRecord *record = (OAIRecord *)palloc(sizeof(OAIRecord));
+	OAIRecord *record;
 	MemoryContext old_cxt;
 
 	elog(DEBUG2, "%s called.", __func__);
@@ -2125,7 +2037,6 @@ static TupleTableSlot *OAIFdwIterateForeignScan(ForeignScanState *node)
 		 * No further records to be retrieved. Let's clean up the XML parser 
 		 * before ending the query.
 		 */
-		xmlFreeDoc(state->xmldoc);
 		xmlCleanupParser();
 		MemoryContextDelete(state->oaicxt);
 	}
@@ -2361,6 +2272,9 @@ static void LoadOAIRecords(struct OAIFdwState **state)
 			}
 		}
 	}
+
+	if((*state)->xmldoc)
+		xmlFreeDoc((*state)->xmldoc);
 }
 
 static void appendTextArray(ArrayType **array, char *text_element)
