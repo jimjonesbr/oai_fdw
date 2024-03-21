@@ -6,29 +6,28 @@
    "maintainer": [
       "Jim Jones <jim.jones@uni-muenster.de>"
    ],
-   "license": {
-      "mit": "http://en.wikipedia.org/wiki/MIT_License"
-   },
+   "license": "mit",
+   "provides": {
+      "oai_fdw": {
+        "file": "oai_fdw--1.9.sql",
+        "docfile": "README.md",
+        "version": "1.9.0",
+        "abstract": "OAI FDW wrapper"
+      }
+    },
    "prereqs": {
       "runtime": {
          "requires": {
-            "PostgreSQL": "11"
-         },
-         "recommends": {
-            "PostgreSQL": "16"
+            "PostgreSQL": "11.0.0"
+         }
+      },
+      "test": {
+         "requires": {
+            "plpgsql": 0
          }
       }
    },
-   "provides": {
-     "oai_fdw": {
-       "file": "oai_fdw--1.9.sql",
-       "docfile": "README.md",
-       "version": "1.9.0",
-       "abstract": "OAI FDW wrapper"
-     }
-   },
    "resources": {
-      "homepage": "https://github.com/jimjonesbr/oai_fdw",
       "bugtracker": {
          "web": "https://github.com/jimjonesbr/oai_fdw/issues"
       },
