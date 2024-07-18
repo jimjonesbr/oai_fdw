@@ -1,5 +1,11 @@
-oai_fdw 1.9
+oai_fdw 1.10
 yyyy-mm-dd
+
+ * New Features *
+   - PostgreSQL 17 support.
+
+oai_fdw 1.9
+2024-03-21
 
  * New Features *
    - This feature defines a mapping of a PostgreSQL user to an user in the target 

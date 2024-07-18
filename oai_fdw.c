@@ -61,7 +61,7 @@
 #include "access/reloptions.h"
 #include "catalog/pg_namespace.h"
 
-#define OAI_FDW_VERSION "1.9"
+#define OAI_FDW_VERSION "1.10"
 #define OAI_REQUEST_LISTRECORDS "ListRecords"
 #define OAI_REQUEST_LISTIDENTIFIERS "ListIdentifiers"
 #define OAI_REQUEST_IDENTIFY "Identify"
@@ -1793,7 +1793,10 @@ static void OAIFdwGetForeignPaths(PlannerInfo *root, RelOptInfo *baserel, Oid fo
 												 NIL,				/* no pathkeys */
 												 NULL,				/* no required outer relids */
 												 NULL,				/* no fdw_outerpath */
-												 NIL);				/* no fdw_private */
+#if PG_VERSION_NUM >= 170000
+												 NIL,   			/* no fdw_restrictinfo */
+#endif  /* PG_VERSION_NUM */
+												 NULL);				/* no fdw_private */
 	add_path(baserel, path);
 }
 
@@ -1820,7 +1823,7 @@ static void OAIFdwBeginForeignScan(ForeignScanState *node, int eflags)
 {
 	ForeignScan *fs = (ForeignScan *)node->ss.ps.plan;
 	OAIFdwState *state = (OAIFdwState *)linitial(fs->fdw_private);
-	EState *estate = node->ss.ps.state;
+	//EState *estate = node->ss.ps.state;
 
 	if (eflags & EXEC_FLAG_EXPLAIN_ONLY)
 		return;
@@ -1829,7 +1832,7 @@ static void OAIFdwBeginForeignScan(ForeignScanState *node, int eflags)
 
 	xmlInitParser();
 
-	state->oaicxt = AllocSetContextCreate(estate->es_query_cxt,
+	state->oaicxt = AllocSetContextCreate(CurrentMemoryContext,
 										  "oai_fdw_ctx",
 										  ALLOCSET_DEFAULT_SIZES);
 }
