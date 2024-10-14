@@ -10,7 +10,7 @@
    "provides": {
       "oai_fdw": {
          "abstract": "OAI-PMH foreign data wrapper for PostgreSQL",
-         "file": "oai_fdw--1.9.sql",
+         "file": "oai_fdw--1.10.sql",
          "docfile": "README.md",
          "version": "1.10.0"
       }
