@@ -787,6 +787,9 @@ static List *GetIdentity(OAIFdwState *state)
 		xmlNodePtr Identity;
 		xmlNodePtr xmlroot = xmlDocGetRootElement(state->xmldoc);
 
+		if (xmlroot == NULL)
+			elog(ERROR, "invalid root element for %s response", state->requestVerb);
+
 		for (oai_root = xmlroot->children; oai_root != NULL; oai_root = oai_root->next)
 		{
 			if (oai_root->type != XML_ELEMENT_NODE)
@@ -843,6 +846,9 @@ static List *GetSets(OAIFdwState *state)
 		xmlNodePtr ListSets;
 		xmlNodePtr SetElement;
 		xmlNodePtr xmlroot = xmlDocGetRootElement(state->xmldoc);
+
+		if (xmlroot == NULL)
+			elog(ERROR, "invalid root element for %s response", state->requestVerb);
 
 		for (oai_root = xmlroot->children; oai_root != NULL; oai_root = oai_root->next)
 		{
@@ -916,6 +922,9 @@ static List *GetMetadataFormats(OAIFdwState *state)
 		xmlNodePtr ListMetadataFormats;
 		xmlNodePtr MetadataElement;
 		xmlNodePtr xmlroot = xmlDocGetRootElement(state->xmldoc);
+
+		if (xmlroot == NULL)
+			elog(ERROR, "invalid root element for %s response", state->requestVerb);
 
 		for (oai_root = xmlroot->children; oai_root != NULL; oai_root = oai_root->next)
 		{
@@ -1342,7 +1351,7 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 static void OAIRequestPlanner(OAIFdwState *state, RelOptInfo *baserel)
 {
 	List *conditions = baserel->baserestrictinfo;
-	bool hasContentForeignColumn = false;
+	bool hasContentForeignColumn = false;	
 
 #if PG_VERSION_NUM < 130000
 	Relation rel = heap_open(state->foreign_table->relid, NoLock);
@@ -1350,6 +1359,7 @@ static void OAIRequestPlanner(OAIFdwState *state, RelOptInfo *baserel)
 	Relation rel = table_open(state->foreign_table->relid, NoLock);
 #endif
 
+	char *relname = NameStr(rel->rd_rel->relname);
 	elog(DEBUG1, "%s called.", __func__);
 
 	/* The default request type is OAI_REQUEST_LISTRECORDS.
@@ -1372,6 +1382,8 @@ static void OAIRequestPlanner(OAIFdwState *state, RelOptInfo *baserel)
 			if (strcmp(def->defname, OAI_NODE_OPTION) == 0)
 			{
 				char *option_value = defGetString(def);
+				char *attname = NameStr(rel->rd_att->attrs[i].attname);
+				int atttypid = rel->rd_att->attrs[i].atttypid;
 
 				if (strcmp(option_value, OAI_NODE_STATUS) == 0)
 				{
@@ -1381,24 +1393,20 @@ static void OAIRequestPlanner(OAIFdwState *state, RelOptInfo *baserel)
 						ereport(ERROR,
 								(errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
 								 errmsg("invalid data type for '%s.%s': %d",
-										NameStr(rel->rd_rel->relname),
-										NameStr(rel->rd_att->attrs[i].attname),
-										rel->rd_att->attrs[i].atttypid),
+										relname, attname, atttypid),
 								 errhint("OAI %s must be of type 'boolean'.",
 										 OAI_NODE_STATUS)));
 					}
 				}
 				else if (strcmp(option_value, OAI_NODE_IDENTIFIER) == 0 || strcmp(option_value, OAI_NODE_METADATAPREFIX) == 0)
 				{
-					if (rel->rd_att->attrs[i].atttypid != TEXTOID &&
-						rel->rd_att->attrs[i].atttypid != VARCHAROID)
+					if (atttypid != TEXTOID &&
+						atttypid != VARCHAROID)
 					{
 						ereport(ERROR,
 								(errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
 								 errmsg("invalid data type for '%s.%s': %d",
-										NameStr(rel->rd_rel->relname),
-										NameStr(rel->rd_att->attrs[i].attname),
-										rel->rd_att->attrs[i].atttypid),
+										relname, attname, atttypid),
 								 errhint("OAI %s must be of type 'text' or 'varchar'.",
 										 option_value)));
 					}
@@ -1407,16 +1415,14 @@ static void OAIRequestPlanner(OAIFdwState *state, RelOptInfo *baserel)
 				{
 					hasContentForeignColumn = true;
 
-					if (rel->rd_att->attrs[i].atttypid != TEXTOID &&
-						rel->rd_att->attrs[i].atttypid != VARCHAROID &&
-						rel->rd_att->attrs[i].atttypid != XMLOID)
+					if (atttypid != TEXTOID &&
+						atttypid != VARCHAROID &&
+						atttypid != XMLOID)
 					{
 						ereport(ERROR,
 								(errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
 								 errmsg("invalid data type for '%s.%s': %d",
-										NameStr(rel->rd_rel->relname),
-										NameStr(rel->rd_att->attrs[i].attname),
-										rel->rd_att->attrs[i].atttypid),
+										relname, attname, atttypid),
 								 errhint("OAI %s expects one of the following types: 'xml', 'text' or 'varchar'.",
 										 OAI_NODE_CONTENT)));
 					}
@@ -1429,9 +1435,7 @@ static void OAIRequestPlanner(OAIFdwState *state, RelOptInfo *baserel)
 						ereport(ERROR,
 								(errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
 								 errmsg("invalid data type for '%s.%s': %d",
-										NameStr(rel->rd_rel->relname),
-										NameStr(rel->rd_att->attrs[i].attname),
-										rel->rd_att->attrs[i].atttypid),
+										relname, attname, atttypid),
 								 errhint("OAI %s expects one of the following types: 'text[]', 'varchar[]'.",
 										 OAI_NODE_SETSPEC)));
 					}
@@ -1443,9 +1447,7 @@ static void OAIRequestPlanner(OAIFdwState *state, RelOptInfo *baserel)
 						ereport(ERROR,
 								(errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
 								 errmsg("invalid data type for '%s.%s': %d",
-										NameStr(rel->rd_rel->relname),
-										NameStr(rel->rd_att->attrs[i].attname),
-										rel->rd_att->attrs[i].atttypid),
+										relname, attname, atttypid),
 								 errhint("OAI %s expects a 'timestamp'.",
 										 OAI_NODE_DATESTAMP)));
 					}
@@ -1461,7 +1463,7 @@ static void OAIRequestPlanner(OAIFdwState *state, RelOptInfo *baserel)
 	{
 		state->requestVerb = OAI_REQUEST_LISTIDENTIFIERS;
 		elog(DEBUG1, "  %s: the foreign table '%s' has no 'content' OAI node. Request type set to '%s'",
-			 __func__, NameStr(rel->rd_rel->relname), OAI_REQUEST_LISTIDENTIFIERS);
+			 __func__, relname, OAI_REQUEST_LISTIDENTIFIERS);
 	}
 
 	if (state->numfdwcols != 0)

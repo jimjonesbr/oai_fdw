@@ -57,7 +57,7 @@ CREATE EXTENSION oai_fdw;
 To install an specific version add the full version number in the `WITH VERSION` clause
 
 ```sql
-CREATE EXTENSION oai_fdw WITH VERSION '1.8';
+CREATE EXTENSION oai_fdw WITH VERSION '1.10';
 ```
 
 To run the predefined regression tests run `make installcheck` with the user `postgres`:
@@ -712,10 +712,10 @@ Shows the version of the installed OAI FDW and its main libraries.
 
 ```sql
 SELECT OAI_Version();
-                                                                                     
-oai fdw = 1.2.0, libxml = 2.9.10, libcurl = libcurl/7.74.0 OpenSSL/1.1.1n zlib/1.2.11 brotli/1.0.9 libidn2/2.3.0 libpsl/0.21.0 (+libidn2/2.3.0) libssh2/1.9.0 nghttp2/1.43.0 librtmp/2.3
+                                                                                                     oai_version                                                                                                     
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ oai fdw = 1.10, libxml = 2.9.14, libcurl = libcurl/7.88.1 OpenSSL/3.0.14 zlib/1.2.13 brotli/1.0.9 zstd/1.5.4 libidn2/2.3.3 libpsl/0.21.2 (+libidn2/2.3.3) libssh2/1.10.0 nghttp2/1.52.0 librtmp/2.3 OpenLDAP/2.5.13
 (1 row)
-
 ```
 
 ### [OAI_HarvestTable](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#oai_harvesttable)
@@ -788,7 +788,6 @@ To build the image save it in a `Dockerfile` and  run the following command in t
 ```bash
  $ docker build -t oai_fdw_image .
 ```
-
 
 After successfully building the image you're ready to `run` or `create` the container ..
  

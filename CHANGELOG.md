@@ -1,10 +1,15 @@
-oai_fdw 1.10
-yyyy-mm-dd
+### oai_fdw 1.10
+2025-07-31
 
- * New Features *
-   - PostgreSQL 17 support.
+ * New Features
+   
+   PostgreSQL 17 support.
 
-oai_fdw 1.9
+  * Bug fixes
+
+    A safeguard has been introduced to handle cases where xmlDocGetRootElement fails to parse the root node of an XML document. Instead of proceeding with an empty set, an error message is now displayed to inform the user of the issue.
+
+### oai_fdw 1.9
 2024-03-21
 
  * New Features *
@@ -15,7 +20,7 @@ oai_fdw 1.9
    - This fix a fixed string length limit in the support functions (512 bytes). I
      mistakenly assumed that it was defined like that in the OAI-PMH Standard.
 
-oai_fdw 1.8
+### oai_fdw 1.8
 2023-11-15
 
  * Performance improvements
@@ -26,13 +31,13 @@ oai_fdw 1.8
       loading the xml response, so that they can accessed later on for
       building the tuples.
 
-oai_fdw 1.7
+### oai_fdw 1.7
 2023-09-22
 
  * New Features *
    -  Adds PostgreSQL 16 support
 
-oai_fdw 1.6
+### oai_fdw 1.6
 2023-04-11
 
  * New Features *
@@ -44,14 +49,14 @@ oai_fdw 1.6
    - This bug fix implements a http response validation to avoid a server crash
      when a support function receives an invalid OAI document from the repository.
 
-oai_fdw 1.5.1
+### oai_fdw 1.5.1
 2023-04-11
 
  * Bug Fixes *
    - This bug fix implements a http response validation to avoid a server crash
      when a support function receives an invalid OAI document from the repository.
 
-oai_fdw 1.5.0
+### oai_fdw 1.5.0
 2022-11-15
 
  * Enhancements *
@@ -63,7 +68,7 @@ oai_fdw 1.5.0
    - add missing memory contexts for oai loader and parser.
 
 
-oai_fdw 1.4.0
+### oai_fdw 1.4.0
 2022-10-27
  
  * New Features *
@@ -73,13 +78,13 @@ oai_fdw 1.4.0
  * Bug Fixes *
    - fix memory leak in xmldoc for requests with resumption tokens
 
-oai_fdw 1.3.0
+### oai_fdw 1.3.0
 2022-10-21
 
  * New Features *
    - Connection retry option for HTTP requests (CREATE SERVER).
    
-oai_fdw 1.2.0
+### oai_fdw 1.2.0
 2022-10-19
 
  * New Features *
@@ -94,7 +99,7 @@ oai_fdw 1.2.0
 * Enhancements *
    - Add regression tests for PostgreSQL 15.
 
-oai_fdw 1.1.0
+### oai_fdw 1.1.0
 2022-10-01
 
  * New Features *
@@ -110,7 +115,7 @@ oai_fdw 1.1.0
    - URls with protocols other than HTTP and HTTPS are now rejected before execution, as other
      protocols are not supported in the OAI-PMH Standard.
 
-oai_fdw 1.0.0
+### oai_fdw 1.0.0
 2022-09-05
 
  * Features *
