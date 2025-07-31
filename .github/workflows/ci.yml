@@ -4,13 +4,11 @@ on:
     paths-ignore:
       - '*.md'
       - '*.json'
-      - 'NEWS'
       - 'LICENSE'
   pull_request:
     paths-ignore:
       - '*.md'
       - '*.json'
-      - 'NEWS'
       - 'LICENSE'
 jobs:
   test:

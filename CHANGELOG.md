@@ -1,13 +1,16 @@
+### oai_fdw 1.11
+yyyy-mm-dd
+
+* Bug fixes
+
+  A safeguard has been introduced to handle cases where xmlDocGetRootElement fails to parse the root node of an XML document. Instead of proceeding with an empty set, an error message is now displayed to inform the user of the issue.
+
 ### oai_fdw 1.10
-2025-07-31
+2024-10-14
 
  * New Features
    
    PostgreSQL 17 support.
-
-  * Bug fixes
-
-    A safeguard has been introduced to handle cases where xmlDocGetRootElement fails to parse the root node of an XML document. Instead of proceeding with an empty set, an error message is now displayed to inform the user of the issue.
 
 ### oai_fdw 1.9
 2024-03-21

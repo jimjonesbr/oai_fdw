@@ -78,7 +78,7 @@ ALTER EXTENSION oai_fdw UPDATE;
 To update to an specific version use `UPDATE TO` and the full version number
 
 ```sql
-ALTER EXTENSION oai_fdw UPDATE TO '1.8';
+ALTER EXTENSION oai_fdw UPDATE TO '1.10';
 ```
 
 ## [Usage](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#usage)
