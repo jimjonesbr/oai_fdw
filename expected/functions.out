@@ -8,12 +8,14 @@ SELECT * FROM OAI_ListMetadataFormats('oai_server_ulb')
 ORDER BY metadataprefix COLLATE "C";
  metadataprefix |                               schema                               |              metadatanamespace              
 ----------------+--------------------------------------------------------------------+---------------------------------------------
+ arcmets        | http://www.loc.gov/standards/mets/mets.xsd                         | http://www.loc.gov/METS/
  epicur         | http://www.persistent-identifier.de/xepicur/version1.0/xepicur.xsd | urn:nbn:de:1111-2004033116
+ marcexport     | http://www.loc.gov/standards/marcxml/schema/MARC21slim.xsd         | http://www.loc.gov/MARC21/slim
  mets           | http://www.loc.gov/standards/mets/mets.xsd                         | http://www.loc.gov/METS/
  mods           | http://www.loc.gov/standards/mods/v3/mods-3-0.xsd                  | http://www.loc.gov/mods/v3
  oai_dc         | http://www.openarchives.org/OAI/2.0/oai_dc.xsd                     | http://www.openarchives.org/OAI/2.0/oai_dc/
  rawmods        | http://www.loc.gov/standards/mods/v3/mods-3-0.xsd                  | http://www.loc.gov/mods/v3
-(5 rows)
+(7 rows)
 
 SELECT * FROM OAI_ListMetadataFormats('oai_server_dnb') 
 ORDER BY metadataprefix COLLATE "C";
