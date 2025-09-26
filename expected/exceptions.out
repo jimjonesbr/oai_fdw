@@ -75,7 +75,7 @@ SELECT * FROM oai_table_err13 LIMIT 1;
 WARNING:    ExecuteOAIRequest (ListIdentifiers): request to 'ftp://services.dnb.de/oai/repository' failed (1)
 WARNING:    ExecuteOAIRequest (ListIdentifiers): request to 'ftp://services.dnb.de/oai/repository' failed (2)
 WARNING:    ExecuteOAIRequest (ListIdentifiers): request to 'ftp://services.dnb.de/oai/repository' failed (3)
-ERROR:  ExecuteOAIRequest => (1) Protocol "ftp" disabled
+ERROR:  ExecuteOAIRequest => (1) Protocol "ftp" not supported or disabled in libcurl
 
 -- URL with an invalid protocol
 CREATE SERVER oai_server_err14 FOREIGN DATA WRAPPER oai_fdw 
