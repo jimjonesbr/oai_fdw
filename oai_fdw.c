@@ -61,7 +61,7 @@
 #include "access/reloptions.h"
 #include "catalog/pg_namespace.h"
 
-#define OAI_FDW_VERSION "1.11-dev"
+#define OAI_FDW_VERSION "1.11"
 #define OAI_REQUEST_LISTRECORDS "ListRecords"
 #define OAI_REQUEST_LISTIDENTIFIERS "ListIdentifiers"
 #define OAI_REQUEST_IDENTIFY "Identify"
@@ -1352,6 +1352,7 @@ static void OAIRequestPlanner(OAIFdwState *state, RelOptInfo *baserel)
 {
 	List *conditions = baserel->baserestrictinfo;
 	bool hasContentForeignColumn = false;	
+	TupleDesc tupdesc;
 
 #if PG_VERSION_NUM < 130000
 	Relation rel = heap_open(state->foreign_table->relid, NoLock);
@@ -1359,8 +1360,10 @@ static void OAIRequestPlanner(OAIFdwState *state, RelOptInfo *baserel)
 	Relation rel = table_open(state->foreign_table->relid, NoLock);
 #endif
 
-	char *relname = NameStr(rel->rd_rel->relname);
+	char *relname = NameStr(rel->rd_rel->relname);	
 	elog(DEBUG1, "%s called.", __func__);
+
+	tupdesc = rel->rd_att;
 
 	/* The default request type is OAI_REQUEST_LISTRECORDS.
 	 * This can be altered depending on the columns used
@@ -1373,6 +1376,7 @@ static void OAIRequestPlanner(OAIFdwState *state, RelOptInfo *baserel)
 	{
 		List *options = GetForeignColumnOptions(state->foreign_table->relid, i + 1);
 		ListCell *lc;
+		Form_pg_attribute attr = TupleDescAttr(tupdesc, i);
 
 		foreach (lc, options)
 		{
@@ -1382,31 +1386,31 @@ static void OAIRequestPlanner(OAIFdwState *state, RelOptInfo *baserel)
 			if (strcmp(def->defname, OAI_NODE_OPTION) == 0)
 			{
 				char *option_value = defGetString(def);
-				char *attname = NameStr(rel->rd_att->attrs[i].attname);
-				int atttypid = rel->rd_att->attrs[i].atttypid;
+				char *attname = NameStr(attr->attname);
+				//int atttypid = rel->rd_att->attrs[i].atttypid;
 
 				if (strcmp(option_value, OAI_NODE_STATUS) == 0)
 				{
 
-					if (rel->rd_att->attrs[i].atttypid != BOOLOID)
+					if (attr->atttypid != BOOLOID)
 					{
 						ereport(ERROR,
 								(errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
 								 errmsg("invalid data type for '%s.%s': %d",
-										relname, attname, atttypid),
+										relname, attname, attr->atttypid),
 								 errhint("OAI %s must be of type 'boolean'.",
 										 OAI_NODE_STATUS)));
 					}
 				}
 				else if (strcmp(option_value, OAI_NODE_IDENTIFIER) == 0 || strcmp(option_value, OAI_NODE_METADATAPREFIX) == 0)
 				{
-					if (atttypid != TEXTOID &&
-						atttypid != VARCHAROID)
+					if (attr->atttypid != TEXTOID &&
+						attr->atttypid != VARCHAROID)
 					{
 						ereport(ERROR,
 								(errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
 								 errmsg("invalid data type for '%s.%s': %d",
-										relname, attname, atttypid),
+										relname, attname, attr->atttypid),
 								 errhint("OAI %s must be of type 'text' or 'varchar'.",
 										 option_value)));
 					}
@@ -1415,39 +1419,39 @@ static void OAIRequestPlanner(OAIFdwState *state, RelOptInfo *baserel)
 				{
 					hasContentForeignColumn = true;
 
-					if (atttypid != TEXTOID &&
-						atttypid != VARCHAROID &&
-						atttypid != XMLOID)
+					if (attr->atttypid != TEXTOID &&
+						attr->atttypid != VARCHAROID &&
+						attr->atttypid != XMLOID)
 					{
 						ereport(ERROR,
 								(errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
 								 errmsg("invalid data type for '%s.%s': %d",
-										relname, attname, atttypid),
+										relname, attname, attr->atttypid),
 								 errhint("OAI %s expects one of the following types: 'xml', 'text' or 'varchar'.",
 										 OAI_NODE_CONTENT)));
 					}
 				}
 				else if (strcmp(option_value, OAI_NODE_SETSPEC) == 0)
 				{
-					if (rel->rd_att->attrs[i].atttypid != TEXTARRAYOID &&
-						rel->rd_att->attrs[i].atttypid != VARCHARARRAYOID)
+					if (attr->atttypid != TEXTARRAYOID &&
+						attr->atttypid != VARCHARARRAYOID)
 					{
 						ereport(ERROR,
 								(errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
 								 errmsg("invalid data type for '%s.%s': %d",
-										relname, attname, atttypid),
+										relname, attname, attr->atttypid),
 								 errhint("OAI %s expects one of the following types: 'text[]', 'varchar[]'.",
 										 OAI_NODE_SETSPEC)));
 					}
 				}
 				else if (strcmp(option_value, OAI_NODE_DATESTAMP) == 0)
 				{
-					if (rel->rd_att->attrs[i].atttypid != TIMESTAMPOID)
+					if (attr->atttypid != TIMESTAMPOID)
 					{
 						ereport(ERROR,
 								(errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
 								 errmsg("invalid data type for '%s.%s': %d",
-										relname, attname, atttypid),
+										relname, attname, attr->atttypid),
 								 errhint("OAI %s expects a 'timestamp'.",
 										 OAI_NODE_DATESTAMP)));
 					}
@@ -1520,6 +1524,7 @@ static char *GetOAINodeFromColumn(Oid foreigntableid, int16 attnum)
 {
 
 	List *options;
+	TupleDesc tupdesc;
 	char *optionValue = NULL;
 
 #if PG_VERSION_NUM < 130000
@@ -1529,14 +1534,16 @@ static char *GetOAINodeFromColumn(Oid foreigntableid, int16 attnum)
 #endif
 
 	elog(DEBUG1, "  %s called", __func__);
+	tupdesc = rel->rd_att;
 
 	for (int i = 0; i < rel->rd_att->natts; i++)
 	{
 
 		ListCell *lc;
+		Form_pg_attribute attr = TupleDescAttr(tupdesc, i);
 		options = GetForeignColumnOptions(foreigntableid, i + 1);
 
-		if (rel->rd_att->attrs[i].attnum == attnum)
+		if (attr->attnum == attnum)
 		{
 
 			foreach (lc, options)
@@ -1788,17 +1795,20 @@ static void OAIFdwGetForeignPaths(PlannerInfo *root, RelOptInfo *baserel, Oid fo
 {
 
 	Path *path = (Path *)create_foreignscan_path(root, baserel,
-												 NULL,				/* default pathtarget */
-												 baserel->rows,		/* rows */
+												 NULL,			/* default pathtarget */
+												 baserel->rows, /* rows */
+#if PG_VERSION_NUM >= 180000
+												 0, /* no parallel pathflags */
+#endif
 												 1,					/* startup cost */
 												 1 + baserel->rows, /* total cost */
 												 NIL,				/* no pathkeys */
 												 NULL,				/* no required outer relids */
 												 NULL,				/* no fdw_outerpath */
 #if PG_VERSION_NUM >= 170000
-												 NIL,   			/* no fdw_restrictinfo */
-#endif  /* PG_VERSION_NUM */
-												 NULL);				/* no fdw_private */
+												 NIL,	/* no fdw_restrictinfo */
+#endif													/* PG_VERSION_NUM */
+												 NULL); /* no fdw_private */
 	add_path(baserel, path);
 }
 

@@ -1,5 +1,9 @@
 ### oai_fdw 1.11
-yyyy-mm-dd
+2025-09-26
+
+* New Features
+
+  PostgreSQL 18 support.
 
 * Bug fixes
 

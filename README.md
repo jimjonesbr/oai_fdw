@@ -57,7 +57,7 @@ CREATE EXTENSION oai_fdw;
 To install an specific version add the full version number in the `WITH VERSION` clause
 
 ```sql
-CREATE EXTENSION oai_fdw WITH VERSION '1.10';
+CREATE EXTENSION oai_fdw WITH VERSION '1.11';
 ```
 
 To run the predefined regression tests run `make installcheck` with the user `postgres`:
@@ -78,7 +78,7 @@ ALTER EXTENSION oai_fdw UPDATE;
 To update to an specific version use `UPDATE TO` and the full version number
 
 ```sql
-ALTER EXTENSION oai_fdw UPDATE TO '1.10';
+ALTER EXTENSION oai_fdw UPDATE TO '1.11';
 ```
 
 ## [Usage](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#usage)
@@ -712,9 +712,9 @@ Shows the version of the installed OAI FDW and its main libraries.
 
 ```sql
 SELECT OAI_Version();
-                                                                                                     oai_version                                                                                                     
----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- oai fdw = 1.10, libxml = 2.9.14, libcurl = libcurl/7.88.1 OpenSSL/3.0.14 zlib/1.2.13 brotli/1.0.9 zstd/1.5.4 libidn2/2.3.3 libpsl/0.21.2 (+libidn2/2.3.3) libssh2/1.10.0 nghttp2/1.52.0 librtmp/2.3 OpenLDAP/2.5.13
+                                                                                                  oai_version                                                                                                   
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ oai fdw = 1.11, libxml = 2.9.14, libcurl = libcurl/8.14.1 OpenSSL/3.5.1 zlib/1.3.1 brotli/1.1.0 zstd/1.5.7 libidn2/2.3.8 libpsl/0.21.2 libssh2/1.11.1 nghttp2/1.64.0 nghttp3/1.8.0 librtmp/2.3 OpenLDAP/2.6.10
 (1 row)
 ```
 
