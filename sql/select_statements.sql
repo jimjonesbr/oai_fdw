@@ -53,15 +53,3 @@ SELECT *
 FROM dnb_zdb_oai_dc_nocontent
 WHERE datestamp BETWEEN '2021-01-03' AND '2021-01-04';
 
-CREATE FOREIGN TABLE davidrumsey_oai_dc (
-  id text                OPTIONS (oai_node 'identifier'), 
-  content xml            OPTIONS (oai_node 'content'), 
-  setspec text[]            OPTIONS (oai_node 'setspec'), 
-  datestamp timestamp   OPTIONS (oai_node 'datestamp'),
-  meta text            OPTIONS (oai_node 'metadataprefix')
- ) SERVER oai_server_davidrumsey OPTIONS (metadataprefix 'oai_dc');
-
--- SELECT using timestamps hh24:mm:ss hh24:mi:ss.
-SELECT ROW_NUMBER() OVER (), id, content IS DOCUMENT AS content, setspec, datestamp, meta
-FROM davidrumsey_oai_dc 
-WHERE datestamp BETWEEN '2022-07-04 03:23:24' AND '2022-07-04 03:23:25';

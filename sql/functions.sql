@@ -11,9 +11,6 @@ ORDER BY metadataprefix COLLATE "C";
 SELECT * FROM OAI_ListMetadataFormats('oai_server_bjihs') 
 ORDER BY metadataprefix COLLATE "C";
 
-SELECT * FROM OAI_ListMetadataFormats('oai_server_davidrumsey') 
-ORDER BY metadataprefix COLLATE "C";
-
 SELECT * FROM OAI_ListSets('oai_server_ulb') 
 WHERE setname IS NOT NULL AND setspec IS NOT NULL 
 ORDER BY setname  COLLATE "C"
@@ -25,11 +22,6 @@ ORDER BY setname  COLLATE "C"
 FETCH FIRST ROW ONLY;
 
 SELECT * FROM OAI_ListSets('oai_server_bjihs') 
-WHERE setname IS NOT NULL AND setspec IS NOT NULL 
-ORDER BY setname  COLLATE "C"
-FETCH FIRST ROW ONLY;
-
-SELECT * FROM OAI_ListSets('oai_server_davidrumsey') 
 WHERE setname IS NOT NULL AND setspec IS NOT NULL 
 ORDER BY setname  COLLATE "C"
 FETCH FIRST ROW ONLY;
@@ -53,6 +45,4 @@ ORDER BY name COLLATE "C";
 SELECT * FROM OAI_Identify('oai_server_bjihs')
 ORDER BY name COLLATE "C";
 
-SELECT * FROM OAI_Identify('oai_server_davidrumsey')
-ORDER BY name COLLATE "C";
 

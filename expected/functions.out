@@ -49,7 +49,7 @@ WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/
 WARNING:    ExecuteOAIRequest (ListMetadataFormats): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (2)
 WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain; charset=utf-8"
 WARNING:    ExecuteOAIRequest (ListMetadataFormats): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (3)
-ERROR:  ExecuteOAIRequest => (23) Failed writing header
+ERROR:  ExecuteOAIRequest => (23) Failure writing output to destination, passed 41 returned 0
 
 SELECT * FROM OAI_ListMetadataFormats('oai_server_bjihs') 
 ORDER BY metadataprefix COLLATE "C";
@@ -61,13 +61,6 @@ ORDER BY metadataprefix COLLATE "C";
  oai_marc       | http://www.openarchives.org/OAI/1.1/oai_marc.xsd           | http://www.openarchives.org/OAI/1.1/oai_marc
  rfc1807        | http://www.openarchives.org/OAI/1.1/rfc1807.xsd            | http://info.internet.isi.edu:80/in-notes/rfc/files/rfc1807.txt
 (5 rows)
-
-SELECT * FROM OAI_ListMetadataFormats('oai_server_davidrumsey') 
-ORDER BY metadataprefix COLLATE "C";
- metadataprefix |                     schema                     |              metadatanamespace              
-----------------+------------------------------------------------+---------------------------------------------
- oai_dc         | http://www.openarchives.org/OAI/2.0/oai_dc.xsd | http://www.openarchives.org/OAI/2.0/oai_dc/
-(1 row)
 
 SELECT * FROM OAI_ListSets('oai_server_ulb') 
 WHERE setname IS NOT NULL AND setspec IS NOT NULL 
@@ -96,15 +89,6 @@ FETCH FIRST ROW ONLY;
  bjihs:ACC | Anais de Conferências Científicas
 (1 row)
 
-SELECT * FROM OAI_ListSets('oai_server_davidrumsey') 
-WHERE setname IS NOT NULL AND setspec IS NOT NULL 
-ORDER BY setname  COLLATE "C"
-FETCH FIRST ROW ONLY;
-  setspec   |                setname                 
-------------+----------------------------------------
- RUMSEY~8~1 | David Rumsey Historical Map Collection
-(1 row)
-
 SELECT count(*) > 0 
 FROM OAI_ListSets('oai_server_dnb') 
 WHERE setname IS NOT NULL AND setspec IS NOT NULL;
@@ -122,7 +106,7 @@ WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/
 WARNING:    ExecuteOAIRequest (ListSets): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (2)
 WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain; charset=utf-8"
 WARNING:    ExecuteOAIRequest (ListSets): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (3)
-ERROR:  ExecuteOAIRequest => (23) Failed writing header
+ERROR:  ExecuteOAIRequest => (23) Failure writing output to destination, passed 41 returned 0
 
 SELECT * FROM OAI_Identify('oai_server_ulb')
 ORDER BY name COLLATE "C";
@@ -159,7 +143,7 @@ WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/
 WARNING:    ExecuteOAIRequest (Identify): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (2)
 WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain; charset=utf-8"
 WARNING:    ExecuteOAIRequest (Identify): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (3)
-ERROR:  ExecuteOAIRequest => (23) Failed writing header
+ERROR:  ExecuteOAIRequest => (23) Failure writing output to destination, passed 41 returned 0
 
 SELECT * FROM OAI_Identify('oai_server_bjihs')
 ORDER BY name COLLATE "C";
@@ -177,17 +161,4 @@ ORDER BY name COLLATE "C";
  protocolVersion   | 2.0
  repositoryName    | Brazilian Journal of Implantology and Health Sciences  
 (11 rows)
-
-SELECT * FROM OAI_Identify('oai_server_davidrumsey')
-ORDER BY name COLLATE "C";
-       name        |                 description                 
--------------------+---------------------------------------------
- adminEmail        | carto@davidrumsey.com
- baseURL           | http://www.davidrumsey.com/luna/servlet/oai
- deletedRecord     | no
- earliestDatestamp | 1979-01-01T00:00:00Z
- granularity       | YYYY-MM-DDThh:mm:ssZ
- protocolVersion   | 2.0
- repositoryName    | David Rumsey Historical Maps
-(7 rows)
 

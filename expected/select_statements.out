@@ -104,30 +104,3 @@ WHERE datestamp BETWEEN '2021-01-03' AND '2021-01-04';
  oai:dnb.de/zdb/1224398580 | {zdb}   | Sun Jan 03 17:42:56 2021 | oai_dc
 (3 rows)
 
-CREATE FOREIGN TABLE davidrumsey_oai_dc (
-  id text                OPTIONS (oai_node 'identifier'), 
-  content xml            OPTIONS (oai_node 'content'), 
-  setspec text[]            OPTIONS (oai_node 'setspec'), 
-  datestamp timestamp   OPTIONS (oai_node 'datestamp'),
-  meta text            OPTIONS (oai_node 'metadataprefix')
- ) SERVER oai_server_davidrumsey OPTIONS (metadataprefix 'oai_dc');
--- SELECT using timestamps hh24:mm:ss hh24:mi:ss.
-SELECT ROW_NUMBER() OVER (), id, content IS DOCUMENT AS content, setspec, datestamp, meta
-FROM davidrumsey_oai_dc 
-WHERE datestamp BETWEEN '2022-07-04 03:23:24' AND '2022-07-04 03:23:25';
- row_number |                 id                 | content |   setspec    |        datestamp         |  meta  
-------------+------------------------------------+---------+--------------+--------------------------+--------
-          1 | oai:N/A:RUMSEY~8~1~343557~90111455 | t       | {RUMSEY~8~1} | Mon Jul 04 03:23:24 2022 | oai_dc
-          2 | oai:N/A:RUMSEY~8~1~343558~90111458 | t       | {RUMSEY~8~1} | Mon Jul 04 03:23:24 2022 | oai_dc
-          3 | oai:N/A:RUMSEY~8~1~343559~90111459 | t       | {RUMSEY~8~1} | Mon Jul 04 03:23:24 2022 | oai_dc
-          4 | oai:N/A:RUMSEY~8~1~343560~90111464 | t       | {RUMSEY~8~1} | Mon Jul 04 03:23:24 2022 | oai_dc
-          5 | oai:N/A:RUMSEY~8~1~343561~90111465 | t       | {RUMSEY~8~1} | Mon Jul 04 03:23:24 2022 | oai_dc
-          6 | oai:N/A:RUMSEY~8~1~343562~90111462 | t       | {RUMSEY~8~1} | Mon Jul 04 03:23:24 2022 | oai_dc
-          7 | oai:N/A:RUMSEY~8~1~343563~90111463 | t       | {RUMSEY~8~1} | Mon Jul 04 03:23:24 2022 | oai_dc
-          8 | oai:N/A:RUMSEY~8~1~343564~90111466 | t       | {RUMSEY~8~1} | Mon Jul 04 03:23:24 2022 | oai_dc
-          9 | oai:N/A:RUMSEY~8~1~343565~90111467 | t       | {RUMSEY~8~1} | Mon Jul 04 03:23:24 2022 | oai_dc
-         10 | oai:N/A:RUMSEY~8~1~343566~90111468 | t       | {RUMSEY~8~1} | Mon Jul 04 03:23:24 2022 | oai_dc
-         11 | oai:N/A:RUMSEY~8~1~343567~90111469 | t       | {RUMSEY~8~1} | Mon Jul 04 03:23:24 2022 | oai_dc
-         12 | oai:N/A:RUMSEY~8~1~343568~90111470 | t       | {RUMSEY~8~1} | Mon Jul 04 03:23:24 2022 | oai_dc
-(12 rows)
-

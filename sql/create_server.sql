@@ -27,10 +27,6 @@ OPTIONS (url 'https://bjihs.emnuvens.com.br/bjihs/oai');
 CREATE SERVER oai_server_kbnl FOREIGN DATA WRAPPER oai_fdw 
 OPTIONS (url 'http://services.kb.nl/mdo/oai');
 
--- David Rumsey Historical Maps
-CREATE SERVER oai_server_davidrumsey FOREIGN DATA WRAPPER oai_fdw 
-OPTIONS (url 'http://www.davidrumsey.com/luna/servlet/oai');
-
 -- German National Library (with redirect)
 CREATE SERVER oai_server_dnb_redirect FOREIGN DATA WRAPPER oai_fdw 
 OPTIONS (url 'https://services.dnb.de/oai/repository',
