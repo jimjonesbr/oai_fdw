@@ -5,7 +5,7 @@
  * oai_fdw is free software: you can redistribute it and/or modify
  * it under the terms of the MIT Licence.
  *
- * Copyright (C) 2021-2024 University of Münster, Germany
+ * Copyright (C) 2021-2026 University of Münster, Germany
  * Written by Jim Jones <jim.jones@uni-muenster.de>
  *
  **********************************************************************/
