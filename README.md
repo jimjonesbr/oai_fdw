@@ -712,9 +712,9 @@ Shows the version of the installed OAI FDW and its main libraries.
 
 ```sql
 SELECT OAI_Version();
-                                                                                                  oai_version                                                                                                   
-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- oai fdw = 1.11, libxml = 2.9.14, libcurl = libcurl/8.14.1 OpenSSL/3.5.1 zlib/1.3.1 brotli/1.1.0 zstd/1.5.7 libidn2/2.3.8 libpsl/0.21.2 libssh2/1.11.1 nghttp2/1.64.0 nghttp3/1.8.0 librtmp/2.3 OpenLDAP/2.6.10
+                                                                                                    oai_version                                                                                                     
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ oai fdw = 1.12-dev, libxml = 2.9.14, libcurl = libcurl/8.14.1 OpenSSL/3.5.4 zlib/1.3.1 brotli/1.1.0 zstd/1.5.7 libidn2/2.3.8 libpsl/0.21.2 libssh2/1.11.1 nghttp2/1.64.0 nghttp3/1.8.0 librtmp/2.3 OpenLDAP/2.6.10
 (1 row)
 ```
 

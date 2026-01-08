@@ -1,3 +1,4 @@
+\set VERBOSITY terse
 -- No metadataprefix SERVER OPTION
 CREATE SERVER oai_server_err1 FOREIGN DATA WRAPPER oai_fdw 
 OPTIONS (url 'https://services.dnb.de/oai/repository');

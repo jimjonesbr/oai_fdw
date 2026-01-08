@@ -1,3 +1,5 @@
+\set VERBOSITY terse
+
 SELECT OAI_Version() IS NULL;
 SELECT * FROM OAI_ListMetadataFormats('oai_server_ulb') 
 ORDER BY metadataprefix COLLATE "C";

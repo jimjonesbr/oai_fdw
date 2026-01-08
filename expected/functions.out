@@ -1,3 +1,4 @@
+\set VERBOSITY terse
 SELECT OAI_Version() IS NULL;
  ?column? 
 ----------
@@ -49,8 +50,7 @@ WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/
 WARNING:    ExecuteOAIRequest (ListMetadataFormats): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (2)
 WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain; charset=utf-8"
 WARNING:    ExecuteOAIRequest (ListMetadataFormats): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (3)
-ERROR:  ExecuteOAIRequest => (23) Failure writing output to destination, passed 41 returned 0
-
+ERROR:  unable to connect to the OAI repository
 SELECT * FROM OAI_ListMetadataFormats('oai_server_bjihs') 
 ORDER BY metadataprefix COLLATE "C";
  metadataprefix |                           schema                           |                       metadatanamespace                        
@@ -106,8 +106,7 @@ WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/
 WARNING:    ExecuteOAIRequest (ListSets): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (2)
 WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain; charset=utf-8"
 WARNING:    ExecuteOAIRequest (ListSets): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (3)
-ERROR:  ExecuteOAIRequest => (23) Failure writing output to destination, passed 41 returned 0
-
+ERROR:  unable to connect to the OAI repository
 SELECT * FROM OAI_Identify('oai_server_ulb')
 ORDER BY name COLLATE "C";
        name        |                             description                              
@@ -143,8 +142,7 @@ WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/
 WARNING:    ExecuteOAIRequest (Identify): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (2)
 WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain; charset=utf-8"
 WARNING:    ExecuteOAIRequest (Identify): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (3)
-ERROR:  ExecuteOAIRequest => (23) Failure writing output to destination, passed 41 returned 0
-
+ERROR:  unable to connect to the OAI repository
 SELECT * FROM OAI_Identify('oai_server_bjihs')
 ORDER BY name COLLATE "C";
        name        |                                           description                                           

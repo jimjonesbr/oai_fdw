@@ -1,3 +1,4 @@
+\set VERBOSITY terse
 -- No metadataprefix SERVER OPTION
 CREATE SERVER oai_server_err1 FOREIGN DATA WRAPPER oai_fdw 
 OPTIONS (url 'https://services.dnb.de/oai/repository');
@@ -37,7 +38,6 @@ OPTIONS (url 'https://services.dnb.de/oai/repository',
          metadataprefix 'oai_dc',
          connect_timeout '-1');
 ERROR:  invalid connect_timeout: -1
-HINT:  expected values are positive integers (timeout in seconds)
          
 -- Invalid timeout
 CREATE SERVER oai_server_err9 FOREIGN DATA WRAPPER oai_fdw
@@ -45,7 +45,6 @@ OPTIONS (url 'https://services.dnb.de/oai/repository',
          metadataprefix 'oai_dc',
          connect_timeout 'foo');         
 ERROR:  invalid connect_timeout: foo
-HINT:  expected values are positive integers (timeout in seconds)
          
 -- Empty metadataprefix
 CREATE SERVER oai_server_err10 FOREIGN DATA WRAPPER oai_fdw 
@@ -75,8 +74,7 @@ SELECT * FROM oai_table_err13 LIMIT 1;
 WARNING:    ExecuteOAIRequest (ListIdentifiers): request to 'ftp://services.dnb.de/oai/repository' failed (1)
 WARNING:    ExecuteOAIRequest (ListIdentifiers): request to 'ftp://services.dnb.de/oai/repository' failed (2)
 WARNING:    ExecuteOAIRequest (ListIdentifiers): request to 'ftp://services.dnb.de/oai/repository' failed (3)
-ERROR:  ExecuteOAIRequest => (1) Protocol "ftp" disabled
-
+ERROR:  unable to connect to the OAI repository
 -- URL with an invalid protocol
 CREATE SERVER oai_server_err14 FOREIGN DATA WRAPPER oai_fdw 
 OPTIONS (url 'foo://services.dnb.de/oai/repository',
@@ -93,7 +91,6 @@ CREATE SERVER oai_server_err15 FOREIGN DATA WRAPPER oai_fdw
 OPTIONS (url 'https://services.dnb.de/oai/repository',
          connect_retry 'foo');
 ERROR:  invalid connect_retry: foo
-HINT:  expected values are positive integers (retry attempts in case of failure)
 -- Unreachable proxy server
 -- Timeout 1 second
 -- Retry 5 times 
@@ -116,7 +113,6 @@ OPTIONS (url 'https://services.dnb.de/oai/repository',
          connect_timeout '1',
          connect_retry '-5');
 ERROR:  invalid connect_retry: -5
-HINT:  expected values are positive integers (retry attempts in case of failure)
 -- Invalid 'request_redirect' value
 CREATE SERVER oai_server_err18 FOREIGN DATA WRAPPER oai_fdw 
 OPTIONS (url 'https://services.dnb.de/oai/repository',
@@ -155,9 +151,6 @@ CREATE FOREIGN TABLE oai_table_err1 (
  SERVER oai_server_ulb OPTIONS (setspec 'ulbmsuo',
                                 metadataPrefix 'oai_dc');
 ERROR:  invalid oai_node option 'foo'
-HINT:  Valid column options for oai_fdw are:
-CREATE SERVER: 'url', 'metadataprefix'
-CREATE TABLE: 'metadataprefix','setspec', 'from', 'until' and 'status'
  
 -- Empty COLUMN OPTION value
 CREATE FOREIGN TABLE oai_table_err2 (
@@ -225,7 +218,6 @@ CREATE FOREIGN TABLE oai_table_err5 (
  SERVER oai_server_ulb OPTIONS (metadataPrefix 'oai_dc');
 SELECT * FROM oai_table_err5 LIMIT 1;
 ERROR:  invalid data type for 'oai_table_err5.id': 23
-HINT:  OAI identifier must be of type 'text' or 'varchar'.
  
 CREATE FOREIGN TABLE oai_table_err6 (
  doc int                 OPTIONS (oai_node 'content')
@@ -233,35 +225,30 @@ CREATE FOREIGN TABLE oai_table_err6 (
 SERVER oai_server_ulb OPTIONS (metadataPrefix 'oai_dc');
 SELECT * FROM oai_table_err6 LIMIT 1;
 ERROR:  invalid data type for 'oai_table_err6.doc': 23
-HINT:  OAI content expects one of the following types: 'xml', 'text' or 'varchar'.
 CREATE FOREIGN TABLE oai_table_err7 (
  sets varchar            OPTIONS (oai_node 'setspec')
 ) 
 SERVER oai_server_ulb OPTIONS (metadataPrefix 'oai_dc');
 SELECT * FROM oai_table_err7 LIMIT 1;
 ERROR:  invalid data type for 'oai_table_err7.sets': 1043
-HINT:  OAI setspec expects one of the following types: 'text[]', 'varchar[]'.
 CREATE FOREIGN TABLE oai_table_err8 (
  updatedate text   OPTIONS (oai_node 'datestamp')
 ) 
 SERVER oai_server_ulb OPTIONS (metadataPrefix 'oai_dc');
 SELECT * FROM oai_table_err8 LIMIT 1;
 ERROR:  invalid data type for 'oai_table_err8.updatedate': 25
-HINT:  OAI datestamp expects a 'timestamp'.
 CREATE FOREIGN TABLE oai_table_err9 (
    format xml            OPTIONS (oai_node 'metadataprefix')
 ) 
 SERVER oai_server_ulb OPTIONS (metadataPrefix 'oai_dc');
 SELECT * FROM oai_table_err9 LIMIT 1;
 ERROR:  invalid data type for 'oai_table_err9.format': 142
-HINT:  OAI metadataprefix must be of type 'text' or 'varchar'.
 CREATE FOREIGN TABLE oai_table_err10 (
   status text         OPTIONS (oai_node 'status')
 ) 
 SERVER oai_server_ulb OPTIONS (metadataPrefix 'oai_dc');
 SELECT * FROM oai_table_err10 LIMIT 1;
 ERROR:  invalid data type for 'oai_table_err10.status': 25
-HINT:  OAI status must be of type 'boolean'.
 -- OAI_ListMetadataFormats: Wrong FOREIGN SERVER
 SELECT * FROM OAI_ListMetadataFormats('foo');
 ERROR:  FOREIGN SERVER does not exist: 'foo'
@@ -293,7 +280,6 @@ CREATE SCHEMA exception_schema;
 -- IMPORT FOREIGN SCHEMA without 'metadataprerifx' OPTION
 IMPORT FOREIGN SCHEMA oai_sets FROM SERVER oai_server_ulb INTO exception_schema;
 ERROR:  missing 'metadataprefix' OPTION.
-HINT:  A OAI Foreign Table must have a fixed 'metadataprefix'. Execute 'SELECT * FROM OAI_ListMetadataFormats('oai_server_ulb')' to see which formats are offered in the OAI Repository.
 -- IMPORT FOREIGN SCHEMA with invalid 'metadataprerifx' OPTION
 IMPORT FOREIGN SCHEMA oai_sets FROM SERVER oai_server_ulb INTO exception_schema OPTIONS (metadataprefix 'foo');
 ERROR:  invalid 'metadataprefix': 'foo'
@@ -306,15 +292,12 @@ ERROR:  invalid FOREIGN SCHEMA: 'foo'
 -- UPDATE query
 UPDATE ulb_ulbmsuo_oai_dc SET status = true;
 ERROR:  Operation not supported.
-HINT:  The OAI Foreign Data Wrapper does not support UPDATE queries.
 -- INSERT query
 INSERT INTO ulb_ulbmsuo_oai_dc (status) VALUES (false);
 ERROR:  Operation not supported.
-HINT:  The OAI Foreign Data Wrapper does not support INSERT queries.
 -- DELETE query
 DELETE FROM ulb_ulbmsuo_oai_dc;
 ERROR:  Operation not supported.
-HINT:  The OAI Foreign Data Wrapper does not support DELETE queries.
 -- empty user name
 CREATE USER MAPPING FOR postgres SERVER oai_server_ulb OPTIONS (user '', password 'foo');
 ERROR:  empty value in option 'user'

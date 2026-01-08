@@ -61,7 +61,7 @@
 #include "access/reloptions.h"
 #include "catalog/pg_namespace.h"
 
-#define OAI_FDW_VERSION "1.11"
+#define OAI_FDW_VERSION "1.12-dev"
 #define OAI_REQUEST_LISTRECORDS "ListRecords"
 #define OAI_REQUEST_LISTIDENTIFIERS "ListIdentifiers"
 #define OAI_REQUEST_IDENTIFY "Identify"
@@ -1382,14 +1382,16 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 			{
 				ereport(ERROR,
 						(errcode(ERRCODE_FDW_UNABLE_TO_ESTABLISH_CONNECTION),
-						 errmsg("%s => (%u) %s%s", __func__, res, errbuf,
+						 errmsg("unable to connect to the OAI repository"),
+						 errdetail("%s => (%u) %s%s", __func__, res, errbuf,
 								((errbuf[len - 1] != '\n') ? "\n" : ""))));
 			}
 			else
 			{
 				ereport(ERROR,
 						(errcode(ERRCODE_FDW_UNABLE_TO_ESTABLISH_CONNECTION),
-						 errmsg("%s => (%u) '%s'\n", __func__, res, curl_easy_strerror(res))));
+						errmsg("unable to connect to the OAI repository"),
+						errdetail("%s => (%u) '%s'\n", __func__, res, curl_easy_strerror(res))));
 			}
 		}
 		else

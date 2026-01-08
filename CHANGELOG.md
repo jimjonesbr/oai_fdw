@@ -1,6 +1,10 @@
 ### oai_fdw 1.12
 YYYY-MM-DD
 
+* Bug Fixes
+  - Added URL encoding for resumption tokens in ListRecords and ListIdentifiers requests using curl_easy_escape to properly handle special characters like '&' and '='.
+  - Ensured xmldoc is only freed if successfully initialized to prevent crashes from freeing uninitialized memory.
+  - Set User-Agent and Accept headers in requests for better server compatibility and to mimic standard HTTP client behavior.
 
 ### oai_fdw 1.11
 2025-09-26
