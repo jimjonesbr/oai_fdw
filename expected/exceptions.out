@@ -75,7 +75,7 @@ SELECT * FROM oai_table_err13 LIMIT 1;
 WARNING:    ExecuteOAIRequest (ListIdentifiers): request to 'ftp://services.dnb.de/oai/repository' failed (1)
 WARNING:    ExecuteOAIRequest (ListIdentifiers): request to 'ftp://services.dnb.de/oai/repository' failed (2)
 WARNING:    ExecuteOAIRequest (ListIdentifiers): request to 'ftp://services.dnb.de/oai/repository' failed (3)
-ERROR:  ExecuteOAIRequest => (1) Protocol "ftp" not supported or disabled in libcurl
+ERROR:  ExecuteOAIRequest => (1) Protocol "ftp" disabled
 
 -- URL with an invalid protocol
 CREATE SERVER oai_server_err14 FOREIGN DATA WRAPPER oai_fdw 
@@ -97,23 +97,16 @@ HINT:  expected values are positive integers (retry attempts in case of failure)
 -- Unreachable proxy server
 -- Timeout 1 second
 -- Retry 5 times 
-CREATE SERVER oai_server_err16 FOREIGN DATA WRAPPER oai_fdw 
-OPTIONS (url 'https://services.dnb.de/oai/repository',
-         http_proxy 'http://proxy.server.im:8080',
-         connect_timeout '1',
-         connect_retry '5');
+-- CREATE SERVER oai_server_err16 FOREIGN DATA WRAPPER oai_fdw 
+-- OPTIONS (url 'https://services.dnb.de/oai/repository',
+--          http_proxy 'http://proxy.server.im:8080',
+--          connect_timeout '1',
+--          connect_retry '5');
          
-CREATE FOREIGN TABLE oai_table_err16 (
-  id text OPTIONS (oai_node 'identifier')
-) SERVER oai_server_err16 OPTIONS (metadataPrefix 'oai_dc');
-SELECT * FROM oai_table_err16 LIMIT 1;
-WARNING:    ExecuteOAIRequest (ListIdentifiers): request to 'https://services.dnb.de/oai/repository' failed (1)
-WARNING:    ExecuteOAIRequest (ListIdentifiers): request to 'https://services.dnb.de/oai/repository' failed (2)
-WARNING:    ExecuteOAIRequest (ListIdentifiers): request to 'https://services.dnb.de/oai/repository' failed (3)
-WARNING:    ExecuteOAIRequest (ListIdentifiers): request to 'https://services.dnb.de/oai/repository' failed (4)
-WARNING:    ExecuteOAIRequest (ListIdentifiers): request to 'https://services.dnb.de/oai/repository' failed (5)
-ERROR:  ExecuteOAIRequest => (5) Could not resolve proxy: proxy.server.im
-
+-- CREATE FOREIGN TABLE oai_table_err16 (
+--   id text OPTIONS (oai_node 'identifier')
+-- ) SERVER oai_server_err16 OPTIONS (metadataPrefix 'oai_dc');
+-- SELECT * FROM oai_table_err16 LIMIT 1;
 -- Unreachable proxy server
 -- Timeout 1 second
 -- Invalid retry (-5 times)

@@ -1,3 +1,7 @@
+### oai_fdw 1.12
+YYYY-MM-DD
+
+
 ### oai_fdw 1.11
 2025-09-26
 

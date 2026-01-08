@@ -1068,6 +1068,24 @@ static size_t HeaderCallbackFunction(char *contents, size_t size, size_t nmemb, 
 	return realsize;
 }
 
+/*
+ * CURLProgressCallback
+ * --------------------
+ * Progress callback function for cURL requests. This allows us to
+ * check for interruptions to immediatelly cancel the request.
+ *
+ * dltotal: Total bytes to download
+ * dlnow: Bytes downloaded so far
+ * ultotal: Total bytes to upload
+ * ulnow: Bytes uploaded so far
+ */
+static int CURLProgressCallback(void *clientp, curl_off_t dltotal, curl_off_t dlnow, curl_off_t ultotal, curl_off_t ulnow)
+{
+	CHECK_FOR_INTERRUPTS();
+
+	return 0;
+}
+
 /**
  * Executes the HTTP request to the OAI repository using the
  * libcurl library.
@@ -1078,11 +1096,13 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 	CURL *curl;
 	CURLcode res;
 	StringInfoData url_buffer;
+	StringInfoData user_agent;
 	char errbuf[CURL_ERROR_SIZE];
 	struct MemoryStruct chunk;
 	struct MemoryStruct chunk_header;
 	long maxretries = OAI_REQUEST_MAXRETRY;
 	long connectTimeout = OAI_REQUEST_CONNECTTIMEOUT;
+	struct curl_slist *headers = NULL;
 
 	if (state->maxretries)
 		maxretries = state->maxretries;
@@ -1098,6 +1118,18 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 	initStringInfo(&url_buffer);
 
 	elog(DEBUG1, "%s called: base url > '%s' ", __func__, state->url);
+
+	/* Initialize curl early so it's available for URL encoding */
+	curl_global_init(CURL_GLOBAL_ALL);
+	curl = curl_easy_init();
+
+	if (!curl)
+	{
+		curl_global_cleanup();
+		ereport(ERROR,
+				(errcode(ERRCODE_FDW_UNABLE_TO_ESTABLISH_CONNECTION),
+				 errmsg("%s: failed to initialize curl", __func__)));
+	}
 
 	appendStringInfo(&url_buffer, "verb=%s", state->requestVerb);
 
@@ -1130,9 +1162,25 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 
 		if (state->resumptionToken)
 		{
+			char *encoded_token;
+
 			elog(DEBUG1, "  %s (%s): appending 'resumptionToken' > %s", __func__, state->requestVerb, state->resumptionToken);
 			resetStringInfo(&url_buffer);
-			appendStringInfo(&url_buffer, "verb=%s&resumptionToken=%s", state->requestVerb, state->resumptionToken);
+			
+			/* URL-encode the resumption token to handle special characters like & */
+			encoded_token = curl_easy_escape(curl, state->resumptionToken, 0);
+			if (encoded_token)
+			{
+				elog(DEBUG1, "  %s (%s): encoded resumptionToken > %s", __func__, state->requestVerb, encoded_token);
+				appendStringInfo(&url_buffer, "verb=%s&resumptionToken=%s", state->requestVerb, encoded_token);
+				curl_free(encoded_token);
+			}
+			else
+			{
+				/* Fallback to unencoded if encoding fails */
+				elog(DEBUG1, "  %s (%s): encoding failed, using raw token", __func__, state->requestVerb);
+				appendStringInfo(&url_buffer, "verb=%s&resumptionToken=%s", state->requestVerb, state->resumptionToken);
+			}
 		}
 	}
 	else if (strcmp(state->requestVerb, OAI_REQUEST_GETRECORD) == 0)
@@ -1179,9 +1227,25 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 
 		if (state->resumptionToken)
 		{
+			char *encoded_token;
+
 			elog(DEBUG1, "  %s (%s): appending 'resumptionToken' > %s", __func__, state->requestVerb, state->resumptionToken);
 			resetStringInfo(&url_buffer);
-			appendStringInfo(&url_buffer, "verb=%s&resumptionToken=%s", state->requestVerb, state->resumptionToken);
+			
+			/* URL-encode the resumption token to handle special characters like & */
+			encoded_token = curl_easy_escape(curl, state->resumptionToken, 0);
+			if (encoded_token)
+			{
+				elog(DEBUG1, "  %s (%s): encoded resumptionToken > %s", __func__, state->requestVerb, encoded_token);
+				appendStringInfo(&url_buffer, "verb=%s&resumptionToken=%s", state->requestVerb, encoded_token);
+				curl_free(encoded_token);
+			}
+			else
+			{
+				/* Fallback to unencoded if encoding fails */
+				elog(DEBUG1, "  %s (%s): encoding failed, using raw token", __func__, state->requestVerb);
+				appendStringInfo(&url_buffer, "verb=%s&resumptionToken=%s", state->requestVerb, state->resumptionToken);
+			}
 		}
 	}
 	else
@@ -1195,9 +1259,6 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 	}
 
 	elog(DEBUG1, "  %s (%s): url build > %s?%s", __func__, state->requestVerb, state->url, url_buffer.data);
-
-	curl_global_init(CURL_GLOBAL_ALL);
-	curl = curl_easy_init();
 
 	if (curl)
 	{
@@ -1262,6 +1323,9 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 			}
 		}
 
+		/* Set the progress callback function */
+		curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, CURLProgressCallback);
+
 		curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
 		curl_easy_setopt(curl, CURLOPT_POSTFIELDS, url_buffer.data);
 		curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, HeaderCallbackFunction);
@@ -1282,6 +1346,13 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 			curl_easy_setopt(curl, CURLOPT_USERNAME, state->user);
 		}
 
+		initStringInfo(&user_agent);
+		appendStringInfo(&user_agent, "PostgreSQL/%s oai_fdw/%s libxml2/%s %s", PG_VERSION, OAI_FDW_VERSION, LIBXML_DOTTED_VERSION, curl_version());
+		curl_easy_setopt(curl, CURLOPT_USERAGENT, user_agent.data);
+
+		headers = curl_slist_append(headers, "Accept: application/xml");
+		curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+
 		elog(DEBUG2, "  %s (%s): performing cURL request ... ", __func__, state->requestVerb);
 
 		res = curl_easy_perform(curl);
@@ -1299,9 +1370,11 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 			size_t len = strlen(errbuf);
 			fprintf(stderr, "\nlibcurl: (%d) ", res);
 
-			xmlFreeDoc(state->xmldoc);
-			pfree(chunk.memory);
-			pfree(chunk_header.memory);
+			if (chunk.memory)
+				pfree(chunk.memory);
+			if (chunk_header.memory)
+				pfree(chunk_header.memory);
+			curl_slist_free_all(headers);
 			curl_easy_cleanup(curl);
 			curl_global_cleanup();
 
@@ -1331,8 +1404,11 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 		}
 	}
 
-	pfree(chunk.memory);
-	pfree(chunk_header.memory);
+	if (chunk.memory)
+		pfree(chunk.memory);
+	if (chunk_header.memory)
+		pfree(chunk_header.memory);
+	curl_slist_free_all(headers);
 	curl_easy_cleanup(curl);
 	curl_global_cleanup();
 
@@ -2120,16 +2196,13 @@ static void LoadOAIRecords(struct OAIFdwState **state)
 					if (xmlStrcmp(ListRecordsRequest->name, (xmlChar *)OAI_RESPONSE_ELEMENT_RESUMPTIONTOKEN) == 0)
 					{
 
-						xmlBufferPtr bufferToken = xmlBufferCreate();
-						xmlNodeDump(bufferToken, (*state)->xmldoc, ListRecordsRequest->children, 0, 0);
-
-						if (strlen((char *)bufferToken->content) != 0)
+						xmlChar *tokenContent = xmlNodeGetContent(ListRecordsRequest);
+						if (tokenContent && strlen((char *)tokenContent) != 0)
 						{
-							(*state)->resumptionToken = pstrdup((char *)bufferToken->content);
-							elog(DEBUG2, "  %s: (%s): Token detected in current page > %s", __func__, (*state)->requestVerb, (char *)bufferToken->content);
+							(*state)->resumptionToken = pstrdup((char *)tokenContent);
+							elog(DEBUG2, "  %s: (%s): Token detected in current page > %s", __func__, (*state)->requestVerb, (char *)tokenContent);
 						}
-
-						xmlBufferFree(bufferToken);
+						xmlFree(tokenContent);
 					}
 					else if (xmlStrcmp(ListRecordsRequest->name, (xmlChar *)OAI_RESPONSE_ELEMENT_HEADER) == 0)
 					{
@@ -2196,13 +2269,10 @@ static void LoadOAIRecords(struct OAIFdwState **state)
 
 					if (xmlStrcmp(ListRecordsRequest->name, (xmlChar *)OAI_RESPONSE_ELEMENT_RESUMPTIONTOKEN) == 0)
 					{
-						xmlBufferPtr bufferToken = xmlBufferCreate();
-						xmlNodeDump(bufferToken, (*state)->xmldoc, ListRecordsRequest->children, 0, 0);
-
-						if (strlen((char *)bufferToken->content) != 0)
-							(*state)->resumptionToken = pstrdup((char *)bufferToken->content);
-
-						xmlBufferFree(bufferToken);
+						xmlChar *tokenContent = xmlNodeGetContent(ListRecordsRequest);
+						if (tokenContent && strlen((char *)tokenContent) != 0)
+							(*state)->resumptionToken = pstrdup((char *)tokenContent);
+						xmlFree(tokenContent);
 					}
 					else if (xmlStrcmp(ListRecordsRequest->name, (xmlChar *)OAI_RESPONSE_ELEMENT_RECORD) == 0)
 					{

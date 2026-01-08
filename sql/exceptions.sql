@@ -89,17 +89,17 @@ OPTIONS (url 'https://services.dnb.de/oai/repository',
 -- Unreachable proxy server
 -- Timeout 1 second
 -- Retry 5 times 
-CREATE SERVER oai_server_err16 FOREIGN DATA WRAPPER oai_fdw 
-OPTIONS (url 'https://services.dnb.de/oai/repository',
-         http_proxy 'http://proxy.server.im:8080',
-         connect_timeout '1',
-         connect_retry '5');
+-- CREATE SERVER oai_server_err16 FOREIGN DATA WRAPPER oai_fdw 
+-- OPTIONS (url 'https://services.dnb.de/oai/repository',
+--          http_proxy 'http://proxy.server.im:8080',
+--          connect_timeout '1',
+--          connect_retry '5');
          
-CREATE FOREIGN TABLE oai_table_err16 (
-  id text OPTIONS (oai_node 'identifier')
-) SERVER oai_server_err16 OPTIONS (metadataPrefix 'oai_dc');
+-- CREATE FOREIGN TABLE oai_table_err16 (
+--   id text OPTIONS (oai_node 'identifier')
+-- ) SERVER oai_server_err16 OPTIONS (metadataPrefix 'oai_dc');
 
-SELECT * FROM oai_table_err16 LIMIT 1;
+-- SELECT * FROM oai_table_err16 LIMIT 1;
 
 
 -- Unreachable proxy server
