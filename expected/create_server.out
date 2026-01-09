@@ -1,4 +1,3 @@
-CREATE EXTENSION oai_fdw;
 -- German National Library
 CREATE SERVER oai_server_dnb FOREIGN DATA WRAPPER oai_fdw
 OPTIONS (url 'https://services.dnb.de/oai/repository',

@@ -1,5 +1,5 @@
 ### oai_fdw 1.12
-YYYY-MM-DD
+2026-01-09
 
 * Bug Fixes
   - Added URL encoding for resumption tokens in ListRecords and ListIdentifiers requests using curl_easy_escape to properly handle special characters like '&' and '='.

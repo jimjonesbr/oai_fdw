@@ -1,0 +1,1 @@
+CREATE EXTENSION oai_fdw VERSION '1.11';

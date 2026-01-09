@@ -2,7 +2,7 @@
    "name": "oai_fdw",
    "abstract": "OAI-PMH foreign data wrapper for PostgreSQL",
    "description": "A PostgreSQL Foreign Data Wrapper to access OAI-PMH repositories (Open Archives Initiative Protocol for Metadata Harvesting).",
-   "version": "1.11.0",
+   "version": "1.12.0",
    "maintainer": [
       "Jim Jones <jim.jones@uni-muenster.de>"
    ],
@@ -10,9 +10,9 @@
    "provides": {
       "oai_fdw": {
          "abstract": "OAI-PMH foreign data wrapper for PostgreSQL",
-         "file": "oai_fdw--1.10.sql",
+         "file": "oai_fdw--1.12.sql",
          "docfile": "README.md",
-         "version": "1.11.0"
+         "version": "1.12.0"
       }
    },
    "prereqs": {
