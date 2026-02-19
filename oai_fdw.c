@@ -96,7 +96,7 @@
 #define OAI_NODE_HTTP_PROXY "http_proxy"
 #define OAI_NODE_HTTPS_PROXY "https_proxy"
 #define OAI_NODE_PROXY_USER "proxy_user"
-#define OAI_NODE_PROXY_USER_PASSWORD "proxy_user_password"
+#define OAI_NODE_PROXY_PASSWORD "proxy_password"
 #define OAI_NODE_CONNECTTIMEOUT "connect_timeout"
 #define OAI_NODE_CONNECTRETRY "connect_retry"
 #define OAI_NODE_REQUEST_REDIRECT "request_redirect"
@@ -136,7 +136,7 @@ typedef struct OAIFdwState
 	char *proxy;			 /* Proxy for HTTP requests, if necessary. */
 	char *proxyType;		 /* Proxy protocol (HTTPS, HTTP). */
 	char *proxyUser;		 /* User name for proxy authentication. */
-	char *proxyUserPassword; /* Password for proxy authentication. */
+	char *proxyPassword; /* Password for proxy authentication. */
 	char *from;				 /* Beginning of am interval to filter an OAI request. */
 	char *until;			 /* End of an interval to filter an OAI request. */
 	char *resumptionToken;	 /* Token to retrieve the next page of a result set. */
@@ -218,8 +218,6 @@ static struct OAIFdwOption valid_options[] =
 		{OAI_NODE_METADATAPREFIX, ForeignServerRelationId, false, false},
 		{OAI_NODE_HTTP_PROXY, ForeignServerRelationId, false, false},
 		{OAI_NODE_HTTPS_PROXY, ForeignServerRelationId, false, false},
-		{OAI_NODE_PROXY_USER, ForeignServerRelationId, false, false},
-		{OAI_NODE_PROXY_USER_PASSWORD, ForeignServerRelationId, false, false},
 		{OAI_NODE_CONNECTTIMEOUT, ForeignServerRelationId, false, false},
 		{OAI_NODE_CONNECTRETRY, ForeignServerRelationId, false, false},
 		{OAI_NODE_REQUEST_REDIRECT, ForeignServerRelationId, false, false},
@@ -235,6 +233,8 @@ static struct OAIFdwOption valid_options[] =
 		/* User Mapping */
 		{OAI_USERMAPPING_OPTION_USER, UserMappingRelationId, false, false},
 		{OAI_USERMAPPING_OPTION_PASSWORD, UserMappingRelationId, false, false},
+		{OAI_NODE_PROXY_USER, UserMappingRelationId, false, false},
+		{OAI_NODE_PROXY_PASSWORD, UserMappingRelationId, false, false},
 		/* EOList option */
 		{NULL, InvalidOid, false, false}};
 
@@ -352,11 +352,11 @@ OAIFdwState *GetServerInfo(const char *srvname)
 				state->proxyType = OAI_NODE_HTTP_PROXY;
 			}
 
-			if (strcmp(def->defname, OAI_NODE_PROXY_USER) == 0)
-				state->proxyUser = defGetString(def);
+			// if (strcmp(def->defname, OAI_NODE_PROXY_USER) == 0)
+			// 	state->proxyUser = defGetString(def);
 
-			if (strcmp(def->defname, OAI_NODE_PROXY_USER_PASSWORD) == 0)
-				state->proxyUserPassword = defGetString(def);
+			// if (strcmp(def->defname, OAI_NODE_PROXY_PASSWORD) == 0)
+			// 	state->proxyPassword = defGetString(def);
 
 			if (strcmp(def->defname, OAI_NODE_CONNECTTIMEOUT) == 0)
 			{
@@ -1253,10 +1253,10 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 				curl_easy_setopt(curl, CURLOPT_PROXYUSERNAME, state->proxyUser);
 			}
 
-			if (state->proxyUserPassword)
+			if (state->proxyPassword)
 			{
 				elog(DEBUG1, "  %s (%s): entering proxy user's password.", __func__, state->requestVerb);
-				curl_easy_setopt(curl, CURLOPT_PROXYUSERPWD, state->proxyUserPassword);
+				curl_easy_setopt(curl, CURLOPT_PROXYUSERPWD, state->proxyPassword);
 			}
 		}
 
@@ -2585,6 +2585,18 @@ static void LoadOAIUserMapping(OAIFdwState *state)
 					state->password = pstrdup(strVal(def->arg));
 					elog(DEBUG1, "%s: %s '*******'", __func__, def->defname);
 				}
+
+				if (strcmp(def->defname, OAI_NODE_PROXY_USER) == 0)
+				{
+					state->proxyUser = pstrdup(defGetString(def));
+					elog(DEBUG2, "%s: proxy user '%s'", __func__, state->proxyUser);
+				}
+
+				if (strcmp(def->defname, OAI_NODE_PROXY_PASSWORD) == 0)
+				{
+					state->proxyPassword = pstrdup(defGetString(def));
+					elog(DEBUG2, "%s: proxy password '*******'", __func__);
+				}
 			}
 		}
 
@@ -2623,8 +2635,8 @@ static void InitSession(OAIFdwState *state, RelOptInfo *baserel)
 		{
 			state->proxyUser = defGetString(def);
 		}
-		else if (strcmp(OAI_NODE_PROXY_USER_PASSWORD, def->defname) == 0)
-			state->proxyUserPassword = defGetString(def);
+		else if (strcmp(OAI_NODE_PROXY_PASSWORD, def->defname) == 0)
+			state->proxyPassword = defGetString(def);
 		else if (strcmp(OAI_NODE_CONNECTTIMEOUT, def->defname) == 0)
 		{
 			char *tailpt;

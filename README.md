@@ -103,8 +103,6 @@ OPTIONS (url 'https://sammlungen.ulb.uni-muenster.de/oai');
 |---------------|----------------------|--------------------------------------------------------------------------------------------------------------------|
 | `url`         | **required**            | URL address of the OAI-PMH repository.
 | `http_proxy` | optional            | Proxy for HTTP requests.
-| `proxy_user` | optional            | User for proxy server authentication.
-| `proxy_user_password` | optional            | Password for proxy server authentication.
 | `connect_timeout`         | optional            | Connection timeout for HTTP requests in seconds (default 300 seconds).
 | `connect_retry`         | optional            | Number of attempts to retry a request in case of failure (default 3 times).
 | `request_redirect`         | optional            | Enables URL redirect issued by the server (default 'false').
@@ -129,6 +127,8 @@ SERVER my_protected_oai OPTIONS (user 'admin', password 'secret');
 |---|---|---|
 | `user` | **required** | name of the user for authentication |
 | `password` | optional |   password of the user set in the option `user` |
+| `proxy_user` | optional | User for proxy server authentication |
+| `proxy_password` | optional | Password for proxy server authentication |
 
 The `oai_fdw` will try to authenticate the user using HTTP Basic Authentication - no other authentication method is currently supported. This feature can be ignored if the OAI repository does not require user authentication.
 

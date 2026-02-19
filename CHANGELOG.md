@@ -1,3 +1,10 @@
+### oai_fdw 1.13
+yyyy-mm-dd
+
+* Bug Fixes
+
+Moved proxy authentication options (`proxy_user` and `proxy_password`) from SERVER to USER MAPPING. These credentials are now correctly specified in CREATE USER MAPPING instead of CREATE SERVER.
+
 ### oai_fdw 1.12
 2026-01-09
 

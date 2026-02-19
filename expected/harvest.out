@@ -9,23 +9,23 @@ CREATE FOREIGN TABLE IF NOT EXISTS dnb_oai_dc (
 CALL OAI_HarvestTable('dnb_oai_dc','clone_dnb_oai_dc', interval '1 day', '2020-01-01 00:00:00', '2020-01-03 00:00:00',true,true);
 INFO:  target table "public.clone_dnb_oai_dc" created
 INFO:  page stored into "public.clone_dnb_oai_dc": 222 records inserted and 0 updated [2020-01-01 00:00:00 - 2020-01-02 00:00:00]
-INFO:  page stored into "public.clone_dnb_oai_dc": 932 records inserted and 0 updated [2020-01-02 00:00:00 - 2020-01-03 00:00:00]
-INFO:  OAI harvester complete ("public.dnb_oai_dc" -> "public.clone_dnb_oai_dc"): 1154 records inserted and 0 updated [2020-01-01 00:00:00 - 2020-01-03 00:00:00]
+INFO:  page stored into "public.clone_dnb_oai_dc": 927 records inserted and 0 updated [2020-01-02 00:00:00 - 2020-01-03 00:00:00]
+INFO:  OAI harvester complete ("public.dnb_oai_dc" -> "public.clone_dnb_oai_dc"): 1149 records inserted and 0 updated [2020-01-01 00:00:00 - 2020-01-03 00:00:00]
 SELECT count(*) FROM clone_dnb_oai_dc;
  count 
 -------
-  1154
+  1149
 (1 row)
 
 -- Existing table will be upserted 
 CALL OAI_HarvestTable('dnb_oai_dc','clone_dnb_oai_dc', interval '1 day', '2020-01-01 00:00:00', '2020-01-03 00:00:00',true,true);
 INFO:  page stored into "public.clone_dnb_oai_dc": 0 records inserted and 222 updated [2020-01-01 00:00:00 - 2020-01-02 00:00:00]
-INFO:  page stored into "public.clone_dnb_oai_dc": 0 records inserted and 932 updated [2020-01-02 00:00:00 - 2020-01-03 00:00:00]
-INFO:  OAI harvester complete ("public.dnb_oai_dc" -> "public.clone_dnb_oai_dc"): 0 records inserted and 1154 updated [2020-01-01 00:00:00 - 2020-01-03 00:00:00]
+INFO:  page stored into "public.clone_dnb_oai_dc": 0 records inserted and 927 updated [2020-01-02 00:00:00 - 2020-01-03 00:00:00]
+INFO:  OAI harvester complete ("public.dnb_oai_dc" -> "public.clone_dnb_oai_dc"): 0 records inserted and 1149 updated [2020-01-01 00:00:00 - 2020-01-03 00:00:00]
 SELECT count(*) FROM clone_dnb_oai_dc;
  count 
 -------
-  1154
+  1149
 (1 row)
 
 CREATE SCHEMA oai_schema;
@@ -33,58 +33,58 @@ CREATE SCHEMA oai_schema;
 CALL OAI_HarvestTable('dnb_oai_dc','oai_schema.clone_dnb_oai_dc', interval '1 day', '2020-01-01 00:00:00', '2020-01-03 00:00:00',true,true);
 INFO:  target table "oai_schema.clone_dnb_oai_dc" created
 INFO:  page stored into "oai_schema.clone_dnb_oai_dc": 222 records inserted and 0 updated [2020-01-01 00:00:00 - 2020-01-02 00:00:00]
-INFO:  page stored into "oai_schema.clone_dnb_oai_dc": 932 records inserted and 0 updated [2020-01-02 00:00:00 - 2020-01-03 00:00:00]
-INFO:  OAI harvester complete ("public.dnb_oai_dc" -> "oai_schema.clone_dnb_oai_dc"): 1154 records inserted and 0 updated [2020-01-01 00:00:00 - 2020-01-03 00:00:00]
+INFO:  page stored into "oai_schema.clone_dnb_oai_dc": 927 records inserted and 0 updated [2020-01-02 00:00:00 - 2020-01-03 00:00:00]
+INFO:  OAI harvester complete ("public.dnb_oai_dc" -> "oai_schema.clone_dnb_oai_dc"): 1149 records inserted and 0 updated [2020-01-01 00:00:00 - 2020-01-03 00:00:00]
 SELECT count(*) FROM oai_schema.clone_dnb_oai_dc;
  count 
 -------
-  1154
+  1149
 (1 row)
 
 /* Target table with specific schema (update records) */
 CALL OAI_HarvestTable('dnb_oai_dc','oai_schema.clone_dnb_oai_dc', interval '1 day', '2020-01-01 00:00:00', '2020-01-03 00:00:00',true,true);
 INFO:  page stored into "oai_schema.clone_dnb_oai_dc": 0 records inserted and 222 updated [2020-01-01 00:00:00 - 2020-01-02 00:00:00]
-INFO:  page stored into "oai_schema.clone_dnb_oai_dc": 0 records inserted and 932 updated [2020-01-02 00:00:00 - 2020-01-03 00:00:00]
-INFO:  OAI harvester complete ("public.dnb_oai_dc" -> "oai_schema.clone_dnb_oai_dc"): 0 records inserted and 1154 updated [2020-01-01 00:00:00 - 2020-01-03 00:00:00]
+INFO:  page stored into "oai_schema.clone_dnb_oai_dc": 0 records inserted and 927 updated [2020-01-02 00:00:00 - 2020-01-03 00:00:00]
+INFO:  OAI harvester complete ("public.dnb_oai_dc" -> "oai_schema.clone_dnb_oai_dc"): 0 records inserted and 1149 updated [2020-01-01 00:00:00 - 2020-01-03 00:00:00]
 SELECT count(*) FROM oai_schema.clone_dnb_oai_dc;
  count 
 -------
-  1154
+  1149
 (1 row)
 
 -- Existing table will be upserted 
 CALL OAI_HarvestTable('dnb_oai_dc','oai_schema.clone_dnb_oai_dc', interval '1 day', '2020-01-01 00:00:00', '2020-01-03 00:00:00',true,true);
 INFO:  page stored into "oai_schema.clone_dnb_oai_dc": 0 records inserted and 222 updated [2020-01-01 00:00:00 - 2020-01-02 00:00:00]
-INFO:  page stored into "oai_schema.clone_dnb_oai_dc": 0 records inserted and 932 updated [2020-01-02 00:00:00 - 2020-01-03 00:00:00]
-INFO:  OAI harvester complete ("public.dnb_oai_dc" -> "oai_schema.clone_dnb_oai_dc"): 0 records inserted and 1154 updated [2020-01-01 00:00:00 - 2020-01-03 00:00:00]
+INFO:  page stored into "oai_schema.clone_dnb_oai_dc": 0 records inserted and 927 updated [2020-01-02 00:00:00 - 2020-01-03 00:00:00]
+INFO:  OAI harvester complete ("public.dnb_oai_dc" -> "oai_schema.clone_dnb_oai_dc"): 0 records inserted and 1149 updated [2020-01-01 00:00:00 - 2020-01-03 00:00:00]
 SELECT count(*) FROM oai_schema.clone_dnb_oai_dc;
  count 
 -------
-  1154
+  1149
 (1 row)
 
 /* Target table containing special characters */
 CALL OAI_HarvestTable('dnb_oai_dc','oai_schema."clone-dnb:oai/dc"', interval '1 day', '2020-01-01 00:00:00', '2020-01-03 00:00:00',true,true);
 INFO:  target table "oai_schema."clone-dnb:oai/dc"" created
 INFO:  page stored into "oai_schema."clone-dnb:oai/dc"": 222 records inserted and 0 updated [2020-01-01 00:00:00 - 2020-01-02 00:00:00]
-INFO:  page stored into "oai_schema."clone-dnb:oai/dc"": 932 records inserted and 0 updated [2020-01-02 00:00:00 - 2020-01-03 00:00:00]
-INFO:  OAI harvester complete ("public.dnb_oai_dc" -> "oai_schema."clone-dnb:oai/dc""): 1154 records inserted and 0 updated [2020-01-01 00:00:00 - 2020-01-03 00:00:00]
+INFO:  page stored into "oai_schema."clone-dnb:oai/dc"": 927 records inserted and 0 updated [2020-01-02 00:00:00 - 2020-01-03 00:00:00]
+INFO:  OAI harvester complete ("public.dnb_oai_dc" -> "oai_schema."clone-dnb:oai/dc""): 1149 records inserted and 0 updated [2020-01-01 00:00:00 - 2020-01-03 00:00:00]
 SELECT count(*) FROM oai_schema."clone-dnb:oai/dc";
  count 
 -------
-  1154
+  1149
 (1 row)
 
 /* Target table containing special characters without schema */
 CALL OAI_HarvestTable('dnb_oai_dc','"clone-dnb:oai/dc"', interval '1 day', '2020-01-01 00:00:00', '2020-01-03 00:00:00',true,true);
 INFO:  target table "public."clone-dnb:oai/dc"" created
 INFO:  page stored into "public."clone-dnb:oai/dc"": 222 records inserted and 0 updated [2020-01-01 00:00:00 - 2020-01-02 00:00:00]
-INFO:  page stored into "public."clone-dnb:oai/dc"": 932 records inserted and 0 updated [2020-01-02 00:00:00 - 2020-01-03 00:00:00]
-INFO:  OAI harvester complete ("public.dnb_oai_dc" -> "public."clone-dnb:oai/dc""): 1154 records inserted and 0 updated [2020-01-01 00:00:00 - 2020-01-03 00:00:00]
+INFO:  page stored into "public."clone-dnb:oai/dc"": 927 records inserted and 0 updated [2020-01-02 00:00:00 - 2020-01-03 00:00:00]
+INFO:  OAI harvester complete ("public.dnb_oai_dc" -> "public."clone-dnb:oai/dc""): 1149 records inserted and 0 updated [2020-01-01 00:00:00 - 2020-01-03 00:00:00]
 SELECT count(*) FROM "clone-dnb:oai/dc";
  count 
 -------
-  1154
+  1149
 (1 row)
 
 /* WARNING: Foreign table without identifier */
@@ -99,8 +99,8 @@ CREATE FOREIGN TABLE IF NOT EXISTS table_without_identifier (
 WARNING:  foreign table "public.table_without_identifier" has no identifier column. It is strongly recommended to map the OAI identifier to a column, as it can ensure that records are not duplicated
 INFO:  target table "public.clone_table_without_identifier" created
 INFO:  page stored into "public.clone_table_without_identifier": 222 records inserted and 0 updated [2020-01-01 00:00:00 - 2020-01-02 00:00:00]
-INFO:  page stored into "public.clone_table_without_identifier": 932 records inserted and 0 updated [2020-01-02 00:00:00 - 2020-01-03 00:00:00]
-INFO:  OAI harvester complete ("public.table_without_identifier" -> "public.clone_table_without_identifier"): 1154 records inserted and 0 updated [2020-01-01 00:00:00 - 2020-01-03 00:00:00]
+INFO:  page stored into "public.clone_table_without_identifier": 927 records inserted and 0 updated [2020-01-02 00:00:00 - 2020-01-03 00:00:00]
+INFO:  OAI harvester complete ("public.table_without_identifier" -> "public.clone_table_without_identifier"): 1149 records inserted and 0 updated [2020-01-01 00:00:00 - 2020-01-03 00:00:00]
  /* EXCEPTION: oai_table does not exist */
 CALL OAI_HarvestTable('foo','clone_dnb_oai_dc', interval '1 day', '2020-01-01 00:00:00', '2020-01-03 00:00:00',true,true);
 ERROR:  foreign table "public.foo" does not exist
