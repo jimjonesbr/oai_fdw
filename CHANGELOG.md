@@ -1,5 +1,5 @@
 ### oai_fdw 1.13
-yyyy-mm-dd
+2026-02-20
 
 * Bug Fixes
 
