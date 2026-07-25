@@ -2122,7 +2122,7 @@ static void LoadOAIRecords(struct OAIFdwState **state)
 						{
 							char *status = (char *)xmlGetProp(ListRecordsRequest, (xmlChar *)OAI_NODE_STATUS);
 
-							if (strcmp(status, OAI_RESPONSE_ELEMENT_DELETED))
+							if (strcmp(status, OAI_RESPONSE_ELEMENT_DELETED) == 0)
 								oai->isDeleted = true;
 						}
 
@@ -2212,7 +2212,7 @@ static void LoadOAIRecords(struct OAIFdwState **state)
 								{
 									char *status = (char *)xmlGetProp(record, (xmlChar *)OAI_NODE_STATUS);
 
-									if (strcmp(status, OAI_RESPONSE_ELEMENT_DELETED))
+									if (strcmp(status, OAI_RESPONSE_ELEMENT_DELETED) == 0)
 										oai->isDeleted = true;
 								}
 
