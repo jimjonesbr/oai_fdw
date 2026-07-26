@@ -19,4 +19,7 @@ SELECT extversion FROM pg_extension WHERE extname = 'oai_fdw';
 ALTER EXTENSION oai_fdw UPDATE TO '1.13';
 SELECT extversion FROM pg_extension WHERE extname = 'oai_fdw';
 
+ALTER EXTENSION oai_fdw UPDATE TO '1.14';
+SELECT extversion FROM pg_extension WHERE extname = 'oai_fdw';
+
 DROP SERVER oai_server_dnb CASCADE;

@@ -60,7 +60,7 @@
 #include "access/reloptions.h"
 #include "catalog/pg_namespace.h"
 
-#define OAI_FDW_VERSION "1.13"
+#define OAI_FDW_VERSION "1.14-dev"
 #define OAI_REQUEST_LISTRECORDS "ListRecords"
 #define OAI_REQUEST_LISTIDENTIFIERS "ListIdentifiers"
 #define OAI_REQUEST_IDENTIFY "Identify"
@@ -2112,7 +2112,7 @@ static void LoadOAIRecords(struct OAIFdwState **state)
 					else if (xmlStrcmp(ListRecordsRequest->name, (xmlChar *)OAI_RESPONSE_ELEMENT_HEADER) == 0)
 					{
 
-						OAIRecord *oai = (OAIRecord *)palloc(sizeof(OAIRecord));
+						OAIRecord *oai = (OAIRecord *)palloc0(sizeof(OAIRecord));
 
 						oai->setsArray = NULL;
 						oai->isDeleted = false;
@@ -2176,7 +2176,7 @@ static void LoadOAIRecords(struct OAIFdwState **state)
 					}
 					else if (xmlStrcmp(ListRecordsRequest->name, (xmlChar *)OAI_RESPONSE_ELEMENT_RECORD) == 0)
 					{
-						OAIRecord *oai = (OAIRecord *)palloc(sizeof(OAIRecord));
+						OAIRecord *oai = (OAIRecord *)palloc0(sizeof(OAIRecord));
 						xmlNodePtr record;
 
 						oai->metadataPrefix = pstrdup((*state)->metadataPrefix);

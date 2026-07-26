@@ -2,7 +2,13 @@ MODULE_big = oai_fdw
 OBJS = oai_fdw.o
 
 EXTENSION = oai_fdw
-DATA = oai_fdw--1.13.sql oai_fdw--1.12.sql oai_fdw--1.11.sql oai_fdw--1.10--1.11.sql oai_fdw--1.11--1.12.sql oai_fdw--1.12--1.13.sql
+DATA = oai_fdw--1.14.sql \
+	   oai_fdw--1.11.sql \
+	   oai_fdw--1.10--1.11.sql \
+	   oai_fdw--1.11--1.12.sql \
+	   oai_fdw--1.12--1.13.sql \
+	   oai_fdw--1.13--1.14.sql
+
 REGRESS = create-extension upgrade create_server import_foreign_schema create_foreign_table select_statements exceptions functions harvest
 
 CURL_CONFIG = curl-config
