@@ -1,3 +1,5 @@
+CREATE EXTENSION oai_fdw VERSION '1.0';
+
 CREATE SERVER oai_server_dnb FOREIGN DATA WRAPPER oai_fdw
 OPTIONS (url 'https://services.dnb.de/oai/repository',
          request_redirect 'true',
@@ -12,6 +14,39 @@ CREATE FOREIGN TABLE dnb_zdb_oai_dc (
  )
 SERVER oai_server_dnb OPTIONS (setspec 'zdb', 
                                metadataPrefix 'oai_dc');
+
+ALTER EXTENSION oai_fdw UPDATE TO '1.1';
+SELECT extversion FROM pg_extension WHERE extname = 'oai_fdw';
+
+ALTER EXTENSION oai_fdw UPDATE TO '1.2';
+SELECT extversion FROM pg_extension WHERE extname = 'oai_fdw';
+
+ALTER EXTENSION oai_fdw UPDATE TO '1.3';
+SELECT extversion FROM pg_extension WHERE extname = 'oai_fdw';
+
+ALTER EXTENSION oai_fdw UPDATE TO '1.4';
+SELECT extversion FROM pg_extension WHERE extname = 'oai_fdw';
+
+ALTER EXTENSION oai_fdw UPDATE TO '1.5';
+SELECT extversion FROM pg_extension WHERE extname = 'oai_fdw';
+
+ALTER EXTENSION oai_fdw UPDATE TO '1.6';
+SELECT extversion FROM pg_extension WHERE extname = 'oai_fdw';
+
+ALTER EXTENSION oai_fdw UPDATE TO '1.7';
+SELECT extversion FROM pg_extension WHERE extname = 'oai_fdw';
+
+ALTER EXTENSION oai_fdw UPDATE TO '1.8';
+SELECT extversion FROM pg_extension WHERE extname = 'oai_fdw';
+
+ALTER EXTENSION oai_fdw UPDATE TO '1.9';
+SELECT extversion FROM pg_extension WHERE extname = 'oai_fdw';
+
+ALTER EXTENSION oai_fdw UPDATE TO '1.10';
+SELECT extversion FROM pg_extension WHERE extname = 'oai_fdw';
+
+ALTER EXTENSION oai_fdw UPDATE TO '1.11';
+SELECT extversion FROM pg_extension WHERE extname = 'oai_fdw';
 
 ALTER EXTENSION oai_fdw UPDATE TO '1.12';
 SELECT extversion FROM pg_extension WHERE extname = 'oai_fdw';
