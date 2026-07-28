@@ -5,4 +5,3 @@ SELECT extversion FROM pg_extension WHERE extname = 'oai_fdw';
  1.14
 (1 row)
 
-DROP EXTENSION oai_fdw;
