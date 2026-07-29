@@ -2085,7 +2085,13 @@ static void LoadOAIRecords(struct OAIFdwState **state)
 		 */
 		(*state)->resumptionToken = NULL;
 
+		if (!(*state)->xmldoc)
+			ereport(ERROR, (errmsg("invalid XML response from '%s'", (*state)->url)));
+
 		xmlroot = xmlDocGetRootElement((*state)->xmldoc);
+
+		if (!xmlroot)
+			ereport(ERROR, (errmsg("empty XML document from '%s'", (*state)->url)));
 
 		if (strcmp((*state)->requestVerb, OAI_REQUEST_LISTIDENTIFIERS) == 0)
 		{
