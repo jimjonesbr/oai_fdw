@@ -1613,6 +1613,8 @@ static void deparseExpr(Expr *expr, OAIFdwState *state)
 	HeapTuple tuple;
 	char *operName;
 	char *oaiNode;
+	Node *left;
+	Node *right;
 
 	elog(DEBUG2, "%s called for expr->type %u", __func__, expr->type);
 
@@ -1635,8 +1637,17 @@ static void deparseExpr(Expr *expr, OAIFdwState *state)
 
 		elog(DEBUG2, "  %s: opername > %s", __func__, operName);
 
-		var = (Var *)linitial(oper->args);
+		left = linitial(oper->args);
+		right = lsecond(oper->args);
+
+		if (!IsA(left, Var) || !IsA(right, Const))
+			break; /* let PG evaluate locally */
+
+		var = (Var *)left;
 		oaiNode = GetOAINodeFromColumn(state->foreign_table->relid, var->varattno);
+
+		if (!oaiNode)
+			break;
 
 		if (strcmp(operName, "=") == 0)
 		{
