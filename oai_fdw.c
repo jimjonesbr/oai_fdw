@@ -1312,6 +1312,9 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 			for (long i = 1; i <= maxretries && (res = curl_easy_perform(curl)) != CURLE_OK; i++)
 			{
 				elog(WARNING, "  %s (%s): request to '%s' failed (%ld)", __func__, state->requestVerb, state->url, i);
+				/* Reset chunk memory for retry */
+				chunk.size = 0;
+				chunk_header.size = 0;
 			}
 		}
 
