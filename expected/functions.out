@@ -43,12 +43,12 @@ ORDER BY metadataprefix COLLATE "C";
 
 SELECT * FROM OAI_ListMetadataFormats('oai_server_bioj') 
 ORDER BY metadataprefix COLLATE "C";
-WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain; charset=utf-8"
-WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain; charset=utf-8"
+WARNING:  HeaderCallbackFunction: unsupported content-type: "content-type: text/plain; charset=utf-8"
+WARNING:  HeaderCallbackFunction: unsupported content-type: "content-type: text/plain; charset=utf-8"
 WARNING:    ExecuteOAIRequest (ListMetadataFormats): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (1)
-WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain; charset=utf-8"
+WARNING:  HeaderCallbackFunction: unsupported content-type: "content-type: text/plain; charset=utf-8"
 WARNING:    ExecuteOAIRequest (ListMetadataFormats): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (2)
-WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain; charset=utf-8"
+WARNING:  HeaderCallbackFunction: unsupported content-type: "content-type: text/plain; charset=utf-8"
 WARNING:    ExecuteOAIRequest (ListMetadataFormats): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (3)
 ERROR:  unable to connect to the OAI repository
 SELECT * FROM OAI_ListMetadataFormats('oai_server_bjihs') 
@@ -99,12 +99,12 @@ WHERE setname IS NOT NULL AND setspec IS NOT NULL;
 
 SELECT * FROM OAI_ListSets('oai_server_bioj')
 ORDER BY setspec COLLATE "C";
-WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain; charset=utf-8"
-WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain; charset=utf-8"
+WARNING:  HeaderCallbackFunction: unsupported content-type: "content-type: text/plain; charset=utf-8"
+WARNING:  HeaderCallbackFunction: unsupported content-type: "content-type: text/plain; charset=utf-8"
 WARNING:    ExecuteOAIRequest (ListSets): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (1)
-WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain; charset=utf-8"
+WARNING:  HeaderCallbackFunction: unsupported content-type: "content-type: text/plain; charset=utf-8"
 WARNING:    ExecuteOAIRequest (ListSets): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (2)
-WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain; charset=utf-8"
+WARNING:  HeaderCallbackFunction: unsupported content-type: "content-type: text/plain; charset=utf-8"
 WARNING:    ExecuteOAIRequest (ListSets): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (3)
 ERROR:  unable to connect to the OAI repository
 SELECT * FROM OAI_Identify('oai_server_ulb')
@@ -135,12 +135,12 @@ ORDER BY name COLLATE "C";
 
 SELECT * FROM OAI_Identify('oai_server_bioj')
 ORDER BY name COLLATE "C";
-WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain; charset=utf-8"
-WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain; charset=utf-8"
+WARNING:  HeaderCallbackFunction: unsupported content-type: "content-type: text/plain; charset=utf-8"
+WARNING:  HeaderCallbackFunction: unsupported content-type: "content-type: text/plain; charset=utf-8"
 WARNING:    ExecuteOAIRequest (Identify): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (1)
-WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain; charset=utf-8"
+WARNING:  HeaderCallbackFunction: unsupported content-type: "content-type: text/plain; charset=utf-8"
 WARNING:    ExecuteOAIRequest (Identify): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (2)
-WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain; charset=utf-8"
+WARNING:  HeaderCallbackFunction: unsupported content-type: "content-type: text/plain; charset=utf-8"
 WARNING:    ExecuteOAIRequest (Identify): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (3)
 ERROR:  unable to connect to the OAI repository
 SELECT * FROM OAI_Identify('oai_server_bjihs')

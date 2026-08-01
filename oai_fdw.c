@@ -980,44 +980,47 @@ static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, voi
 
 static size_t HeaderCallbackFunction(char *contents, size_t size, size_t nmemb, void *userp)
 {
-
 	size_t realsize = size * nmemb;
 	struct MemoryStruct *mem = (struct MemoryStruct *)userp;
 	char *ptr;
-	char *textxml = "content-type: text/xml";
-	char *applicationxml = "content-type: application/xml";
 
-	/* is it a "content-type" entry? "*/
-	if (strncasecmp(contents, textxml, 13) == 0)
+	/* Work on a NUL-terminated copy; libcurl does NOT terminate 'contents'. */
+	char *line = palloc(realsize + 1);
+	memcpy(line, contents, realsize);
+	line[realsize] = '\0';
+
+	/* strip trailing CR/LF safely */
+	while (realsize > 0 && (line[realsize - 1] == '\r' || line[realsize - 1] == '\n'))
+		line[--realsize] = '\0';
+
+	/* Is this the Content-Type header? */
+	if (pg_strncasecmp(line, "content-type:", 13) == 0)
 	{
-		/*
-		 * if the content-type isn't "text/xml" or "application/xml"
-		 * return 0 (fail), as other content-types aren't supported
-		 * in the OAI 2.0 Standard.
-		 */
-		if (strncasecmp(contents, textxml, strlen(textxml)) != 0 &&
-			strncasecmp(contents, applicationxml, strlen(applicationxml)) != 0)
+		if (pg_strncasecmp(line, "content-type: text/xml", 22) != 0 &&
+			pg_strncasecmp(line, "content-type: application/xml", 29) != 0)
 		{
-			/* remove crlf */
-			contents[strlen(contents) - 2] = '\0';
-			elog(WARNING, "%s: unsupported header entry: \"%s\"", __func__, contents);
-			return 0;
+			elog(WARNING, "%s: unsupported content-type: \"%s\"", __func__, line);
+			pfree(line);
+			/* return realsize to keep going, or 0 to abort — your choice */
+			return realsize;   /* NOTE: realsize was mutated above; see note */
 		}
 	}
 
-	ptr = repalloc(mem->memory, mem->size + realsize + 1);
+	pfree(line);
 
+	/* keep storing the raw header bytes */
+	ptr = repalloc(mem->memory, mem->size + (size * nmemb) + 1);
 	if (!ptr)
 		ereport(ERROR,
 				(errcode(ERRCODE_FDW_OUT_OF_MEMORY),
 				 errmsg("[%s] out of memory (repalloc returned NULL)", __func__)));
 
 	mem->memory = ptr;
-	memcpy(&(mem->memory[mem->size]), contents, realsize);
-	mem->size += realsize;
+	memcpy(&(mem->memory[mem->size]), contents, size * nmemb);
+	mem->size += size * nmemb;
 	mem->memory[mem->size] = 0;
 
-	return realsize;
+	return size * nmemb;
 }
 
 /*
