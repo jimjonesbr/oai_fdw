@@ -2337,10 +2337,32 @@ static void appendTextArray(ArrayType **array, char *text_element)
 
 static void OAIFdwReScanForeignScan(ForeignScanState *node)
 {
+	struct OAIFdwState *state = (struct OAIFdwState *) node->fdw_state;
+
+	if (!state)
+		return;
+
+	state->rowcount = 0;
+	state->pageindex = 0;
+	state->pagesize = 0;
+	state->records = NIL;
+	state->resumptionToken = NULL;
+	state->xmldoc = NULL;
 }
 
 static void OAIFdwEndForeignScan(ForeignScanState *node)
 {
+	struct OAIFdwState *state;
+
+	if (node->fdw_state)
+	{
+		state = (struct OAIFdwState *)node->fdw_state;
+
+		elog(DEBUG2, "%s: freeing oai_fdw state", __func__);
+		pfree(state);
+	}
+
+	elog(DEBUG1, "%s exit oai_fdw: so long .. \n", __func__);
 }
 
 static List *OAIFdwImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid serverOid)
