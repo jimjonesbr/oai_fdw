@@ -287,6 +287,14 @@ static void RaiseOAIException(xmlNodePtr error);
 static Datum CreateDatum(HeapTuple tuple, int pgtype, int pgtypmod, char *value);
 static void LoadOAIUserMapping(OAIFdwState *state);
 static void InitSession(OAIFdwState *state, RelOptInfo *baserel);
+void _PG_init(void);
+
+void _PG_init(void)
+{
+	if (curl_global_init(CURL_GLOBAL_ALL) != 0)
+		ereport(ERROR,
+				(errmsg("oai_fdw: could not initialize libcurl")));
+}
 
 Datum oai_fdw_handler(PG_FUNCTION_ARGS)
 {
@@ -1074,13 +1082,10 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 
 	elog(DEBUG1, "%s called: base url > '%s' ", __func__, state->url);
 
-	/* Initialize curl early so it's available for URL encoding */
-	curl_global_init(CURL_GLOBAL_ALL);
 	curl = curl_easy_init();
 
 	if (!curl)
 	{
-		curl_global_cleanup();
 		ereport(ERROR,
 				(errcode(ERRCODE_FDW_UNABLE_TO_ESTABLISH_CONNECTION),
 				 errmsg("%s: failed to initialize curl", __func__)));
@@ -1332,7 +1337,6 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 				pfree(chunk_header.memory);
 			curl_slist_free_all(headers);
 			curl_easy_cleanup(curl);
-			curl_global_cleanup();
 
 			if (len)
 				ereport(ERROR,
@@ -1364,7 +1368,6 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 		pfree(chunk_header.memory);
 	curl_slist_free_all(headers);
 	curl_easy_cleanup(curl);
-	curl_global_cleanup();
 
 	return OAI_SUCCESS;
 }
