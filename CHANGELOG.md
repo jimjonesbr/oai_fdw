@@ -1,9 +1,16 @@
+### oai_fdw 1.14
+**unreleased**
+
+* Bug fixes
+
+  **Fixed invalid libcurl lifecycle**: `curl_global_init()`/`curl_global_cleanup()` were being called on every SPARQL request instead of once per backend process. This could interfere with other libcurl users loaded in the same backend (e.g. other FDWs). Global initialization now happens once in `_PG_init()`; cleanup is left to the OS at process exit.
+
 ### oai_fdw 1.13
 2026-02-20
 
 * Bug Fixes
 
-Moved proxy authentication options (`proxy_user` and `proxy_password`) from SERVER to USER MAPPING. These credentials are now correctly specified in CREATE USER MAPPING instead of CREATE SERVER.
+  Moved proxy authentication options (`proxy_user` and `proxy_password`) from SERVER to USER MAPPING. These credentials are now correctly specified in CREATE USER MAPPING instead of CREATE SERVER.
 
 ### oai_fdw 1.12
 2026-01-09

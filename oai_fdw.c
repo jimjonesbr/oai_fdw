@@ -291,9 +291,20 @@ void _PG_init(void);
 
 void _PG_init(void)
 {
-	if (curl_global_init(CURL_GLOBAL_ALL) != 0)
+	/*
+	 * Initialize libcurl's global state once per backend process.
+	 * Intentionally no matching _PG_fini()/curl_global_cleanup(): this is a
+	 * single-threaded, long-lived backend process that may share the address
+	 * space with other libcurl-using extensions (e.g. rdf_fdw), and
+	 * _PG_fini() is not guaranteed to run on backend exit anyway. Global
+	 * state is reclaimed by the OS when the backend process terminates.
+	 */
+	if (curl_global_init(CURL_GLOBAL_ALL) != CURLE_OK)
 		ereport(ERROR,
-				(errmsg("oai_fdw: could not initialize libcurl")));
+				(errcode(ERRCODE_FDW_ERROR),
+				 errmsg("oai_fdw: could not initialise libcurl")));
+
+	xmlInitParser();
 }
 
 Datum oai_fdw_handler(PG_FUNCTION_ARGS)
@@ -754,7 +765,6 @@ static List *GetIdentity(OAIFdwState *state)
 	if (!state->xmldoc)
 		elog(ERROR, "invalid %s response from '%s'", state->requestVerb, state->url);
 
-	xmlInitParser();
 
 	if (oaiExecuteResponse == OAI_SUCCESS)
 	{
@@ -788,7 +798,6 @@ static List *GetIdentity(OAIFdwState *state)
 	}
 
 	xmlFreeDoc(state->xmldoc);
-	xmlCleanupParser();
 
 	elog(DEBUG1, "%s => finished", __func__);
 
@@ -813,7 +822,6 @@ static List *GetSets(OAIFdwState *state)
 	if (!state->xmldoc)
 		elog(ERROR, "invalid %s response from '%s'", state->requestVerb, state->url);
 
-	xmlInitParser();
 
 	if (oaiExecuteResponse == OAI_SUCCESS)
 	{
@@ -859,7 +867,6 @@ static List *GetSets(OAIFdwState *state)
 	}
 
 	xmlFreeDoc(state->xmldoc);
-	xmlCleanupParser();
 
 	elog(DEBUG1, "%s => finished", __func__);
 
@@ -884,8 +891,6 @@ static List *GetMetadataFormats(OAIFdwState *state)
 
 	if (!state->xmldoc)
 		elog(ERROR, "invalid %s response from '%s'", state->requestVerb, state->url);
-
-	xmlInitParser();
 
 	if (oaiExecuteResponse == OAI_SUCCESS)
 	{
@@ -933,7 +938,6 @@ static List *GetMetadataFormats(OAIFdwState *state)
 	}
 
 	xmlFreeDoc(state->xmldoc);
-	xmlCleanupParser();
 
 	elog(DEBUG1, "  %s => finished.", __func__);
 
@@ -1862,8 +1866,6 @@ static void OAIFdwBeginForeignScan(ForeignScanState *node, int eflags)
 
 	node->fdw_state = (void *)state;
 
-	xmlInitParser();
-
 	state->oaicxt = AllocSetContextCreate(CurrentMemoryContext,
 										  "oai_fdw_ctx",
 										  ALLOCSET_DEFAULT_SIZES);
@@ -2058,7 +2060,6 @@ static TupleTableSlot *OAIFdwIterateForeignScan(ForeignScanState *node)
 		 * No further records to be retrieved. Let's clean up the XML parser
 		 * before ending the query.
 		 */
-		xmlCleanupParser();
 		MemoryContextDelete(state->oaicxt);
 	}
 
