@@ -59,6 +59,7 @@
 #include "catalog/pg_type.h"
 #include "access/reloptions.h"
 #include "catalog/pg_namespace.h"
+#include "nodes/makefuncs.h"
 
 #define OAI_FDW_VERSION "1.14-dev"
 #define OAI_REQUEST_LISTRECORDS "ListRecords"
@@ -117,6 +118,17 @@
 #define OAI_MALFORMED_URL 3
 #define OAI_UNKNOWN_REQUEST 2
 #define ERROR_CODE_MISSING_PREFIX 1
+#define IntToConst(x) makeConst(INT4OID, -1, InvalidOid, 4, Int32GetDatum((int32)(x)), false, true)
+#define OidToConst(x) makeConst(OIDOID, -1, InvalidOid, 4, ObjectIdGetDatum(x), false, true)
+
+/* list API has changed in v13 */
+#if PG_VERSION_NUM < 130000
+#define list_next(l, e) lnext((e))
+#define do_each_cell(cell, list, element) for_each_cell(cell, (element))
+#else
+#define list_next(l, e) lnext((l), (e))
+#define do_each_cell(cell, list, element) for_each_cell(cell, (list), (element))
+#endif /* PG_VERSION_NUM */
 
 PG_MODULE_MAGIC;
 
@@ -287,6 +299,10 @@ static void RaiseOAIException(xmlNodePtr error);
 static Datum CreateDatum(HeapTuple tuple, int pgtype, int pgtypmod, char *value);
 static void LoadOAIUserMapping(OAIFdwState *state);
 static void InitSession(OAIFdwState *state, RelOptInfo *baserel);
+static List *SerializePlanData(OAIFdwState *state);
+static struct OAIFdwState *DeserializePlanData(List *list);
+Const *CStringToConst(const char *str);
+char *ConstToCString(Const *constant);
 void _PG_init(void);
 
 void _PG_init(void)
@@ -1812,7 +1828,6 @@ static void OAIFdwGetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid 
 	state->foreign_table = GetForeignTable(foreigntableid);
 	state->foreign_server = GetForeignServer(state->foreign_table->serverid);
 
-	InitSession(state, baserel);
 	baserel->fdw_private = state;
 }
 
@@ -1840,17 +1855,18 @@ static void OAIFdwGetForeignPaths(PlannerInfo *root, RelOptInfo *baserel, Oid fo
 static ForeignScan *OAIFdwGetForeignPlan(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid, ForeignPath *best_path, List *tlist, List *scan_clauses, Plan *outer_plan)
 {
 	OAIFdwState *state = baserel->fdw_private;
-	List *fdw_private;
+	List *fdw_private = NIL;
 
-	fdw_private = list_make1(state);
+	InitSession(state, baserel);
 
 	scan_clauses = extract_actual_clauses(scan_clauses, false);
+	fdw_private = SerializePlanData(state);
 
 	return make_foreignscan(tlist,
 							scan_clauses,
 							baserel->relid,
 							NIL,		 /* no expressions we will evaluate */
-							fdw_private, /* pass along our start and end */
+							fdw_private, /* pass along our state */
 							NIL,		 /* no custom tlist; our scan tuple looks like tlist */
 							NIL,		 /* no quals we will recheck */
 							outer_plan);
@@ -1859,7 +1875,9 @@ static ForeignScan *OAIFdwGetForeignPlan(PlannerInfo *root, RelOptInfo *baserel,
 static void OAIFdwBeginForeignScan(ForeignScanState *node, int eflags)
 {
 	ForeignScan *fs = (ForeignScan *)node->ss.ps.plan;
-	OAIFdwState *state = (OAIFdwState *)linitial(fs->fdw_private);
+	OAIFdwState *state;
+
+	state = DeserializePlanData(fs->fdw_private);
 
 	if (eflags & EXEC_FLAG_EXPLAIN_ONLY)
 		return;
@@ -2727,4 +2745,162 @@ static void InitSession(OAIFdwState *state, RelOptInfo *baserel)
 	LoadOAIUserMapping(state);
 
 	OAIRequestPlanner(state, baserel);
+}
+
+/*
+ * SerializePlanData
+ * -----------------
+ * Converts parameters into Const variables, so that it can be properly
+ * stored by the plan
+ *
+ * returns a List containing all converted parameterrs.
+ */
+static List *SerializePlanData(OAIFdwState *state)
+{
+	List *result = NIL;
+
+	elog(DEBUG1, "%s called", __func__);
+
+	result = lappend(result, IntToConst((int)state->numcols));
+	result = lappend(result, IntToConst((int)state->numfdwcols));
+	result = lappend(result, IntToConst((int)state->rowcount));
+	result = lappend(result, IntToConst((int)state->requestRedirect));
+	result = lappend(result, IntToConst((int)state->requestMaxRedirect));
+	result = lappend(result, IntToConst((int)state->maxretries));
+	result = lappend(result, IntToConst((int)state->connectTimeout));
+	result = lappend(result, CStringToConst(state->identifier));
+	result = lappend(result, CStringToConst(state->set));
+	result = lappend(result, CStringToConst(state->url));
+	result = lappend(result, CStringToConst(state->metadataPrefix));
+	result = lappend(result, CStringToConst(state->proxy));
+	result = lappend(result, CStringToConst(state->proxyType));
+	result = lappend(result, CStringToConst(state->proxyUser));
+	result = lappend(result, CStringToConst(state->proxyPassword));
+	result = lappend(result, CStringToConst(state->from));
+	result = lappend(result, CStringToConst(state->until));
+	result = lappend(result, CStringToConst(state->resumptionToken));
+	result = lappend(result, CStringToConst(state->requestVerb));
+	result = lappend(result, OidToConst(state->foreigntableid));
+
+	elog(DEBUG1, "%s exit", __func__);
+	return result;
+}
+
+/*
+ * DeserializePlanData
+ * -------------------
+ * Converts Const variables created using SerializePlanData back
+ * into pointers.
+ *
+ * IMPORTANT: fields must be extracted in the EXACT same order they were
+ * appended in SerializePlanData(); any mismatch silently produces wrong values.
+ *
+ * returns a OAIFdwState containing all converted parameterrs.
+ */
+static struct OAIFdwState *DeserializePlanData(List *list)
+{
+	struct OAIFdwState *state = (struct OAIFdwState *)palloc0(sizeof(OAIFdwState));
+	ListCell *cell = list_head(list);
+
+	elog(DEBUG1, "%s called", __func__);
+
+	state->numcols = (int)DatumGetInt32(((Const *)lfirst(cell))->constvalue);
+	state->pagesize = 0;
+	cell = list_next(list, cell);
+
+	state->numfdwcols = (int)DatumGetInt32(((Const *)lfirst(cell))->constvalue);
+	cell = list_next(list, cell);
+
+	state->rowcount = (int)DatumGetInt32(((Const *)lfirst(cell))->constvalue);
+	cell = list_next(list, cell);
+
+	state->requestRedirect = (int)DatumGetInt32(((Const *)lfirst(cell))->constvalue);
+	cell = list_next(list, cell);
+
+	state->requestMaxRedirect = (int)DatumGetInt32(((Const *)lfirst(cell))->constvalue);
+	cell = list_next(list, cell);
+
+	state->maxretries = (int)DatumGetInt32(((Const *)lfirst(cell))->constvalue);
+	cell = list_next(list, cell);
+
+	state->connectTimeout = (int)DatumGetInt32(((Const *)lfirst(cell))->constvalue);
+	cell = list_next(list, cell);
+
+	state->identifier = ConstToCString(lfirst(cell));
+	cell = list_next(list, cell);
+
+	state->set = ConstToCString(lfirst(cell));
+	cell = list_next(list, cell);
+
+	state->url = ConstToCString(lfirst(cell));
+	cell = list_next(list, cell);
+
+	state->metadataPrefix = ConstToCString(lfirst(cell));
+	cell = list_next(list, cell);
+
+	state->proxy = ConstToCString(lfirst(cell));
+	cell = list_next(list, cell);
+
+	state->proxyType = ConstToCString(lfirst(cell));
+	cell = list_next(list, cell);
+
+	state->proxyUser = ConstToCString(lfirst(cell));
+	cell = list_next(list, cell);
+
+	state->proxyPassword = ConstToCString(lfirst(cell));
+	cell = list_next(list, cell);
+
+	state->from = ConstToCString(lfirst(cell));
+	cell = list_next(list, cell);
+
+	state->until = ConstToCString(lfirst(cell));
+	cell = list_next(list, cell);
+
+	state->resumptionToken = ConstToCString(lfirst(cell));
+	cell = list_next(list, cell);
+
+	state->requestVerb = ConstToCString(lfirst(cell));
+	cell = list_next(list, cell);
+
+	state->foreigntableid = DatumGetObjectId(((Const *)lfirst(cell))->constvalue);
+	cell = list_next(list, cell);
+
+	elog(DEBUG1, "%s exit", __func__);
+	return state;
+}
+
+/*
+ * CStringToConst
+ * -----------------
+ * Wraps a C string in a Const node
+ *
+ * str: the C string to wrap (NULL produces a null Const)
+ *
+ * returns a Const node wrapping the given string
+ */
+Const *CStringToConst(const char *str)
+{
+	if (str == NULL)
+		return makeNullConst(TEXTOID, -1, InvalidOid);
+	else
+		return makeConst(TEXTOID, -1, InvalidOid, -1, PointerGetDatum(cstring_to_text(str)), false, false);
+}
+
+/*
+ * ConstToCString
+ * -----------------
+ * Extracts a string from a Const
+ *
+ * constant: the Const node to extract from
+ *
+ * returns a palloc'ed copy.
+ */
+char *ConstToCString(Const *constant)
+{
+	Assert(constant != NULL);
+
+	if (constant->constisnull)
+		return NULL;
+	else
+		return text_to_cstring(DatumGetTextP(constant->constvalue));
 }
