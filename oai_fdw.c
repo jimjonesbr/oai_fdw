@@ -2047,11 +2047,12 @@ static TupleTableSlot *OAIFdwIterateForeignScan(ForeignScanState *node)
 
 	ExecClearTuple(slot);
 
-	old_cxt = MemoryContextSwitchTo(state->oaicxt);
-
 	/* Returns an empty tuple in case there is no mapping for OAI nodes and columns */
 	if (state->numfdwcols == 0)
 		return slot;
+
+	old_cxt = MemoryContextSwitchTo(state->oaicxt);
+
 	/*
 	 * Load OAI records in case that this function is called for the first time
 	 * or a page contains a resumption token and the index reached the end of
