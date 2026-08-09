@@ -872,9 +872,17 @@ static List *GetSets(OAIFdwState *state)
 						continue;
 
 					if (xmlStrcmp(SetElement->name, (xmlChar *)OAI_RESPONSE_ELEMENT_SETSPEC) == 0)
-						set->setSpec = pstrdup((char *)xmlNodeGetContent(SetElement));
+					{
+						xmlChar *el = xmlNodeGetContent(SetElement);
+						set->setSpec = pstrdup((char *) el);
+						xmlFree(el);
+					}
 					else if (xmlStrcmp(SetElement->name, (xmlChar *)OAI_RESPONSE_ELEMENT_SETNAME) == 0)
-						set->setName = pstrdup((char *)xmlNodeGetContent(SetElement));
+					{
+						xmlChar *el = xmlNodeGetContent(SetElement);
+						set->setName = pstrdup((char *) el);
+						xmlFree(el);
+					}
 				}
 
 				result = lappend(result, set);
@@ -941,11 +949,23 @@ static List *GetMetadataFormats(OAIFdwState *state)
 						continue;
 
 					if (xmlStrcmp(MetadataElement->name, (xmlChar *)OAI_RESPONSE_ELEMENT_METADATAPREFIX) == 0)
-						format->metadataPrefix = pstrdup((char *)xmlNodeGetContent(MetadataElement));
+					{
+						xmlChar *el = xmlNodeGetContent(MetadataElement);
+						format->metadataPrefix = pstrdup((char *) el);
+						xmlFree(el);
+					}
 					else if (xmlStrcmp(MetadataElement->name, (xmlChar *)OAI_RESPONSE_ELEMENT_SCHEMA) == 0)
-						format->schema = pstrdup((char *)xmlNodeGetContent(MetadataElement));
+					{
+						xmlChar *el = xmlNodeGetContent(MetadataElement);
+						format->schema = pstrdup((char *) el);
+						xmlFree(el);
+					}
 					else if (xmlStrcmp(MetadataElement->name, (xmlChar *)OAI_RESPONSE_ELEMENT_METADATANAMESPACE) == 0)
-						format->metadataNamespace = pstrdup((char *)xmlNodeGetContent(MetadataElement));
+					{
+						xmlChar *el = xmlNodeGetContent(MetadataElement);
+						format->metadataNamespace = pstrdup((char *) el);
+						xmlFree(el);
+					}
 				}
 
 				result = lappend(result, format);
@@ -2089,16 +2109,37 @@ static TupleTableSlot *OAIFdwIterateForeignScan(ForeignScanState *node)
 
 static void RaiseOAIException(xmlNodePtr error)
 {
+	xmlChar *code = xmlGetProp(error, (xmlChar *)"code");
+	xmlChar *cont = xmlNodeGetContent(error);
+	char *ccode;
+	char *ccont;
 
-	if (strcmp((char *)xmlGetProp(error, (xmlChar *)"code"), OAI_ERROR_ID_DOES_NOT_EXIST) == 0 ||
-		strcmp((char *)xmlGetProp(error, (xmlChar *)"code"), OAI_ERROR_NO_RECORD_MATCH) == 0)
+	/* Guard the RAW pointers before any string op */
+	if (!code)
+	{
+		if (cont)
+			xmlFree(cont);
+		ereport(ERROR,
+				(errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
+				 errmsg("invalid OAI error response: missing 'code' attribute")));
+	}
+
+	ccode = pstrdup((char *)code);
+	ccont = cont ? pstrdup((char *)cont) : pstrdup("");
+
+	xmlFree(code);
+	if (cont)
+		xmlFree(cont);
+
+	if (strcmp(ccode, OAI_ERROR_ID_DOES_NOT_EXIST) == 0 ||
+		strcmp(ccode, OAI_ERROR_NO_RECORD_MATCH) == 0)
 		ereport(WARNING,
 				(errcode(ERRCODE_NO_DATA_FOUND),
-				 errmsg("OAI %s: %s", (char *)xmlGetProp(error, (xmlChar *)"code"), (char *)xmlNodeGetContent(error))));
+				 errmsg("OAI %s: %s", ccode, ccont)));
 	else
 		ereport(ERROR,
 				(errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
-				 errmsg("OAI %s: %s", (char *)xmlGetProp(error, (xmlChar *)"code"), (char *)xmlNodeGetContent(error))));
+				 errmsg("OAI %s: %s", ccode, ccont)));
 }
 
 static void LoadOAIRecords(struct OAIFdwState **state)
