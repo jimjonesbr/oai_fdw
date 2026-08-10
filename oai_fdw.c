@@ -1188,8 +1188,10 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 
 		if (state->identifier)
 		{
+			char *encoded_identifier = curl_easy_escape(curl, state->identifier, 0);
 			elog(DEBUG1, "  %s (%s): appending 'identifier' > %s", __func__, state->requestVerb, state->identifier);
-			appendStringInfo(&url_buffer, "&identifier=%s", state->identifier);
+			appendStringInfo(&url_buffer, "&identifier=%s", encoded_identifier);
+			curl_free(encoded_identifier);
 		}
 
 		if (state->metadataPrefix)
@@ -1203,26 +1205,34 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 
 		if (state->set)
 		{
+			char *encoded_set = curl_easy_escape(curl, state->set, 0);
 			elog(DEBUG1, "  %s (%s): appending 'set' > %s", __func__, state->requestVerb, state->set);
-			appendStringInfo(&url_buffer, "&set=%s", state->set);
+			appendStringInfo(&url_buffer, "&set=%s", encoded_set);
+			curl_free(encoded_set);
 		}
 
 		if (state->from)
 		{
+			char *encoded_from = curl_easy_escape(curl, state->from, 0);
 			elog(DEBUG1, "  %s (%s): appending 'from' > %s", __func__, state->requestVerb, state->from);
-			appendStringInfo(&url_buffer, "&from=%s", state->from);
+			appendStringInfo(&url_buffer, "&from=%s", encoded_from);
+			curl_free(encoded_from);
 		}
 
 		if (state->until)
 		{
+			char *encoded_until = curl_easy_escape(curl, state->until, 0);
 			elog(DEBUG1, "  %s (%s): appending 'until' > %s", __func__, state->requestVerb, state->until);
-			appendStringInfo(&url_buffer, "&until=%s", state->until);
+			appendStringInfo(&url_buffer, "&until=%s", encoded_until);
+			curl_free(encoded_until);
 		}
 
 		if (state->metadataPrefix)
 		{
+			char *encoded_metadataPrefix = curl_easy_escape(curl, state->metadataPrefix, 0);
 			elog(DEBUG1, "  %s (%s): appending 'metadataPrefix' > %s", __func__, state->requestVerb, state->metadataPrefix);
-			appendStringInfo(&url_buffer, "&metadataPrefix=%s", state->metadataPrefix);
+			appendStringInfo(&url_buffer, "&metadataPrefix=%s",encoded_metadataPrefix);
+			curl_free(encoded_metadataPrefix);
 		}
 
 		if (state->resumptionToken)
