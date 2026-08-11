@@ -1973,7 +1973,7 @@ static void CreateOAITuple(TupleTableSlot *slot, OAIFdwState *state, OAIRecord *
 					elog(DEBUG2, "  %s: setting column %d option '%s'", __func__, i, option_value);
 
 					slot->tts_isnull[i] = false;
-					slot->tts_values[i] = oai->isDeleted;
+					slot->tts_values[i] = BoolGetDatum(oai->isDeleted);
 				}
 				else if (strcmp(option_value, OAI_NODE_IDENTIFIER) == 0 && oai->identifier)
 				{
