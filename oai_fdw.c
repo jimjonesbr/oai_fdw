@@ -296,7 +296,7 @@ static List *GetMetadataFormats(OAIFdwState *state);
 static List *GetIdentity(OAIFdwState *state);
 static List *GetSets(OAIFdwState *state);
 static void RaiseOAIException(xmlNodePtr error);
-static Datum CreateDatum(HeapTuple tuple, int pgtype, int pgtypmod, char *value);
+static Datum CreateDatum(int pgtype, int pgtypmod, char *value);
 static void LoadOAIUserMapping(OAIFdwState *state);
 static void InitSession(OAIFdwState *state, RelOptInfo *baserel);
 static List *SerializePlanData(OAIFdwState *state);
@@ -484,9 +484,9 @@ Datum oai_fdw_identity(PG_FUNCTION_ARGS)
 			Form_pg_attribute att = TupleDescAttr(funcctx->attinmeta->tupdesc, i);
 
 			if (strcmp(NameStr(att->attname), "name") == 0)
-				values[i] = CreateDatum(tuple, att->atttypid, att->atttypmod, identity_node->name);
+				values[i] = CreateDatum(att->atttypid, att->atttypmod, identity_node->name);
 			else if (strcmp(NameStr(att->attname), "description") == 0)
-				values[i] = CreateDatum(tuple, att->atttypid, att->atttypmod, identity_node->description);
+				values[i] = CreateDatum(att->atttypid, att->atttypmod, identity_node->description);
 			else
 				nulls[i] = true;
 		}
@@ -557,9 +557,9 @@ Datum oai_fdw_listSets(PG_FUNCTION_ARGS)
 			Form_pg_attribute att = TupleDescAttr(funcctx->attinmeta->tupdesc, i);
 
 			if (strcmp(NameStr(att->attname), "setname") == 0)
-				values[i] = CreateDatum(tuple, att->atttypid, att->atttypmod, set_node->setName);
+				values[i] = CreateDatum(att->atttypid, att->atttypmod, set_node->setName);
 			else if (strcmp(NameStr(att->attname), "setspec") == 0)
-				values[i] = CreateDatum(tuple, att->atttypid, att->atttypmod, set_node->setSpec);
+				values[i] = CreateDatum(att->atttypid, att->atttypmod, set_node->setSpec);
 			else
 				nulls[i] = true;
 		}
@@ -634,11 +634,11 @@ Datum oai_fdw_listMetadataFormats(PG_FUNCTION_ARGS)
 			Form_pg_attribute att = TupleDescAttr(funcctx->attinmeta->tupdesc, i);
 
 			if (strcmp(NameStr(att->attname), "metadataprefix") == 0)
-				values[i] = CreateDatum(tuple, att->atttypid, att->atttypmod, format->metadataPrefix);
+				values[i] = CreateDatum(att->atttypid, att->atttypmod, format->metadataPrefix);
 			else if (strcmp(NameStr(att->attname), "schema") == 0)
-				values[i] = CreateDatum(tuple, att->atttypid, att->atttypmod, format->schema);
+				values[i] = CreateDatum(att->atttypid, att->atttypmod, format->schema);
 			else if (strcmp(NameStr(att->attname), "metadatanamespace") == 0)
-				values[i] = CreateDatum(tuple, att->atttypid, att->atttypmod, format->metadataNamespace);
+				values[i] = CreateDatum(att->atttypid, att->atttypmod, format->metadataNamespace);
 			else
 				nulls[i] = true;
 		}
@@ -2602,11 +2602,10 @@ static List *OAIFdwImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid server
  *
  * returns Datum
  */
-static Datum CreateDatum(HeapTuple tuple, int pgtype, int pgtypmod, char *value)
+static Datum CreateDatum(int pgtype, int pgtypmod, char *value)
 {
 	regproc typinput;
-
-	tuple = SearchSysCache1(TYPEOID, ObjectIdGetDatum(pgtype));
+	HeapTuple tuple = SearchSysCache1(TYPEOID, ObjectIdGetDatum(pgtype));
 
 	if (!HeapTupleIsValid(tuple))
 		ereport(ERROR,
