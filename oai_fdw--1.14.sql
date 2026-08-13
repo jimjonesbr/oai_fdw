@@ -2,11 +2,6 @@ CREATE FUNCTION oai_fdw_handler()
   RETURNS fdw_handler AS 'MODULE_PATHNAME' 
   LANGUAGE C STRICT;
 
-CREATE TYPE oai_node AS (
-  code text,
-  description text
-);
-
 CREATE TYPE OAI_IdentityNode AS (
   name text,
   description text

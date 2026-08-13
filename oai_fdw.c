@@ -65,7 +65,6 @@
 #define OAI_REQUEST_LISTRECORDS "ListRecords"
 #define OAI_REQUEST_LISTIDENTIFIERS "ListIdentifiers"
 #define OAI_REQUEST_IDENTIFY "Identify"
-#define OAI_REQUEST_LISTSETS "ListSets"
 #define OAI_REQUEST_GETRECORD "GetRecord"
 #define OAI_REQUEST_LISTMETADATAFORMATS "ListMetadataFormats"
 #define OAI_REQUEST_LISTSETS "ListSets"
@@ -115,9 +114,7 @@
 
 #define OAI_SUCCESS 0
 #define OAI_FAIL 1
-#define OAI_MALFORMED_URL 3
 #define OAI_UNKNOWN_REQUEST 2
-#define ERROR_CODE_MISSING_PREFIX 1
 #define IntToConst(x) makeConst(INT4OID, -1, InvalidOid, 4, Int32GetDatum((int32)(x)), false, true)
 #define OidToConst(x) makeConst(OIDOID, -1, InvalidOid, 4, ObjectIdGetDatum(x), false, true)
 

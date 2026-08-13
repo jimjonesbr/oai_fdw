@@ -19,3 +19,6 @@ CREATE OR REPLACE FUNCTION OAI_ListSets(text)
 CREATE OR REPLACE FUNCTION OAI_Identify(text)
   RETURNS SETOF OAI_IdentityNode AS 'MODULE_PATHNAME', 'oai_fdw_identity'
   LANGUAGE C VOLATILE STRICT;
+
+/* unused PG type */
+DROP TYPE oai_node;
