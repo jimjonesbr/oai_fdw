@@ -1461,12 +1461,12 @@ static void OAIRequestPlanner(OAIFdwState *state, RelOptInfo *baserel)
 		foreach (lc, options)
 		{
 			DefElem *def = (DefElem *)lfirst(lc);
-			state->numfdwcols++;
 
 			if (strcmp(def->defname, OAI_NODE_OPTION) == 0)
 			{
 				char *option_value = defGetString(def);
 				char *attname = NameStr(attr->attname);
+				state->numfdwcols++;
 
 				if (strcmp(option_value, OAI_NODE_STATUS) == 0)
 				{
