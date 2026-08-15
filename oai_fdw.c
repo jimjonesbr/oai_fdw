@@ -376,36 +376,28 @@ OAIFdwState *GetServerInfo(const char *srvname)
 			elog(DEBUG1, "  %s parsing node '%s': %s", __func__, def->defname, defGetString(def));
 
 			if (strcmp(def->defname, OAI_NODE_URL) == 0)
+			{
 				state->url = defGetString(def);
-
-			if (strcmp(def->defname, OAI_NODE_HTTP_PROXY) == 0)
+			}
+			else if (strcmp(def->defname, OAI_NODE_HTTP_PROXY) == 0)
 			{
 				state->proxy = defGetString(def);
 				state->proxyType = OAI_NODE_HTTP_PROXY;
 			}
-
-			// if (strcmp(def->defname, OAI_NODE_PROXY_USER) == 0)
-			// 	state->proxyUser = defGetString(def);
-
-			// if (strcmp(def->defname, OAI_NODE_PROXY_PASSWORD) == 0)
-			// 	state->proxyPassword = defGetString(def);
-
-			if (strcmp(def->defname, OAI_NODE_CONNECTTIMEOUT) == 0)
+			else if (strcmp(def->defname, OAI_NODE_CONNECTTIMEOUT) == 0)
 			{
 				char *tailpt;
 				char *timeout_str = defGetString(def);
 
 				state->connectTimeout = strtol(timeout_str, &tailpt, 0);
 			}
-
-			if (strcmp(def->defname, OAI_NODE_REQUEST_REDIRECT) == 0)
+			else if (strcmp(def->defname, OAI_NODE_REQUEST_REDIRECT) == 0)
 			{
 				state->requestRedirect = defGetBoolean(def);
 
 				elog(DEBUG1, "  %s: setting \"%s\": %d", __func__, OAI_NODE_REQUEST_REDIRECT, state->requestRedirect);
 			}
-
-			if (strcmp(def->defname, OAI_NODE_REQUEST_MAX_REDIRECT) == 0)
+			else if (strcmp(def->defname, OAI_NODE_REQUEST_MAX_REDIRECT) == 0)
 			{
 				char *tailpt;
 				char *maxredirect_str = defGetString(def);
@@ -424,6 +416,8 @@ OAIFdwState *GetServerInfo(const char *srvname)
 				(errcode(ERRCODE_CONNECTION_DOES_NOT_EXIST),
 				 errmsg("FOREIGN SERVER does not exist: '%s'", srvname)));
 
+	state->foreign_server = server;
+	LoadOAIUserMapping(state);
 	return state;
 }
 
