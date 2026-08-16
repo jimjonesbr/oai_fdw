@@ -161,6 +161,8 @@ typedef struct OAIFdwState
 	ForeignServer *foreign_server;
 	char *user;
 	char *password;
+	Cost startup_cost;
+	Cost total_cost;
 } OAIFdwState;
 
 typedef struct OAIRecord
@@ -1848,6 +1850,9 @@ static void OAIFdwGetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid 
 	OAIFdwState *state = (OAIFdwState *)palloc0(sizeof(OAIFdwState));
 	state->foreign_table = GetForeignTable(foreigntableid);
 	state->foreign_server = GetForeignServer(state->foreign_table->serverid);
+	state->startup_cost = 10000.0;
+	/* estimate total cost as startup cost + 10 * (returned rows) */
+	state->total_cost = state->startup_cost + baserel->rows * 10.0;
 
 	baserel->fdw_private = state;
 }
@@ -1855,17 +1860,18 @@ static void OAIFdwGetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid 
 static void OAIFdwGetForeignPaths(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid)
 {
 
+	struct OAIFdwState *state = (struct OAIFdwState *)baserel->fdw_private;
 	Path *path = (Path *)create_foreignscan_path(root, baserel,
 												 NULL,			/* default pathtarget */
 												 baserel->rows, /* rows */
 #if PG_VERSION_NUM >= 180000
 												 0, /* no parallel pathflags */
 #endif
-												 1,					/* startup cost */
-												 1 + baserel->rows, /* total cost */
-												 NIL,				/* no pathkeys */
-												 NULL,				/* no required outer relids */
-												 NULL,				/* no fdw_outerpath */
+												 state->startup_cost, /* startup cost */
+												 state->total_cost,   /* total cost */
+												 NIL,				  /* no pathkeys */
+												 NULL,				  /* no required outer relids */
+												 NULL,				  /* no fdw_outerpath */
 #if PG_VERSION_NUM >= 170000
 												 NIL,	/* no fdw_restrictinfo */
 #endif													/* PG_VERSION_NUM */
