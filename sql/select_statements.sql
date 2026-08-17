@@ -52,4 +52,3 @@ SERVER oai_server_dnb OPTIONS (setspec 'zdb',
 SELECT * 
 FROM dnb_zdb_oai_dc_nocontent
 WHERE datestamp BETWEEN '2021-01-03' AND '2021-01-04';
-

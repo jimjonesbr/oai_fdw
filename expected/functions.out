@@ -41,27 +41,6 @@ ORDER BY metadataprefix COLLATE "C";
  xMetaDiss        | http://www.d-nb.de/standards/xmetadiss/xmetadiss.xsd                        | http://www.d-nb.de/standards/xMetaDiss/
 (17 rows)
 
-SELECT * FROM OAI_ListMetadataFormats('oai_server_bioj') 
-ORDER BY metadataprefix COLLATE "C";
-WARNING:  HeaderCallbackFunction: unsupported content-type: "content-type: text/plain; charset=utf-8"
-WARNING:  HeaderCallbackFunction: unsupported content-type: "content-type: text/plain; charset=utf-8"
-WARNING:    ExecuteOAIRequest (ListMetadataFormats): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (1)
-WARNING:  HeaderCallbackFunction: unsupported content-type: "content-type: text/plain; charset=utf-8"
-WARNING:    ExecuteOAIRequest (ListMetadataFormats): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (2)
-WARNING:  HeaderCallbackFunction: unsupported content-type: "content-type: text/plain; charset=utf-8"
-WARNING:    ExecuteOAIRequest (ListMetadataFormats): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (3)
-ERROR:  unable to connect to the OAI repository
-SELECT * FROM OAI_ListMetadataFormats('oai_server_bjihs') 
-ORDER BY metadataprefix COLLATE "C";
- metadataprefix |                           schema                           |                       metadatanamespace                        
-----------------+------------------------------------------------------------+----------------------------------------------------------------
- marcxml        | http://www.loc.gov/standards/marcxml/schema/MARC21slim.xsd | http://www.loc.gov/MARC21/slim
- oai_biblat     | https://biblat.unam.mx                                     | oai_biblat_330v16
- oai_dc         | http://www.openarchives.org/OAI/2.0/oai_dc.xsd             | http://www.openarchives.org/OAI/2.0/oai_dc/
- oai_marc       | http://www.openarchives.org/OAI/1.1/oai_marc.xsd           | http://www.openarchives.org/OAI/1.1/oai_marc
- rfc1807        | http://www.openarchives.org/OAI/1.1/rfc1807.xsd            | http://info.internet.isi.edu:80/in-notes/rfc/files/rfc1807.txt
-(5 rows)
-
 SELECT * FROM OAI_ListSets('oai_server_ulb') 
 WHERE setname IS NOT NULL AND setspec IS NOT NULL 
 ORDER BY setname  COLLATE "C"
@@ -80,15 +59,6 @@ FETCH FIRST ROW ONLY;
  authorities:dif | Bestand Deutsches Filminstitut (DIF e. V.)
 (1 row)
 
-SELECT * FROM OAI_ListSets('oai_server_bjihs') 
-WHERE setname IS NOT NULL AND setspec IS NOT NULL 
-ORDER BY setname  COLLATE "C"
-FETCH FIRST ROW ONLY;
-  setspec  |              setname              
------------+-----------------------------------
- bjihs:ACC | Anais de Conferências Científicas
-(1 row)
-
 SELECT count(*) > 0 
 FROM OAI_ListSets('oai_server_dnb') 
 WHERE setname IS NOT NULL AND setspec IS NOT NULL;
@@ -97,16 +67,6 @@ WHERE setname IS NOT NULL AND setspec IS NOT NULL;
  t
 (1 row)
 
-SELECT * FROM OAI_ListSets('oai_server_bioj')
-ORDER BY setspec COLLATE "C";
-WARNING:  HeaderCallbackFunction: unsupported content-type: "content-type: text/plain; charset=utf-8"
-WARNING:  HeaderCallbackFunction: unsupported content-type: "content-type: text/plain; charset=utf-8"
-WARNING:    ExecuteOAIRequest (ListSets): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (1)
-WARNING:  HeaderCallbackFunction: unsupported content-type: "content-type: text/plain; charset=utf-8"
-WARNING:    ExecuteOAIRequest (ListSets): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (2)
-WARNING:  HeaderCallbackFunction: unsupported content-type: "content-type: text/plain; charset=utf-8"
-WARNING:    ExecuteOAIRequest (ListSets): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (3)
-ERROR:  unable to connect to the OAI repository
 SELECT * FROM OAI_Identify('oai_server_ulb')
 ORDER BY name COLLATE "C";
        name        |                             description                              
@@ -132,31 +92,4 @@ ORDER BY name COLLATE "C";
  protocolVersion   | 2.0
  repositoryName    | OAI-Repository of the German National Library V2.0.11
 (7 rows)
-
-SELECT * FROM OAI_Identify('oai_server_bioj')
-ORDER BY name COLLATE "C";
-WARNING:  HeaderCallbackFunction: unsupported content-type: "content-type: text/plain; charset=utf-8"
-WARNING:  HeaderCallbackFunction: unsupported content-type: "content-type: text/plain; charset=utf-8"
-WARNING:    ExecuteOAIRequest (Identify): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (1)
-WARNING:  HeaderCallbackFunction: unsupported content-type: "content-type: text/plain; charset=utf-8"
-WARNING:    ExecuteOAIRequest (Identify): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (2)
-WARNING:  HeaderCallbackFunction: unsupported content-type: "content-type: text/plain; charset=utf-8"
-WARNING:    ExecuteOAIRequest (Identify): request to 'https://www.bioj-online.com/jms/index.php/up/oai/' failed (3)
-ERROR:  unable to connect to the OAI repository
-SELECT * FROM OAI_Identify('oai_server_bjihs')
-ORDER BY name COLLATE "C";
-       name        |                                           description                                           
--------------------+-------------------------------------------------------------------------------------------------
- adminEmail        | journalbjihs@gmail.com
- baseURL           | https://bjihs.emnuvens.com.br/bjihs/oai
- compression       | deflate
- compression       | gzip
- deletedRecord     | persistent
- description       | Open Journal SystemsPublic Knowledge Projectpkp.contact@gmail.com3.3.0.17http://pkp.sfu.ca/ojs/
- description       | oaiojs.bjihs.emnuvens.com.br:oai:ojs.bjihs.emnuvens.com.br:article/1
- earliestDatestamp | 2020-04-18T03:05:46Z
- granularity       | YYYY-MM-DDThh:mm:ssZ
- protocolVersion   | 2.0
- repositoryName    | Brazilian Journal of Implantology and Health Sciences  
-(11 rows)
 

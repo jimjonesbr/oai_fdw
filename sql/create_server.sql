@@ -8,25 +8,4 @@ OPTIONS (url 'https://services.dnb.de/oai/repository',
 CREATE USER MAPPING FOR postgres 
 SERVER oai_server_dnb OPTIONS (user 'admin', password 'secret', proxy_user 'proxyuser', proxy_password 'proxypass');
 
--- Münster University Library
-CREATE SERVER oai_server_ulb FOREIGN DATA WRAPPER oai_fdw 
-OPTIONS (url 'https://sammlungen.ulb.uni-muenster.de/oai',
-         request_redirect 'true');
-
--- British and Irish Orthoptic Journal	
-CREATE SERVER oai_server_bioj FOREIGN DATA WRAPPER oai_fdw 
-OPTIONS (url 'https://www.bioj-online.com/jms/index.php/up/oai/');
-
--- Brazilian Journal of Implantology and Health Sciences
-CREATE SERVER oai_server_bjihs FOREIGN DATA WRAPPER oai_fdw 
-OPTIONS (url 'https://bjihs.emnuvens.com.br/bjihs/oai');
-
--- National Library of the Netherlands
-CREATE SERVER oai_server_kbnl FOREIGN DATA WRAPPER oai_fdw 
-OPTIONS (url 'http://services.kb.nl/mdo/oai');
-
--- German National Library (with redirect)
-CREATE SERVER oai_server_dnb_redirect FOREIGN DATA WRAPPER oai_fdw 
-OPTIONS (url 'https://services.dnb.de/oai/repository',
-         request_redirect 'true',
-         request_max_redirect '1');
+DROP SERVER oai_server_dnb CASCADE;

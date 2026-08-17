@@ -15,6 +15,7 @@
 #include "optimizer/pathnode.h"
 #include "optimizer/restrictinfo.h"
 #include "optimizer/planmain.h"
+#include "optimizer/planmain.h"  // planner APIs
 #include "utils/rel.h"
 #include "miscadmin.h"
 
@@ -34,7 +35,12 @@
 
 #include "foreign/foreign.h"
 #include "commands/defrem.h"
-#include "nodes/pg_list.h"
+
+#if PG_VERSION_NUM >= 180000
+#include "commands/explain_format.h"
+#include "commands/explain_state.h"
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <curl/curl.h>
@@ -46,8 +52,15 @@
 #include <funcapi.h>
 #include "lib/stringinfo.h"
 #include <utils/lsyscache.h>
+#include "nodes/pg_list.h"
 #include "nodes/nodes.h"
 #include "nodes/primnodes.h"
+#include "nodes/makefuncs.h"
+#include "nodes/nodeFuncs.h"
+#include "nodes/plannodes.h"
+#if PG_VERSION_NUM < 180000
+#include "nodes/bitmapset.h" /* Needed for bms_is_empty in versions where it's inline */
+#endif
 #include "utils/datetime.h"
 #include "utils/timestamp.h"
 #include "utils/formatting.h"
@@ -59,7 +72,7 @@
 #include "catalog/pg_type.h"
 #include "access/reloptions.h"
 #include "catalog/pg_namespace.h"
-#include "nodes/makefuncs.h"
+
 
 #define OAI_FDW_VERSION "1.14-dev"
 #define OAI_REQUEST_LISTRECORDS "ListRecords"
@@ -151,6 +164,7 @@ typedef struct OAIFdwState
 	char *resumptionToken;	 /* Token to retrieve the next page of a result set. */
 	char *requestVerb;		 /* Type of OAI request (GetRecord, ListRecords, ListIdentifiers,
 								Identify, ListSets, ListMetadataFormats. */
+	char *serverName;
 	Oid foreigntableid;
 	xmlDocPtr xmldoc;	  /* Result of an OAI request. */
 	MemoryContext oaicxt; /* Memory Context for data manipulation. */
@@ -269,6 +283,7 @@ static void OAIFdwGetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid 
 static void OAIFdwGetForeignPaths(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid);
 static ForeignScan *OAIFdwGetForeignPlan(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid, ForeignPath *best_path, List *tlist, List *scan_clauses, Plan *outer_plan);
 static void OAIFdwBeginForeignScan(ForeignScanState *node, int eflags);
+static void OAIExplainForeignScan(ForeignScanState *node, ExplainState *es);
 static TupleTableSlot *OAIFdwIterateForeignScan(ForeignScanState *node);
 static void OAIFdwReScanForeignScan(ForeignScanState *node);
 static void OAIFdwEndForeignScan(ForeignScanState *node);
@@ -329,6 +344,7 @@ Datum oai_fdw_handler(PG_FUNCTION_ARGS)
 	fdwroutine->GetForeignPaths = OAIFdwGetForeignPaths;
 	fdwroutine->GetForeignPlan = OAIFdwGetForeignPlan;
 	fdwroutine->BeginForeignScan = OAIFdwBeginForeignScan;
+	fdwroutine->ExplainForeignScan = OAIExplainForeignScan;
 	fdwroutine->IterateForeignScan = OAIFdwIterateForeignScan;
 	fdwroutine->ReScanForeignScan = OAIFdwReScanForeignScan;
 	fdwroutine->EndForeignScan = OAIFdwEndForeignScan;
@@ -1902,14 +1918,14 @@ static ForeignScan *OAIFdwGetForeignPlan(PlannerInfo *root, RelOptInfo *baserel,
 static void OAIFdwBeginForeignScan(ForeignScanState *node, int eflags)
 {
 	ForeignScan *fs = (ForeignScan *)node->ss.ps.plan;
-	OAIFdwState *state;
+	struct OAIFdwState *state;
 
 	state = DeserializePlanData(fs->fdw_private);
 
+	node->fdw_state = (void *)state; /* set for BOTH explain and normal */
+
 	if (eflags & EXEC_FLAG_EXPLAIN_ONLY)
 		return;
-
-	node->fdw_state = (void *)state;
 
 	state->oaicxt = AllocSetContextCreate(CurrentMemoryContext,
 										  "oai_fdw_ctx",
@@ -2060,6 +2076,32 @@ static void CreateOAITuple(TupleTableSlot *slot, OAIFdwState *state, OAIRecord *
 	}
 
 	MemoryContextSwitchTo(old_cxt);
+}
+
+static void OAIExplainForeignScan(ForeignScanState *node, ExplainState *es)
+{
+	OAIFdwState *state = (OAIFdwState *)node->fdw_state;
+
+	if (state)
+	{
+		if (state->url && strlen(state->url) > 0)
+			ExplainPropertyText("Server URL", state->url, es);
+
+		if (state->requestVerb && strlen(state->requestVerb) > 0)
+			ExplainPropertyText("requestVerb", state->requestVerb, es);
+
+		if (state->set && strlen(state->set) > 0)
+			ExplainPropertyText("setSpec", state->set, es);
+
+		if (state->metadataPrefix && strlen(state->metadataPrefix) > 0)
+			ExplainPropertyText("metadataPrefix", state->metadataPrefix, es);
+
+		if (state->from && strlen(state->from) > 0)
+			ExplainPropertyText("from", state->from, es);
+
+		if (state->until && strlen(state->until) > 0)
+			ExplainPropertyText("until", state->until, es);
+	}
 }
 
 static TupleTableSlot *OAIFdwIterateForeignScan(ForeignScanState *node)
@@ -2829,6 +2871,7 @@ static List *SerializePlanData(OAIFdwState *state)
 	result = lappend(result, CStringToConst(state->resumptionToken));
 	result = lappend(result, CStringToConst(state->requestVerb));
 	result = lappend(result, OidToConst(state->foreigntableid));
+	result = lappend(result, CStringToConst(state->serverName));
 
 	elog(DEBUG1, "%s exit", __func__);
 	return result;
@@ -2911,6 +2954,10 @@ static struct OAIFdwState *DeserializePlanData(List *list)
 	cell = list_next(list, cell);
 
 	state->foreigntableid = DatumGetObjectId(((Const *)lfirst(cell))->constvalue);
+	cell = list_next(list, cell);
+ 
+	state->foreign_server = (ForeignServer *)palloc0(sizeof(ForeignServer));
+	state->serverName = ConstToCString(lfirst(cell));
 	cell = list_next(list, cell);
 
 	elog(DEBUG1, "%s exit", __func__);
