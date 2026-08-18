@@ -1918,14 +1918,16 @@ static ForeignScan *OAIFdwGetForeignPlan(PlannerInfo *root, RelOptInfo *baserel,
 static void OAIFdwBeginForeignScan(ForeignScanState *node, int eflags)
 {
 	ForeignScan *fs = (ForeignScan *)node->ss.ps.plan;
-	struct OAIFdwState *state;
+	struct OAIFdwState *state = DeserializePlanData(fs->fdw_private);
 
-	state = DeserializePlanData(fs->fdw_private);
-
-	node->fdw_state = (void *)state; /* set for BOTH explain and normal */
+	node->fdw_state = (void *) state;
 
 	if (eflags & EXEC_FLAG_EXPLAIN_ONLY)
 		return;
+
+	state->foreign_table  = GetForeignTable(state->foreigntableid);
+	state->foreign_server = GetForeignServer(state->foreign_table->serverid);
+	LoadOAIUserMapping(state);   /* restores user/password/proxy creds */
 
 	state->oaicxt = AllocSetContextCreate(CurrentMemoryContext,
 										  "oai_fdw_ctx",
@@ -2832,8 +2834,6 @@ static void InitSession(OAIFdwState *state, RelOptInfo *baserel)
 			state->until = defGetString(def);
 	}
 
-	LoadOAIUserMapping(state);
-
 	OAIRequestPlanner(state, baserel);
 }
 
@@ -2864,14 +2864,11 @@ static List *SerializePlanData(OAIFdwState *state)
 	result = lappend(result, CStringToConst(state->metadataPrefix));
 	result = lappend(result, CStringToConst(state->proxy));
 	result = lappend(result, CStringToConst(state->proxyType));
-	result = lappend(result, CStringToConst(state->proxyUser));
-	result = lappend(result, CStringToConst(state->proxyPassword));
 	result = lappend(result, CStringToConst(state->from));
 	result = lappend(result, CStringToConst(state->until));
 	result = lappend(result, CStringToConst(state->resumptionToken));
 	result = lappend(result, CStringToConst(state->requestVerb));
 	result = lappend(result, OidToConst(state->foreigntableid));
-	result = lappend(result, CStringToConst(state->serverName));
 
 	elog(DEBUG1, "%s exit", __func__);
 	return result;
@@ -2935,12 +2932,6 @@ static struct OAIFdwState *DeserializePlanData(List *list)
 	state->proxyType = ConstToCString(lfirst(cell));
 	cell = list_next(list, cell);
 
-	state->proxyUser = ConstToCString(lfirst(cell));
-	cell = list_next(list, cell);
-
-	state->proxyPassword = ConstToCString(lfirst(cell));
-	cell = list_next(list, cell);
-
 	state->from = ConstToCString(lfirst(cell));
 	cell = list_next(list, cell);
 
@@ -2954,10 +2945,6 @@ static struct OAIFdwState *DeserializePlanData(List *list)
 	cell = list_next(list, cell);
 
 	state->foreigntableid = DatumGetObjectId(((Const *)lfirst(cell))->constvalue);
-	cell = list_next(list, cell);
- 
-	state->foreign_server = (ForeignServer *)palloc0(sizeof(ForeignServer));
-	state->serverName = ConstToCString(lfirst(cell));
 	cell = list_next(list, cell);
 
 	elog(DEBUG1, "%s exit", __func__);
