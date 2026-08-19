@@ -1374,15 +1374,18 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 
 		res = curl_easy_perform(curl);
 
-		if (res != CURLE_OK)
+		for (long i = 1; res != CURLE_OK && i <= maxretries; i++)
 		{
-			for (long i = 1; i <= maxretries && (res = curl_easy_perform(curl)) != CURLE_OK; i++)
-			{
-				elog(WARNING, "  %s (%s): request to '%s' failed (%ld)", __func__, state->requestVerb, state->url, i);
-				/* Reset chunk memory for retry */
-				chunk.size = 0;
-				chunk_header.size = 0;
-			}
+			elog(WARNING, "request to '%s' failed (%ld/%ld)",
+				state->foreign_server->servername, i, maxretries);
+
+			/* discard any partial data from the failed attempt */
+			chunk.size = 0;
+			chunk.memory[0] = '\0';
+			chunk_header.size = 0;
+			chunk_header.memory[0] = '\0';
+
+			res = curl_easy_perform(curl);
 		}
 
 		if (res != CURLE_OK)
