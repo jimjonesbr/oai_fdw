@@ -104,3 +104,33 @@ WHERE datestamp BETWEEN '2021-01-03' AND '2021-01-04';
  oai:dnb.de/zdb/1224398580 | {zdb}   | Sun Jan 03 17:42:56 2021 | oai_dc
 (3 rows)
 
+SELECT o.*
+FROM (VALUES ('zdb'), ('oai_dc')) AS v(fmt)
+JOIN dnb_zdb_oai_dc_nocontent o ON o.setSpec <@ ARRAY[v.fmt]
+WHERE datestamp BETWEEN '2021-01-03' AND '2021-01-04';
+            id             | setspec |        datestamp         |  meta  
+---------------------------+---------+--------------------------+--------
+ oai:dnb.de/zdb/01950022X  | {zdb}   | Sun Jan 03 16:38:59 2021 | oai_dc
+ oai:dnb.de/zdb/1224394720 | {zdb}   | Sun Jan 03 16:34:54 2021 | oai_dc
+ oai:dnb.de/zdb/1224398580 | {zdb}   | Sun Jan 03 17:42:56 2021 | oai_dc
+(3 rows)
+
+SET enable_hashjoin = off;
+SET enable_mergejoin = off;
+SET enable_material = off;
+SELECT v.s,
+       (SELECT count(*)
+        FROM dnb_zdb_oai_dc_nocontent o
+        WHERE o.datestamp BETWEEN '2021-01-03' AND '2021-01-04'
+          AND o.setspec <@ ARRAY[v.s])
+FROM (VALUES ('zdb'), ('zdb'), ('zdb')) AS v(s);
+  s  | count 
+-----+-------
+ zdb |     3
+ zdb |     3
+ zdb |     3
+(3 rows)
+
+RESET enable_hashjoin;
+RESET enable_mergejoin;
+RESET enable_material;

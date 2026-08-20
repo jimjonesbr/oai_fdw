@@ -2147,14 +2147,6 @@ static TupleTableSlot *OAIFdwIterateForeignScan(ForeignScanState *node)
 		ExecStoreVirtualTuple(slot);
 		pfree(record);
 	}
-	else
-	{
-		/*
-		 * No further records to be retrieved. Let's clean up the XML parser
-		 * before ending the query.
-		 */
-		MemoryContextDelete(state->oaicxt);
-	}
 
 	elog(DEBUG1, "%s => returning tuple (rowcount: %d)", __func__, state->rowcount);
 
@@ -2459,6 +2451,9 @@ static void OAIFdwReScanForeignScan(ForeignScanState *node)
 
 	if (!state)
 		return;
+	
+	if (state->oaicxt)
+		MemoryContextReset(state->oaicxt);
 
 	state->rowcount = 0;
 	state->pageindex = 0;
@@ -2470,14 +2465,14 @@ static void OAIFdwReScanForeignScan(ForeignScanState *node)
 
 static void OAIFdwEndForeignScan(ForeignScanState *node)
 {
-	struct OAIFdwState *state;
+	struct OAIFdwState *state = (struct OAIFdwState *) node->fdw_state;
+	if (!state)
+		return;
 
-	if (node->fdw_state)
+	if (state->oaicxt)
 	{
-		state = (struct OAIFdwState *)node->fdw_state;
-
-		elog(DEBUG2, "%s: freeing oai_fdw state", __func__);
-		pfree(state);
+		MemoryContextDelete(state->oaicxt);
+		state->oaicxt = NULL;
 	}
 
 	elog(DEBUG1, "%s exit oai_fdw: so long .. \n", __func__);

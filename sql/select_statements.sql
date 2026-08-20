@@ -52,3 +52,23 @@ SERVER oai_server_dnb OPTIONS (setspec 'zdb',
 SELECT * 
 FROM dnb_zdb_oai_dc_nocontent
 WHERE datestamp BETWEEN '2021-01-03' AND '2021-01-04';
+
+SELECT o.*
+FROM (VALUES ('zdb'), ('oai_dc')) AS v(fmt)
+JOIN dnb_zdb_oai_dc_nocontent o ON o.setSpec <@ ARRAY[v.fmt]
+WHERE datestamp BETWEEN '2021-01-03' AND '2021-01-04';
+
+SET enable_hashjoin = off;
+SET enable_mergejoin = off;
+SET enable_material = off;
+
+SELECT v.s,
+       (SELECT count(*)
+        FROM dnb_zdb_oai_dc_nocontent o
+        WHERE o.datestamp BETWEEN '2021-01-03' AND '2021-01-04'
+          AND o.setspec <@ ARRAY[v.s])
+FROM (VALUES ('zdb'), ('zdb'), ('zdb')) AS v(s);
+
+RESET enable_hashjoin;
+RESET enable_mergejoin;
+RESET enable_material;
