@@ -1037,47 +1037,35 @@ static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, voi
 
 static size_t HeaderCallbackFunction(char *contents, size_t size, size_t nmemb, void *userp)
 {
-	size_t realsize = size * nmemb;
+	size_t nbytes = size * nmemb;      /* MUST be the return value */
 	struct MemoryStruct *mem = (struct MemoryStruct *)userp;
 	char *ptr;
+	char *line = palloc(nbytes + 1);
+	size_t linelen = nbytes;
 
-	/* Work on a NUL-terminated copy; libcurl does NOT terminate 'contents'. */
-	char *line = palloc(realsize + 1);
-	memcpy(line, contents, realsize);
-	line[realsize] = '\0';
+	memcpy(line, contents, nbytes);
+	line[nbytes] = '\0';
 
-	/* strip trailing CR/LF safely */
-	while (realsize > 0 && (line[realsize - 1] == '\r' || line[realsize - 1] == '\n'))
-		line[--realsize] = '\0';
+	while (linelen > 0 && (line[linelen - 1] == '\r' || line[linelen - 1] == '\n'))
+		line[--linelen] = '\0';
 
-	/* Is this the Content-Type header? */
-	if (pg_strncasecmp(line, "content-type:", 13) == 0)
+	if (pg_strncasecmp(line, "content-type:", 13) == 0 &&
+		pg_strncasecmp(line, "content-type: text/xml", 22) != 0 &&
+		pg_strncasecmp(line, "content-type: application/xml", 29) != 0)
 	{
-		if (pg_strncasecmp(line, "content-type: text/xml", 22) != 0 &&
-			pg_strncasecmp(line, "content-type: application/xml", 29) != 0)
-		{
-			elog(WARNING, "%s: unsupported content-type: \"%s\"", __func__, line);
-			pfree(line);
-			/* return realsize to keep going, or 0 to abort — your choice */
-			return realsize;   /* NOTE: realsize was mutated above; see note */
-		}
+		elog(WARNING, "unsupported content-type: \"%s\"", line);
 	}
-
 	pfree(line);
 
-	/* keep storing the raw header bytes */
-	ptr = repalloc(mem->memory, mem->size + (size * nmemb) + 1);
+	ptr = repalloc(mem->memory, mem->size + nbytes + 1);
 	if (!ptr)
-		ereport(ERROR,
-				(errcode(ERRCODE_FDW_OUT_OF_MEMORY),
-				 errmsg("[%s] out of memory (repalloc returned NULL)", __func__)));
-
+		ereport(ERROR, (errcode(ERRCODE_FDW_OUT_OF_MEMORY),
+						errmsg("[%s] out of memory", __func__)));
 	mem->memory = ptr;
-	memcpy(&(mem->memory[mem->size]), contents, size * nmemb);
-	mem->size += size * nmemb;
+	memcpy(&(mem->memory[mem->size]), contents, nbytes);
+	mem->size += nbytes;
 	mem->memory[mem->size] = 0;
-
-	return size * nmemb;
+	return nbytes;
 }
 
 /*
