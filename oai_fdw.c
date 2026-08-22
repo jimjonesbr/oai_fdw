@@ -164,7 +164,6 @@ typedef struct OAIFdwState
 	char *resumptionToken;	 /* Token to retrieve the next page of a result set. */
 	char *requestVerb;		 /* Type of OAI request (GetRecord, ListRecords, ListIdentifiers,
 								Identify, ListSets, ListMetadataFormats. */
-	char *serverName;
 	Oid foreigntableid;
 	xmlDocPtr xmldoc;	  /* Result of an OAI request. */
 	MemoryContext oaicxt; /* Memory Context for data manipulation. */
@@ -315,8 +314,8 @@ static void LoadOAIUserMapping(OAIFdwState *state);
 static void InitSession(OAIFdwState *state, RelOptInfo *baserel);
 static List *SerializePlanData(OAIFdwState *state);
 static struct OAIFdwState *DeserializePlanData(List *list);
-Const *CStringToConst(const char *str);
-char *ConstToCString(Const *constant);
+static Const *CStringToConst(const char *str);
+static char *ConstToCString(Const *constant);
 void _PG_init(void);
 
 void _PG_init(void)
@@ -1037,7 +1036,7 @@ static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, voi
 
 static size_t HeaderCallbackFunction(char *contents, size_t size, size_t nmemb, void *userp)
 {
-	size_t nbytes = size * nmemb;      /* MUST be the return value */
+	size_t nbytes = size * nmemb;
 	struct MemoryStruct *mem = (struct MemoryStruct *)userp;
 	char *ptr;
 	char *line = palloc(nbytes + 1);
@@ -2946,7 +2945,7 @@ static struct OAIFdwState *DeserializePlanData(List *list)
  *
  * returns a Const node wrapping the given string
  */
-Const *CStringToConst(const char *str)
+static Const *CStringToConst(const char *str)
 {
 	if (str == NULL)
 		return makeNullConst(TEXTOID, -1, InvalidOid);
@@ -2963,7 +2962,7 @@ Const *CStringToConst(const char *str)
  *
  * returns a palloc'ed copy.
  */
-char *ConstToCString(Const *constant)
+static char *ConstToCString(Const *constant)
 {
 	Assert(constant != NULL);
 
