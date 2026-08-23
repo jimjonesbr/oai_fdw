@@ -401,6 +401,17 @@ OAIFdwState *GetServerInfo(const char *srvname)
 				state->proxy = defGetString(def);
 				state->proxyType = OAI_NODE_HTTP_PROXY;
 			}
+			else if (strcmp(OAI_NODE_HTTPS_PROXY, def->defname) == 0)
+			{
+				state->proxy = defGetString(def);
+				state->proxyType = OAI_NODE_HTTPS_PROXY;
+			}
+			else if (strcmp(OAI_NODE_CONNECTRETRY, def->defname) == 0)
+			{
+				char *tailpt;
+				char *maxretry_str = defGetString(def);
+				state->maxretries = strtol(maxretry_str, &tailpt, 0);
+			}
 			else if (strcmp(def->defname, OAI_NODE_CONNECTTIMEOUT) == 0)
 			{
 				char *tailpt;
