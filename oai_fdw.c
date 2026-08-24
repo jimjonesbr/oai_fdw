@@ -15,7 +15,6 @@
 #include "optimizer/pathnode.h"
 #include "optimizer/restrictinfo.h"
 #include "optimizer/planmain.h"
-#include "optimizer/planmain.h"  // planner APIs
 #include "utils/rel.h"
 #include "miscadmin.h"
 
@@ -188,14 +187,6 @@ typedef struct OAIRecord
 	ArrayType *setsArray;
 } OAIRecord;
 
-typedef struct OAIColumn
-{
-	int id;
-	char *oaiNode;
-	char *label;
-	char *function;
-} OAIColumn;
-
 typedef struct OAIMetadataFormat
 {
 	char *metadataPrefix;
@@ -214,12 +205,6 @@ typedef struct OAIFdwIdentityNode
 	char *name;
 	char *description;
 } OAIFdwIdentityNode;
-
-struct string
-{
-	char *ptr;
-	size_t len;
-};
 
 struct OAIFdwOption
 {
@@ -1389,7 +1374,6 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 		if (res != CURLE_OK)
 		{
 			size_t len = strlen(errbuf);
-			fprintf(stderr, "\nlibcurl: (%d) ", res);
 
 			if (chunk.memory)
 				pfree(chunk.memory);
@@ -1959,16 +1943,7 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState **state)
 
 static void CreateOAITuple(TupleTableSlot *slot, OAIFdwState *state, OAIRecord *oai)
 {
-
-	MemoryContext old_cxt, tmp_cxt;
-
 	elog(DEBUG2, "%s called", __func__);
-
-	tmp_cxt = AllocSetContextCreate(CurrentMemoryContext,
-									"oai_fdw temporary data",
-									ALLOCSET_SMALL_SIZES);
-
-	old_cxt = MemoryContextSwitchTo(tmp_cxt);
 
 	for (int i = 0; i < state->numcols; i++)
 	{
@@ -2077,8 +2052,6 @@ static void CreateOAITuple(TupleTableSlot *slot, OAIFdwState *state, OAIRecord *
 			}
 		}
 	}
-
-	MemoryContextSwitchTo(old_cxt);
 }
 
 static void OAIExplainForeignScan(ForeignScanState *node, ExplainState *es)
@@ -2139,8 +2112,14 @@ static TupleTableSlot *OAIFdwIterateForeignScan(ForeignScanState *node)
 
 	if (record != NULL)
 	{
+		MemoryContext per_tuple = node->ss.ps.ps_ExprContext->ecxt_per_tuple_memory;
+		MemoryContext old = MemoryContextSwitchTo(per_tuple);
+
 		elog(DEBUG2, "  %s: creating OAI tuple", __func__);
 		CreateOAITuple(slot, state, record);
+
+		MemoryContextSwitchTo(old);
+
 		elog(DEBUG2, "  %s: storing virtual tuple", __func__);
 		ExecStoreVirtualTuple(slot);
 		pfree(record);
