@@ -175,6 +175,7 @@ typedef struct OAIFdwState
 	char *password;
 	Cost startup_cost;
 	Cost total_cost;
+	struct OAIfdwTable *oaiTable;	   /* All necessary information of the FOREIGN TABLE used in a SQL statement */
 } OAIFdwState;
 
 typedef struct OAIRecord
@@ -219,6 +220,22 @@ struct MemoryStruct
 	char *memory;
 	size_t size;
 };
+
+typedef struct OAIfdwTable
+{
+	char *name;					/* FOREIGN TABLE name */
+	struct OAIfdwColumn **cols; /* List of columns of a FOREIGN TABLE */
+} OAIfdwTable;
+
+typedef struct OAIfdwColumn
+{
+	char *name;			 /* Column name */
+	char *oai_node;		 /* OAI node identifier */
+	Oid pgtype;			 /* PostgreSQL data type */
+	int pgtypmod;		 /* PostgreSQL type modifier */
+	int pgattnum;		 /* PostgreSQL attribute number */
+
+} OAIfdwColumn;
 
 static struct OAIFdwOption valid_options[] =
 	{
@@ -295,6 +312,7 @@ static List *GetIdentity(OAIFdwState *state);
 static List *GetSets(OAIFdwState *state);
 static void RaiseOAIException(xmlNodePtr error);
 static Datum CreateDatum(int pgtype, int pgtypmod, char *value);
+static void LoadOAITableInfo(OAIFdwState *state);
 static void LoadOAIUserMapping(OAIFdwState *state);
 static void InitSession(OAIFdwState *state, RelOptInfo *baserel);
 static List *SerializePlanData(OAIFdwState *state);
@@ -1947,109 +1965,81 @@ static void CreateOAITuple(TupleTableSlot *slot, OAIFdwState *state, OAIRecord *
 
 	for (int i = 0; i < state->numcols; i++)
 	{
+		Oid pgtype = state->oaiTable->cols[i]->pgtype;
+		char *oai_node = state->oaiTable->cols[i]->oai_node;
+		char *colname = state->oaiTable->cols[i]->name;
+		int pgtypmod = state->oaiTable->cols[i]->pgtypmod;
 
-		List *options = GetForeignColumnOptions(state->foreigntableid, i + 1);
-		ListCell *lc;
-
-		foreach (lc, options)
+		if (oai_node)
 		{
-			DefElem *def = (DefElem *)lfirst(lc);
+			slot->tts_isnull[i] = false;
 
-			if (strcmp(def->defname, OAI_NODE_OPTION) == 0)
+			if (strcmp(oai_node, OAI_NODE_STATUS) == 0)
+				slot->tts_values[i] = BoolGetDatum(oai->isDeleted);
+			else if (strcmp(oai_node, OAI_NODE_IDENTIFIER) == 0)
 			{
-				char *option_value = defGetString(def);
-
-				if (strcmp(option_value, OAI_NODE_STATUS) == 0)
-				{
-					elog(DEBUG2, "  %s: setting column %d option '%s'", __func__, i, option_value);
-
-					slot->tts_isnull[i] = false;
-					slot->tts_values[i] = BoolGetDatum(oai->isDeleted);
-				}
-				else if (strcmp(option_value, OAI_NODE_IDENTIFIER) == 0 && oai->identifier)
-				{
-					elog(DEBUG2, "  %s: setting column %d option '%s'", __func__, i, option_value);
-
-					slot->tts_isnull[i] = false;
+				if (oai->identifier)
 					slot->tts_values[i] = CStringGetTextDatum(oai->identifier);
-				}
-				else if (strcmp(option_value, OAI_NODE_METADATAPREFIX) == 0 && oai->metadataPrefix)
-				{
-					elog(DEBUG2, "  %s: setting column %d option '%s'", __func__, i, option_value);
-
-					slot->tts_isnull[i] = false;
+				else
+					slot->tts_isnull[i] = true;
+			}
+			else if (strcmp(oai_node, OAI_NODE_METADATAPREFIX) == 0)
+			{
+				if (oai->metadataPrefix)
 					slot->tts_values[i] = CStringGetTextDatum(oai->metadataPrefix);
-				}
-				else if (strcmp(option_value, OAI_NODE_CONTENT) == 0 && oai->content)
-				{
-					elog(DEBUG2, "  %s: setting column %d option '%s'", __func__, i, option_value);
-
-					slot->tts_isnull[i] = false;
+				else
+					slot->tts_isnull[i] = true;
+			}
+			else if (strcmp(oai_node, OAI_NODE_CONTENT) == 0)
+			{
+				if (oai->content)
 					slot->tts_values[i] = CStringGetTextDatum((char *)oai->content);
-				}
-				else if (strcmp(option_value, OAI_NODE_SETSPEC) == 0 && oai->setsArray)
-				{
-					elog(DEBUG2, "  %s: setting column %d option '%s'", __func__, i, option_value);
-
-					slot->tts_isnull[i] = false;
+				else
+					slot->tts_isnull[i] = true;
+			}
+			else if (strcmp(oai_node, OAI_NODE_SETSPEC) == 0)
+			{
+				if (oai->setsArray)
 					slot->tts_values[i] = (Datum)DatumGetArrayTypeP((Datum)oai->setsArray);
-				}
-				else if (strcmp(option_value, OAI_NODE_DATESTAMP) == 0 && oai->datestamp)
+				else
+					slot->tts_isnull[i] = true;
+			}
+			else if (strcmp(oai_node, OAI_NODE_DATESTAMP) == 0)
+			{
+				if (oai->datestamp)
 				{
+					HeapTuple tuple;
+					regproc typinput;
+					Datum datum;
 
-					char lowstr[MAXDATELEN + 1];
-					char *field[MAXDATEFIELDS];
-					int ftype[MAXDATEFIELDS];
-					int nf;
-					int parseError = ParseDateTime(oai->datestamp, lowstr, MAXDATELEN, field, ftype, MAXDATEFIELDS, &nf);
+					datum = CStringGetDatum(oai->datestamp);
+					/* find the appropriate conversion function */
+					tuple = SearchSysCache1(TYPEOID, ObjectIdGetDatum(pgtype));
 
-					elog(DEBUG2, "  %s: setting column %d option '%s'", __func__, i, option_value);
+					if (!HeapTupleIsValid(tuple))
+						ereport(ERROR,
+								(errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
+								 errmsg("cache lookup failed for type %u > column '%s'", pgtype, colname)));
 
-					if (parseError == 0)
-					{
+					typinput = ((Form_pg_type)GETSTRUCT(tuple))->typinput;
+					ReleaseSysCache(tuple);
 
-						int dtype;
-						struct pg_tm date;
-						fsec_t fsec = 0;
-						int tz = 0;
-
-#if PG_VERSION_NUM < 160000
-						int decodeError = DecodeDateTime(field, ftype, nf, &dtype, &date, &fsec, &tz);
-#else
-						DateTimeErrorExtra extra;
-						int decodeError = DecodeDateTime(field, ftype, nf, &dtype, &date, &fsec, &tz, &extra);
-#endif
-
-						Timestamp tmsp;
-						tm2timestamp(&date, fsec, &tz, &tmsp);
-
-						if (decodeError == 0)
-						{
-							slot->tts_isnull[i] = false;
-							slot->tts_values[i] = (Datum)TimestampTzGetDatum(tmsp);
-							elog(DEBUG2, "  %s: datestamp (\"%s\") parsed and decoded.", __func__, oai->datestamp);
-						}
-						else
-						{
-							slot->tts_isnull[i] = true;
-							slot->tts_values[i] = PointerGetDatum(NULL);
-							elog(WARNING, "  %s: could not decode datestamp: %s", __func__, oai->datestamp);
-						}
-					}
-					else
-					{
-						slot->tts_isnull[i] = true;
-						slot->tts_values[i] = PointerGetDatum(NULL);
-						elog(WARNING, "  %s: could not parse datestamp: %s", __func__, oai->datestamp);
-					}
+					slot->tts_values[i] = OidFunctionCall3(
+						typinput,
+						datum,
+						ObjectIdGetDatum(InvalidOid),
+						Int32GetDatum(pgtypmod));
 				}
 				else
-				{
-
 					slot->tts_isnull[i] = true;
-					slot->tts_values[i] = PointerGetDatum(NULL);
-				}
 			}
+			else
+				slot->tts_isnull[i] = true;
+		}
+		else
+		{
+			slot->tts_isnull[i] = true;
+			slot->tts_values[i] = PointerGetDatum(NULL);
 		}
 	}
 }
@@ -2117,7 +2107,6 @@ static TupleTableSlot *OAIFdwIterateForeignScan(ForeignScanState *node)
 
 		elog(DEBUG2, "  %s: creating OAI tuple", __func__);
 		CreateOAITuple(slot, state, record);
-
 		MemoryContextSwitchTo(old);
 
 		elog(DEBUG2, "  %s: storing virtual tuple", __func__);
@@ -2738,6 +2727,76 @@ static void LoadOAIUserMapping(OAIFdwState *state)
 	}
 }
 
+static void LoadOAITableInfo(OAIFdwState *state)
+{
+	TupleDesc tupdesc;
+	Relation rel;
+	ListCell *cell;
+
+	elog(DEBUG1, "%s called", __func__);
+
+#if PG_VERSION_NUM < 130000
+	rel = heap_open(state->foreign_table->relid, NoLock);
+#else
+	rel = table_open(state->foreign_table->relid, NoLock);
+#endif
+
+	state->numcols = rel->rd_att->natts;
+	tupdesc = rel->rd_att;
+
+	/*
+	 *Loading FOREIGN TABLE strucuture (columns and their OPTION values)
+	 */
+	state->oaiTable = (struct OAIfdwTable *)palloc0(sizeof(struct OAIfdwTable));
+	state->oaiTable->cols = (struct OAIfdwColumn **)palloc0(sizeof(struct OAIfdwColumn *) * state->numcols);
+
+	for (int i = 0; i < state->numcols; i++)
+	{
+		List *options = GetForeignColumnOptions(state->foreign_table->relid, i + 1);
+		ListCell *lc;
+
+		Form_pg_attribute attr = TupleDescAttr(tupdesc, i);
+		state->oaiTable->cols[i] = (struct OAIfdwColumn *)palloc0(sizeof(struct OAIfdwColumn));
+		state->oaiTable->cols[i]->pgtype = attr->atttypid;
+		state->oaiTable->cols[i]->name = pstrdup(NameStr(attr->attname));
+		state->oaiTable->cols[i]->pgtypmod = attr->atttypmod;
+		state->oaiTable->cols[i]->pgattnum = attr->attnum;
+
+		foreach (lc, options)
+		{
+			DefElem *def = (DefElem *)lfirst(lc);
+
+			if (strcmp(def->defname, OAI_NODE_OPTION) == 0)
+			{
+				elog(DEBUG2, "  %s: (%d) adding oai_node > '%s'", __func__, i, defGetString(def));
+				state->oaiTable->cols[i]->oai_node = pstrdup(defGetString(def));
+			}
+		}
+	}
+#if PG_VERSION_NUM < 130000
+	heap_close(rel, NoLock);
+#else
+	table_close(rel, NoLock);
+#endif
+
+	/*
+	 * Loading FOREIGN TABLE OPTIONS
+	 */
+	foreach (cell, state->foreign_table->options)
+	{
+		DefElem *def = lfirst_node(DefElem, cell);
+
+		if (strcmp(OAI_NODE_METADATAPREFIX, def->defname) == 0)
+			state->metadataPrefix = defGetString(def);
+		else if (strcmp(OAI_NODE_FROM, def->defname) == 0)
+			state->from = defGetString(def);
+		else if (strcmp(OAI_NODE_UNTIL, def->defname) == 0)
+			state->until = defGetString(def);
+		else if (strcmp(OAI_NODE_SETSPEC, def->defname) == 0)
+			state->set = defGetString(def);
+	}
+}
+
 static void InitSession(OAIFdwState *state, RelOptInfo *baserel)
 {
 	ListCell *cell;
@@ -2795,19 +2854,7 @@ static void InitSession(OAIFdwState *state, RelOptInfo *baserel)
 			elog(WARNING, "Invalid SERVER OPTION > '%s'", def->defname);
 	}
 
-	foreach (cell, state->foreign_table->options)
-	{
-		DefElem *def = lfirst_node(DefElem, cell);
-
-		if (strcmp(OAI_NODE_METADATAPREFIX, def->defname) == 0)
-			state->metadataPrefix = defGetString(def);
-		else if (strcmp(OAI_NODE_SETSPEC, def->defname) == 0)
-			state->set = defGetString(def);
-		else if (strcmp(OAI_NODE_FROM, def->defname) == 0)
-			state->from = defGetString(def);
-		else if (strcmp(OAI_NODE_UNTIL, def->defname) == 0)
-			state->until = defGetString(def);
-	}
+	LoadOAITableInfo(state);
 
 	OAIRequestPlanner(state, baserel);
 }
@@ -2844,6 +2891,33 @@ static List *SerializePlanData(OAIFdwState *state)
 	result = lappend(result, CStringToConst(state->resumptionToken));
 	result = lappend(result, CStringToConst(state->requestVerb));
 	result = lappend(result, OidToConst(state->foreigntableid));
+
+	elog(DEBUG2, "%s: serializing table with %d columns", __func__, state->numcols);
+	for (int i = 0; i < state->numcols; ++i)
+	{
+		elog(DEBUG2, "%s: column name '%s'", __func__, state->oaiTable->cols[i]->name);
+		result = lappend(result, CStringToConst(state->oaiTable->cols[i]->name));
+
+		if (state->oaiTable->cols[i]->oai_node)
+		{
+			elog(DEBUG2, "%s: oai_node '%s'", __func__, state->oaiTable->cols[i]->oai_node);
+			result = lappend(result, CStringToConst(state->oaiTable->cols[i]->oai_node));
+		}
+		else
+		{
+			elog(DEBUG2, "%s: column contains no oai_node", __func__);
+			result = lappend(result, CStringToConst(""));
+		}
+
+		elog(DEBUG2, "%s: pgtypmod '%d'", __func__, state->oaiTable->cols[i]->pgtypmod);
+		result = lappend(result, IntToConst(state->oaiTable->cols[i]->pgtypmod));
+
+		elog(DEBUG2, "%s: pgattnum '%d'", __func__, state->oaiTable->cols[i]->pgattnum);
+		result = lappend(result, IntToConst(state->oaiTable->cols[i]->pgattnum));
+
+		elog(DEBUG2, "%s: pgtype '%u'", __func__, state->oaiTable->cols[i]->pgtype);
+		result = lappend(result, OidToConst(state->oaiTable->cols[i]->pgtype));
+	}
 
 	elog(DEBUG1, "%s exit", __func__);
 	return result;
@@ -2921,6 +2995,39 @@ static struct OAIFdwState *DeserializePlanData(List *list)
 
 	state->foreigntableid = DatumGetObjectId(((Const *)lfirst(cell))->constvalue);
 	cell = list_next(list, cell);
+
+	elog(DEBUG2, "  %s: deserializing table with %d columns", __func__, state->numcols);
+	state->oaiTable = (struct OAIfdwTable *)palloc0(sizeof(struct OAIfdwTable));
+	state->oaiTable->cols = (struct OAIfdwColumn **)palloc0(sizeof(struct OAIfdwColumn *) * state->numcols);
+
+	for (int i = 0; i < state->numcols; ++i)
+	{
+		state->oaiTable->cols[i] = (struct OAIfdwColumn *)palloc0(sizeof(struct OAIfdwColumn));
+
+		state->oaiTable->cols[i]->name = ConstToCString(lfirst(cell));
+		cell = list_next(list, cell);
+		elog(DEBUG2, "  %s: column name '%s'", __func__, state->oaiTable->cols[i]->name);
+
+		if (state->oaiTable->cols[i]->oai_node && state->oaiTable->cols[i]->oai_node[0])
+		{
+			state->oaiTable->cols[i]->oai_node = ConstToCString(lfirst(cell));
+			cell = list_next(list, cell);
+		}
+		else
+			state->oaiTable->cols[i]->oai_node = NULL;
+
+		state->oaiTable->cols[i]->oai_node = ConstToCString(lfirst(cell));
+		cell = list_next(list, cell);
+
+		state->oaiTable->cols[i]->pgtypmod = (int)DatumGetInt32(((Const *)lfirst(cell))->constvalue);
+		cell = list_next(list, cell);
+
+		state->oaiTable->cols[i]->pgattnum = (int)DatumGetInt32(((Const *)lfirst(cell))->constvalue);
+		cell = list_next(list, cell);
+
+		state->oaiTable->cols[i]->pgtype = DatumGetObjectId(((Const *)lfirst(cell))->constvalue);
+		cell = list_next(list, cell);
+	}
 
 	elog(DEBUG1, "%s exit", __func__);
 	return state;
