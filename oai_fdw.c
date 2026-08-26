@@ -312,6 +312,7 @@ static List *GetIdentity(OAIFdwState *state);
 static List *GetSets(OAIFdwState *state);
 static void RaiseOAIException(xmlNodePtr error);
 static Datum CreateDatum(int pgtype, int pgtypmod, char *value);
+static void LoadServerInfo(OAIFdwState *state);
 static void LoadOAITableInfo(OAIFdwState *state);
 static void LoadOAIUserMapping(OAIFdwState *state);
 static void InitSession(OAIFdwState *state, RelOptInfo *baserel);
@@ -448,7 +449,6 @@ OAIFdwState *GetServerInfo(const char *srvname)
 				 errmsg("FOREIGN SERVER does not exist: '%s'", srvname)));
 
 	state->foreign_server = server;
-	LoadOAIUserMapping(state);
 	return state;
 }
 
@@ -1350,7 +1350,7 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 		curl_easy_setopt(curl, CURLOPT_HEADERDATA, (void *)&chunk_header);
 		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
 		curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&chunk);
-		curl_easy_setopt(curl, CURLOPT_FAILONERROR, true);
+		curl_easy_setopt(curl, CURLOPT_FAILONERROR, 1L);
 
 		if (state->user && state->password)
 		{
@@ -2797,64 +2797,83 @@ static void LoadOAITableInfo(OAIFdwState *state)
 	}
 }
 
+static void LoadServerInfo(OAIFdwState *state)
+{
+	if (state->foreign_server)
+	{
+		ListCell *cell;
+
+		foreach (cell, state->foreign_server->options)
+		{
+			DefElem *def = lfirst_node(DefElem, cell);
+
+			if (strcmp(OAI_NODE_URL, def->defname) == 0)
+				state->url = defGetString(def);
+			else if (strcmp(OAI_NODE_METADATAPREFIX, def->defname) == 0)
+				state->metadataPrefix = defGetString(def);
+			else if (strcmp(OAI_NODE_HTTP_PROXY, def->defname) == 0)
+			{
+				state->proxy = defGetString(def);
+				state->proxyType = OAI_NODE_HTTP_PROXY;
+			}
+			else if (strcmp(OAI_NODE_HTTPS_PROXY, def->defname) == 0)
+			{
+				state->proxy = defGetString(def);
+				state->proxyType = OAI_NODE_HTTPS_PROXY;
+			}
+			else if (strcmp(OAI_NODE_PROXY_USER, def->defname) == 0)
+			{
+				state->proxyUser = defGetString(def);
+			}
+			else if (strcmp(OAI_NODE_PROXY_PASSWORD, def->defname) == 0)
+				state->proxyPassword = defGetString(def);
+			else if (strcmp(OAI_NODE_CONNECTTIMEOUT, def->defname) == 0)
+			{
+				char *tailpt;
+				char *timeout_str = defGetString(def);
+				state->connectTimeout = strtol(timeout_str, &tailpt, 0);
+			}
+			else if (strcmp(OAI_NODE_CONNECTRETRY, def->defname) == 0)
+			{
+				char *tailpt;
+				char *maxretry_str = defGetString(def);
+				state->maxretries = strtol(maxretry_str, &tailpt, 0);
+			}
+			else if (strcmp(OAI_NODE_REQUEST_REDIRECT, def->defname) == 0)
+				state->requestRedirect = defGetBoolean(def);
+			else if (strcmp(OAI_NODE_REQUEST_MAX_REDIRECT, def->defname) == 0)
+			{
+				char *tailpt;
+				char *maxredirect_str = defGetString(def);
+				state->requestMaxRedirect = strtol(maxredirect_str, &tailpt, 0);
+			}
+			else
+				elog(WARNING, "Invalid SERVER OPTION > '%s'", def->defname);
+		}
+	}
+}
+
 static void InitSession(OAIFdwState *state, RelOptInfo *baserel)
 {
-	ListCell *cell;
-
 	state->requestRedirect = false;
 	state->requestMaxRedirect = 0;
 
 	elog(DEBUG1, "%s called", __func__);
 
-	foreach (cell, state->foreign_server->options)
-	{
-		DefElem *def = lfirst_node(DefElem, cell);
+	/*
+	 * Loading SERVER OPTIONS
+	 */
+	LoadServerInfo(state);
 
-		if (strcmp(OAI_NODE_URL, def->defname) == 0)
-			state->url = defGetString(def);
-		else if (strcmp(OAI_NODE_METADATAPREFIX, def->defname) == 0)
-			state->metadataPrefix = defGetString(def);
-		else if (strcmp(OAI_NODE_HTTP_PROXY, def->defname) == 0)
-		{
-			state->proxy = defGetString(def);
-			state->proxyType = OAI_NODE_HTTP_PROXY;
-		}
-		else if (strcmp(OAI_NODE_HTTPS_PROXY, def->defname) == 0)
-		{
-			state->proxy = defGetString(def);
-			state->proxyType = OAI_NODE_HTTPS_PROXY;
-		}
-		else if (strcmp(OAI_NODE_PROXY_USER, def->defname) == 0)
-		{
-			state->proxyUser = defGetString(def);
-		}
-		else if (strcmp(OAI_NODE_PROXY_PASSWORD, def->defname) == 0)
-			state->proxyPassword = defGetString(def);
-		else if (strcmp(OAI_NODE_CONNECTTIMEOUT, def->defname) == 0)
-		{
-			char *tailpt;
-			char *timeout_str = defGetString(def);
-			state->connectTimeout = strtol(timeout_str, &tailpt, 0);
-		}
-		else if (strcmp(OAI_NODE_CONNECTRETRY, def->defname) == 0)
-		{
-			char *tailpt;
-			char *maxretry_str = defGetString(def);
-			state->maxretries = strtol(maxretry_str, &tailpt, 0);
-		}
-		else if (strcmp(OAI_NODE_REQUEST_REDIRECT, def->defname) == 0)
-			state->requestRedirect = defGetBoolean(def);
-		else if (strcmp(OAI_NODE_REQUEST_MAX_REDIRECT, def->defname) == 0)
-		{
-			char *tailpt;
-			char *maxredirect_str = defGetString(def);
-			state->requestMaxRedirect = strtol(maxredirect_str, &tailpt, 0);
-		}
-		else
-			elog(WARNING, "Invalid SERVER OPTION > '%s'", def->defname);
-	}
-
+	/*
+	 * Loading FOREIGN TABLE structure and OPTIONS
+	 */
 	LoadOAITableInfo(state);
+
+	/*
+	 * Loading USER MAPPING (if any)
+	 */
+	LoadOAIUserMapping(state);
 
 	OAIRequestPlanner(state, baserel);
 }
