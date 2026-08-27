@@ -7,6 +7,8 @@
 
   **Fixed catalog lookup overhead**: Foreign table column metadata (name, OAI node mapping, PostgreSQL type, type modifier, and attribute number) is now loaded once during session initialization and cached in the scan state, then passed to the executor via the serialized plan. Previously this information was looked up from the system catalogs (`GetForeignColumnOptions`) for every column of every row during `CreateOAITuple()`, causing significant syscache overhead on large result sets.
 
+  **Add missing user mapping in helper functions**: GetIdentity, ListSets, and ListMetadataFormats were being executed without loading the `USER MAPPINGS`, which could fail requests if the server needed any sort of authentication. This has now been solved.
+
 ### oai_fdw 1.13
 2026-02-20
 

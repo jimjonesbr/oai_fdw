@@ -457,7 +457,6 @@ Datum oai_fdw_identity(PG_FUNCTION_ARGS)
 	text *srvname_text = PG_GETARG_TEXT_P(0);
 	const char *srvname = text_to_cstring(srvname_text);
 	OAIFdwState *state = GetServerInfo(srvname);
-
 	FuncCallContext *funcctx;
 	AttInMetadata *attinmeta;
 	TupleDesc tupdesc;
@@ -470,6 +469,12 @@ Datum oai_fdw_identity(PG_FUNCTION_ARGS)
 	{
 		funcctx = SRF_FIRSTCALL_INIT();
 		oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
+
+		/*
+		 * Loading USER MAPPING (if any)
+		 */
+		LoadOAIUserMapping(state);
+
 		identity = GetIdentity(state);
 		funcctx->user_fctx = identity;
 
@@ -543,6 +548,12 @@ Datum oai_fdw_listSets(PG_FUNCTION_ARGS)
 		List *sets;
 		funcctx = SRF_FIRSTCALL_INIT();
 		oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
+
+		/*
+		 * Loading USER MAPPING (if any)
+		 */
+		LoadOAIUserMapping(state);
+
 		sets = GetSets(state);
 		funcctx->user_fctx = sets;
 
@@ -616,6 +627,12 @@ Datum oai_fdw_listMetadataFormats(PG_FUNCTION_ARGS)
 		List *formats;
 		funcctx = SRF_FIRSTCALL_INIT();
 		oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
+
+		/*
+		 * Loading USER MAPPING (if any)
+		 */
+		LoadOAIUserMapping(state);
+
 		formats = GetMetadataFormats(state);
 		funcctx->user_fctx = formats;
 
@@ -823,13 +840,18 @@ static List *GetIdentity(OAIFdwState *state)
 
 			for (Identity = oai_root->children; Identity != NULL; Identity = Identity->next)
 			{
-				OAIFdwIdentityNode *node = (OAIFdwIdentityNode *)palloc0(sizeof(OAIFdwIdentityNode));
+				OAIFdwIdentityNode *node;
+				xmlChar *el;
 
 				if (Identity->type != XML_ELEMENT_NODE)
 					continue;
 
+				node = (OAIFdwIdentityNode *)palloc0(sizeof(OAIFdwIdentityNode));
 				node->name = pstrdup((char *)Identity->name);
-				node->description = pstrdup((char *)xmlNodeGetContent(Identity));
+				el = xmlNodeGetContent(Identity);
+				node->description = el ? pstrdup((char *)el) : NULL;
+				if (el)
+					xmlFree(el);
 				result = lappend(result, node);
 			}
 		}
@@ -1135,39 +1157,44 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 	curl = curl_easy_init();
 
 	if (!curl)
-	{
 		ereport(ERROR,
 				(errcode(ERRCODE_FDW_UNABLE_TO_ESTABLISH_CONNECTION),
 				 errmsg("%s: failed to initialize curl", __func__)));
-	}
 
 	appendStringInfo(&url_buffer, "verb=%s", state->requestVerb);
 
 	if (strcmp(state->requestVerb, OAI_REQUEST_LISTRECORDS) == 0)
 	{
-
 		if (state->set)
 		{
+			char *encoded_set = curl_easy_escape(curl, state->set, 0);
 			elog(DEBUG1, "  %s (%s): appending 'set' > %s", __func__, state->requestVerb, state->set);
-			appendStringInfo(&url_buffer, "&set=%s", state->set);
+			appendStringInfo(&url_buffer, "&set=%s", encoded_set);
+			curl_free(encoded_set);
 		}
 
 		if (state->from)
 		{
+			char *encoded_from = curl_easy_escape(curl, state->from, 0);
 			elog(DEBUG1, "  %s (%s): appending 'from' > %s", __func__, state->requestVerb, state->from);
-			appendStringInfo(&url_buffer, "&from=%s", state->from);
+			appendStringInfo(&url_buffer, "&from=%s", encoded_from);
+			curl_free(encoded_from);
 		}
 
 		if (state->until)
 		{
+			char *encoded_until = curl_easy_escape(curl, state->until, 0);
 			elog(DEBUG1, "  %s (%s): appending 'until' > %s", __func__, state->requestVerb, state->until);
-			appendStringInfo(&url_buffer, "&until=%s", state->until);
+			appendStringInfo(&url_buffer, "&until=%s", encoded_until);
+			curl_free(encoded_until);
 		}
 
 		if (state->metadataPrefix)
 		{
+			char *encoded_metadataPrefix = curl_easy_escape(curl, state->metadataPrefix, 0);
 			elog(DEBUG1, "  %s (%s): appending 'metadataPrefix' > %s", __func__, state->requestVerb, state->metadataPrefix);
-			appendStringInfo(&url_buffer, "&metadataPrefix=%s", state->metadataPrefix);
+			appendStringInfo(&url_buffer, "&metadataPrefix=%s",encoded_metadataPrefix);
+			curl_free(encoded_metadataPrefix);
 		}
 
 		if (state->resumptionToken)
@@ -1342,6 +1369,7 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 		}
 
 		/* Set the progress callback function */
+		curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
 		curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, CURLProgressCallback);
 
 		curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
@@ -2000,7 +2028,7 @@ static void CreateOAITuple(TupleTableSlot *slot, OAIFdwState *state, OAIRecord *
 			else if (strcmp(oai_node, OAI_NODE_SETSPEC) == 0)
 			{
 				if (oai->setsArray)
-					slot->tts_values[i] = (Datum)DatumGetArrayTypeP((Datum)oai->setsArray);
+					slot->tts_values[i] = PointerGetDatum(oai->setsArray);
 				else
 					slot->tts_isnull[i] = true;
 			}
@@ -2212,17 +2240,18 @@ static void LoadOAIRecords(struct OAIFdwState **state)
 					{
 
 						OAIRecord *oai = (OAIRecord *)palloc0(sizeof(OAIRecord));
+						xmlChar *status;
 
 						oai->setsArray = NULL;
 						oai->isDeleted = false;
 						oai->metadataPrefix = pstrdup((*state)->metadataPrefix);
+						status = xmlGetProp(ListRecordsRequest, (xmlChar *)OAI_NODE_STATUS);
 
-						if (xmlGetProp(ListRecordsRequest, (xmlChar *)OAI_NODE_STATUS))
+						if (status)
 						{
-							char *status = (char *)xmlGetProp(ListRecordsRequest, (xmlChar *)OAI_NODE_STATUS);
-
-							if (strcmp(status, OAI_RESPONSE_ELEMENT_DELETED) == 0)
+							if (xmlStrcmp(status, (xmlChar *)OAI_RESPONSE_ELEMENT_DELETED) == 0)
 								oai->isDeleted = true;
+							xmlFree(status);
 						}
 
 						for (headerElements = ListRecordsRequest->children; headerElements != NULL; headerElements = headerElements->next)
@@ -2307,12 +2336,12 @@ static void LoadOAIRecords(struct OAIFdwState **state)
 							if (xmlStrcmp(record->name, (xmlChar *)OAI_RESPONSE_ELEMENT_HEADER) == 0)
 							{
 
-								if (xmlGetProp(record, (xmlChar *)OAI_NODE_STATUS))
+								xmlChar *status = xmlGetProp(record, (xmlChar *)OAI_NODE_STATUS);
+								if (status)
 								{
-									char *status = (char *)xmlGetProp(record, (xmlChar *)OAI_NODE_STATUS);
-
-									if (strcmp(status, OAI_RESPONSE_ELEMENT_DELETED) == 0)
+									if (xmlStrcmp(status, (xmlChar *)OAI_RESPONSE_ELEMENT_DELETED) == 0)
 										oai->isDeleted = true;
+									xmlFree(status);
 								}
 
 								for (headerElements = record->children; headerElements != NULL; headerElements = headerElements->next)
@@ -2615,7 +2644,7 @@ static Datum CreateDatum(int pgtype, int pgtypmod, char *value)
 	if (!HeapTupleIsValid(tuple))
 		ereport(ERROR,
 				(errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
-				 errmsg("cache lookup failed for type %u (osm_id)", pgtype)));
+				 errmsg("cache lookup failed for type %u", pgtype)));
 
 	typinput = ((Form_pg_type)GETSTRUCT(tuple))->typinput;
 	ReleaseSysCache(tuple);
@@ -3026,14 +3055,6 @@ static struct OAIFdwState *DeserializePlanData(List *list)
 		state->oaiTable->cols[i]->name = ConstToCString(lfirst(cell));
 		cell = list_next(list, cell);
 		elog(DEBUG2, "  %s: column name '%s'", __func__, state->oaiTable->cols[i]->name);
-
-		if (state->oaiTable->cols[i]->oai_node && state->oaiTable->cols[i]->oai_node[0])
-		{
-			state->oaiTable->cols[i]->oai_node = ConstToCString(lfirst(cell));
-			cell = list_next(list, cell);
-		}
-		else
-			state->oaiTable->cols[i]->oai_node = NULL;
 
 		state->oaiTable->cols[i]->oai_node = ConstToCString(lfirst(cell));
 		cell = list_next(list, cell);
