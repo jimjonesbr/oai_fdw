@@ -1,3 +1,4 @@
+SET client_min_messages TO DEBUG1;
 CREATE FOREIGN TABLE dnb_zdb_oai_dc (
   id text OPTIONS (oai_node 'identifier'),
   content text OPTIONS (oai_node 'content'),
@@ -12,6 +13,8 @@ SELECT ROW_NUMBER() OVER (), id, content::xml IS DOCUMENT AS content, setspec, d
 FROM dnb_zdb_oai_dc
 WHERE
   datestamp BETWEEN '2021-01-03' AND '2021-01-04';
+DEBUG:  GET: https://services.dnb.de/oai/repository?verb=ListRecords&set=zdb&from=2021-01-03T00%3A00%3A00Z&until=2021-01-04T00%3A00%3A00Z&metadataPrefix=oai_dc
+DEBUG:  HTTP 200, 2539 bytes
  row_number |            id             | content | setspec |        datestamp         |  meta  
 ------------+---------------------------+---------+---------+--------------------------+--------
           1 | oai:dnb.de/zdb/01950022X  | t       | {zdb}   | Sun Jan 03 16:38:59 2021 | oai_dc
@@ -28,6 +31,8 @@ WHERE
   datestamp BETWEEN '2022-02-01' AND '2022-02-02' AND
   meta = 'MARC21-xml' AND
   setspec <@ ARRAY['dnb:reiheC'];
+DEBUG:  GET: https://services.dnb.de/oai/repository?verb=ListRecords&set=dnb%3AreiheC&from=2022-02-01T00%3A00%3A00Z&until=2022-02-02T00%3A00%3A00Z&metadataPrefix=MARC21-xml
+DEBUG:  HTTP 200, 158034 bytes
  row_number |                id                | content |   setspec    |        datestamp         |    meta    
 ------------+----------------------------------+---------+--------------+--------------------------+------------
           1 | oai:dnb.de/dnb:reiheC/116804152X | t       | {dnb:reiheC} | Tue Feb 01 14:11:46 2022 | MARC21-xml
@@ -57,6 +62,8 @@ FROM dnb_zdb_oai_dc
 WHERE
   datestamp BETWEEN '2021-01-01' AND '2021-01-05' AND
   setspec <@ ARRAY['dnb:reiheC'];
+DEBUG:  GET: https://services.dnb.de/oai/repository?verb=ListRecords&set=dnb%3AreiheC&from=2021-01-01T00%3A00%3A00Z&until=2021-01-05T00%3A00%3A00Z&metadataPrefix=oai_dc
+DEBUG:  HTTP 200, 8449 bytes
  count 
 -------
      7
@@ -66,6 +73,8 @@ WHERE
 -- GetRecord request
 SELECT * FROM dnb_zdb_oai_dc
 WHERE id = 'oai:dnb.de/zdb/1250800153';
+DEBUG:  GET: https://services.dnb.de/oai/repository?verb=GetRecord&identifier=oai%3Adnb.de%2Fzdb%2F1250800153&metadataPrefix=oai_dc
+DEBUG:  HTTP 200, 1511 bytes
             id             |                                                                                                                                 content                                                                                                                                 | setspec |        datestamp         |  meta  
 ---------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+---------+--------------------------+--------
  oai:dnb.de/zdb/1250800153 | <dc xmlns:dnb="http://d-nb.de/standards/dnbterms" xmlns:tel="http://krait.kb.nl/coop/tel/handbook/telterms.html" xmlns="http://www.openarchives.org/OAI/2.0/oai_dc/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">+| {zdb}   | Thu Aug 15 08:52:27 2024 | oai_dc
@@ -97,6 +106,8 @@ SERVER oai_server_dnb OPTIONS (setspec 'zdb',
 SELECT * 
 FROM dnb_zdb_oai_dc_nocontent
 WHERE datestamp BETWEEN '2021-01-03' AND '2021-01-04';
+DEBUG:  GET: https://services.dnb.de/oai/repository?verb=ListIdentifiers&set=zdb&from=2021-01-03T00%3A00%3A00Z&until=2021-01-04T00%3A00%3A00Z&metadataPrefix=oai_dc
+DEBUG:  HTTP 200, 1024 bytes
             id             | setspec |        datestamp         |  meta  
 ---------------------------+---------+--------------------------+--------
  oai:dnb.de/zdb/01950022X  | {zdb}   | Sun Jan 03 16:38:59 2021 | oai_dc
@@ -108,6 +119,8 @@ SELECT o.*
 FROM (VALUES ('zdb'), ('oai_dc')) AS v(fmt)
 JOIN dnb_zdb_oai_dc_nocontent o ON o.setSpec <@ ARRAY[v.fmt]
 WHERE datestamp BETWEEN '2021-01-03' AND '2021-01-04';
+DEBUG:  GET: https://services.dnb.de/oai/repository?verb=ListIdentifiers&set=zdb&from=2021-01-03T00%3A00%3A00Z&until=2021-01-04T00%3A00%3A00Z&metadataPrefix=oai_dc
+DEBUG:  HTTP 200, 1024 bytes
             id             | setspec |        datestamp         |  meta  
 ---------------------------+---------+--------------------------+--------
  oai:dnb.de/zdb/01950022X  | {zdb}   | Sun Jan 03 16:38:59 2021 | oai_dc
@@ -124,6 +137,12 @@ SELECT v.s,
         WHERE o.datestamp BETWEEN '2021-01-03' AND '2021-01-04'
           AND o.setspec <@ ARRAY[v.s])
 FROM (VALUES ('zdb'), ('zdb'), ('zdb')) AS v(s);
+DEBUG:  GET: https://services.dnb.de/oai/repository?verb=ListIdentifiers&set=zdb&from=2021-01-03T00%3A00%3A00Z&until=2021-01-04T00%3A00%3A00Z&metadataPrefix=oai_dc
+DEBUG:  HTTP 200, 1024 bytes
+DEBUG:  GET: https://services.dnb.de/oai/repository?verb=ListIdentifiers&set=zdb&from=2021-01-03T00%3A00%3A00Z&until=2021-01-04T00%3A00%3A00Z&metadataPrefix=oai_dc
+DEBUG:  HTTP 200, 1024 bytes
+DEBUG:  GET: https://services.dnb.de/oai/repository?verb=ListIdentifiers&set=zdb&from=2021-01-03T00%3A00%3A00Z&until=2021-01-04T00%3A00%3A00Z&metadataPrefix=oai_dc
+DEBUG:  HTTP 200, 1024 bytes
   s  | count 
 -----+-------
  zdb |     3

@@ -1,4 +1,5 @@
 \set VERBOSITY terse
+SET client_min_messages TO DEBUG1;
 
 SELECT OAI_Version() IS NULL;
 SELECT * FROM OAI_ListMetadataFormats('oai_server_ulb') 

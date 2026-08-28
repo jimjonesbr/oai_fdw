@@ -1,4 +1,5 @@
 \set VERBOSITY terse
+SET client_min_messages TO DEBUG1;
 SELECT OAI_Version() IS NULL;
  ?column? 
 ----------
@@ -7,6 +8,8 @@ SELECT OAI_Version() IS NULL;
 
 SELECT * FROM OAI_ListMetadataFormats('oai_server_ulb') 
 ORDER BY metadataprefix COLLATE "C";
+DEBUG:  GET: https://sammlungen.ulb.uni-muenster.de/oai?verb=ListMetadataFormats
+DEBUG:  HTTP 200, 1853 bytes
  metadataprefix |                               schema                               |              metadatanamespace              
 ----------------+--------------------------------------------------------------------+---------------------------------------------
  arcmets        | http://www.loc.gov/standards/mets/mets.xsd                         | http://www.loc.gov/METS/
@@ -20,6 +23,8 @@ ORDER BY metadataprefix COLLATE "C";
 
 SELECT * FROM OAI_ListMetadataFormats('oai_server_dnb') 
 ORDER BY metadataprefix COLLATE "C";
+DEBUG:  GET: https://services.dnb.de/oai/repository?verb=ListMetadataFormats
+DEBUG:  HTTP 200, 4186 bytes
   metadataprefix  |                                   schema                                    |                            metadatanamespace                            
 ------------------+-----------------------------------------------------------------------------+-------------------------------------------------------------------------
  BibframeRDFxml   | http://www.w3.org/2000/07/rdf.xsd                                           | http://www.w3.org/1999/02/22-rdf-syntax-ns
@@ -45,6 +50,8 @@ SELECT * FROM OAI_ListSets('oai_server_ulb')
 WHERE setname IS NOT NULL AND setspec IS NOT NULL 
 ORDER BY setname  COLLATE "C"
 FETCH FIRST ROW ONLY;
+DEBUG:  GET: https://sammlungen.ulb.uni-muenster.de/oai?verb=ListSets
+DEBUG:  HTTP 200, 1386 bytes
  setspec |                         setname                          
 ---------+----------------------------------------------------------
  ulbmsh  | Handschriften, Nachlässe, Autographen, Sammlungen (HANS)
@@ -54,6 +61,8 @@ SELECT * FROM OAI_ListSets('oai_server_dnb')
 WHERE setname IS NOT NULL AND setspec IS NOT NULL 
 ORDER BY setname  COLLATE "C"
 FETCH FIRST ROW ONLY;
+DEBUG:  GET: https://services.dnb.de/oai/repository?verb=ListSets
+DEBUG:  HTTP 200, 800458 bytes
      setspec     |                  setname                   
 -----------------+--------------------------------------------
  authorities:dif | Bestand Deutsches Filminstitut (DIF e. V.)
@@ -62,6 +71,8 @@ FETCH FIRST ROW ONLY;
 SELECT count(*) > 0 
 FROM OAI_ListSets('oai_server_dnb') 
 WHERE setname IS NOT NULL AND setspec IS NOT NULL;
+DEBUG:  GET: https://services.dnb.de/oai/repository?verb=ListSets
+DEBUG:  HTTP 200, 800458 bytes
  ?column? 
 ----------
  t
@@ -69,6 +80,8 @@ WHERE setname IS NOT NULL AND setspec IS NOT NULL;
 
 SELECT * FROM OAI_Identify('oai_server_ulb')
 ORDER BY name COLLATE "C";
+DEBUG:  GET: https://sammlungen.ulb.uni-muenster.de/oai?verb=Identify
+DEBUG:  HTTP 200, 760 bytes
        name        |                             description                              
 -------------------+----------------------------------------------------------------------
  adminEmail        | vl-support@semantics.de
@@ -82,6 +95,8 @@ ORDER BY name COLLATE "C";
 
 SELECT * FROM OAI_Identify('oai_server_dnb')
 ORDER BY name COLLATE "C";
+DEBUG:  GET: https://services.dnb.de/oai/repository?verb=Identify
+DEBUG:  HTTP 200, 779 bytes
        name        |                      description                      
 -------------------+-------------------------------------------------------
  adminEmail        | oai-repository@dnb.de

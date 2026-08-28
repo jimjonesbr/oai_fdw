@@ -384,7 +384,7 @@ OAIFdwState *GetServerInfo(const char *srvname)
 	state->requestRedirect = false;
 	state->requestMaxRedirect = 0L;
 
-	elog(DEBUG1, "%s called: '%s'", __func__, srvname);
+	elog(DEBUG2, "%s called: '%s'", __func__, srvname);
 
 	if (server)
 	{
@@ -394,7 +394,7 @@ OAIFdwState *GetServerInfo(const char *srvname)
 		{
 			DefElem *def = lfirst_node(DefElem, cell);
 
-			elog(DEBUG1, "  %s parsing node '%s': %s", __func__, def->defname, defGetString(def));
+			elog(DEBUG2, "  %s parsing node '%s': %s", __func__, def->defname, defGetString(def));
 
 			if (strcmp(def->defname, OAI_NODE_URL) == 0)
 			{
@@ -427,7 +427,7 @@ OAIFdwState *GetServerInfo(const char *srvname)
 			{
 				state->requestRedirect = defGetBoolean(def);
 
-				elog(DEBUG1, "  %s: setting \"%s\": %d", __func__, OAI_NODE_REQUEST_REDIRECT, state->requestRedirect);
+				elog(DEBUG2, "  %s: setting \"%s\": %d", __func__, OAI_NODE_REQUEST_REDIRECT, state->requestRedirect);
 			}
 			else if (strcmp(def->defname, OAI_NODE_REQUEST_MAX_REDIRECT) == 0)
 			{
@@ -436,7 +436,7 @@ OAIFdwState *GetServerInfo(const char *srvname)
 
 				state->requestMaxRedirect = strtol(maxredirect_str, &tailpt, 10);
 
-				elog(DEBUG1, "  %s: setting \"%s\": %ld", __func__, OAI_NODE_REQUEST_MAX_REDIRECT, state->requestMaxRedirect);
+				elog(DEBUG2, "  %s: setting \"%s\": %ld", __func__, OAI_NODE_REQUEST_MAX_REDIRECT, state->requestMaxRedirect);
 
 				if (strcmp(defGetString(def), "0") != 0 && state->requestMaxRedirect == 0)
 					elog(ERROR, "invalid value for \"%s\"", OAI_NODE_REQUEST_MAX_REDIRECT);
@@ -811,7 +811,7 @@ static List *GetIdentity(OAIFdwState *state)
 	int oaiExecuteResponse;
 	List *result = NIL;
 
-	elog(DEBUG1, "%s called", __func__);
+	elog(DEBUG2, "%s called", __func__);
 
 	state->requestVerb = OAI_REQUEST_IDENTIFY;
 
@@ -859,7 +859,7 @@ static List *GetIdentity(OAIFdwState *state)
 
 	xmlFreeDoc(state->xmldoc);
 
-	elog(DEBUG1, "%s => finished", __func__);
+	elog(DEBUG2, "%s => finished", __func__);
 
 	return result;
 }
@@ -873,7 +873,7 @@ static List *GetSets(OAIFdwState *state)
 	int oaiExecuteResponse;
 	List *result = NIL;
 
-	elog(DEBUG1, "%s called", __func__);
+	elog(DEBUG2, "%s called", __func__);
 
 	state->requestVerb = OAI_REQUEST_LISTSETS;
 
@@ -936,7 +936,7 @@ static List *GetSets(OAIFdwState *state)
 
 	xmlFreeDoc(state->xmldoc);
 
-	elog(DEBUG1, "%s => finished", __func__);
+	elog(DEBUG2, "%s => finished", __func__);
 
 	return result;
 }
@@ -951,7 +951,7 @@ static List *GetMetadataFormats(OAIFdwState *state)
 	int oaiExecuteResponse;
 	List *result = NIL;
 
-	elog(DEBUG1, "  %s called", __func__);
+	elog(DEBUG2, "  %s called", __func__);
 
 	state->requestVerb = OAI_REQUEST_LISTMETADATAFORMATS;
 
@@ -1019,7 +1019,7 @@ static List *GetMetadataFormats(OAIFdwState *state)
 
 	xmlFreeDoc(state->xmldoc);
 
-	elog(DEBUG1, "  %s => finished.", __func__);
+	elog(DEBUG2, "  %s => finished.", __func__);
 
 	return result;
 }
@@ -1033,17 +1033,17 @@ static int CheckURL(char *url)
 	CURLUcode code;
 	CURLU *handler = curl_url();
 
-	elog(DEBUG1, "%s called > '%s'", __func__, url);
+	elog(DEBUG2, "%s called > '%s'", __func__, url);
 
 	code = curl_url_set(handler, CURLUPART_URL, url, 0);
 
 	curl_url_cleanup(handler);
 
-	elog(DEBUG1, "  %s handler return code: %u", __func__, code);
+	elog(DEBUG2, "  %s handler return code: %u", __func__, code);
 
 	if (code != 0)
 	{
-		elog(DEBUG1, "%s: invalid URL (%u) > '%s'", __func__, code, url);
+		elog(DEBUG2, "%s: invalid URL (%u) > '%s'", __func__, code, url);
 
 		return code;
 	}
@@ -1152,7 +1152,7 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 
 	initStringInfo(&url_buffer);
 
-	elog(DEBUG1, "%s called: base url > '%s' ", __func__, state->url);
+	elog(DEBUG2, "%s called: base url > '%s' ", __func__, state->url);
 
 	curl = curl_easy_init();
 
@@ -1168,7 +1168,7 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 		if (state->set)
 		{
 			char *encoded_set = curl_easy_escape(curl, state->set, 0);
-			elog(DEBUG1, "  %s (%s): appending 'set' > %s", __func__, state->requestVerb, state->set);
+			elog(DEBUG2, "  %s (%s): appending 'set' > %s", __func__, state->requestVerb, state->set);
 			appendStringInfo(&url_buffer, "&set=%s", encoded_set);
 			curl_free(encoded_set);
 		}
@@ -1176,7 +1176,7 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 		if (state->from)
 		{
 			char *encoded_from = curl_easy_escape(curl, state->from, 0);
-			elog(DEBUG1, "  %s (%s): appending 'from' > %s", __func__, state->requestVerb, state->from);
+			elog(DEBUG2, "  %s (%s): appending 'from' > %s", __func__, state->requestVerb, state->from);
 			appendStringInfo(&url_buffer, "&from=%s", encoded_from);
 			curl_free(encoded_from);
 		}
@@ -1184,7 +1184,7 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 		if (state->until)
 		{
 			char *encoded_until = curl_easy_escape(curl, state->until, 0);
-			elog(DEBUG1, "  %s (%s): appending 'until' > %s", __func__, state->requestVerb, state->until);
+			elog(DEBUG2, "  %s (%s): appending 'until' > %s", __func__, state->requestVerb, state->until);
 			appendStringInfo(&url_buffer, "&until=%s", encoded_until);
 			curl_free(encoded_until);
 		}
@@ -1192,7 +1192,7 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 		if (state->metadataPrefix)
 		{
 			char *encoded_metadataPrefix = curl_easy_escape(curl, state->metadataPrefix, 0);
-			elog(DEBUG1, "  %s (%s): appending 'metadataPrefix' > %s", __func__, state->requestVerb, state->metadataPrefix);
+			elog(DEBUG2, "  %s (%s): appending 'metadataPrefix' > %s", __func__, state->requestVerb, state->metadataPrefix);
 			appendStringInfo(&url_buffer, "&metadataPrefix=%s",encoded_metadataPrefix);
 			curl_free(encoded_metadataPrefix);
 		}
@@ -1201,21 +1201,21 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 		{
 			char *encoded_token;
 
-			elog(DEBUG1, "  %s (%s): appending 'resumptionToken' > %s", __func__, state->requestVerb, state->resumptionToken);
+			elog(DEBUG2, "  %s (%s): appending 'resumptionToken' > %s", __func__, state->requestVerb, state->resumptionToken);
 			resetStringInfo(&url_buffer);
 
 			/* URL-encode the resumption token to handle special characters like & */
 			encoded_token = curl_easy_escape(curl, state->resumptionToken, 0);
 			if (encoded_token)
 			{
-				elog(DEBUG1, "  %s (%s): encoded resumptionToken > %s", __func__, state->requestVerb, encoded_token);
+				elog(DEBUG2, "  %s (%s): encoded resumptionToken > %s", __func__, state->requestVerb, encoded_token);
 				appendStringInfo(&url_buffer, "verb=%s&resumptionToken=%s", state->requestVerb, encoded_token);
 				curl_free(encoded_token);
 			}
 			else
 			{
 				/* Fallback to unencoded if encoding fails */
-				elog(DEBUG1, "  %s (%s): encoding failed, using raw token", __func__, state->requestVerb);
+				elog(DEBUG2, "  %s (%s): encoding failed, using raw token", __func__, state->requestVerb);
 				appendStringInfo(&url_buffer, "verb=%s&resumptionToken=%s", state->requestVerb, state->resumptionToken);
 			}
 		}
@@ -1226,14 +1226,14 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 		if (state->identifier)
 		{
 			char *encoded_identifier = curl_easy_escape(curl, state->identifier, 0);
-			elog(DEBUG1, "  %s (%s): appending 'identifier' > %s", __func__, state->requestVerb, state->identifier);
+			elog(DEBUG2, "  %s (%s): appending 'identifier' > %s", __func__, state->requestVerb, state->identifier);
 			appendStringInfo(&url_buffer, "&identifier=%s", encoded_identifier);
 			curl_free(encoded_identifier);
 		}
 
 		if (state->metadataPrefix)
 		{
-			elog(DEBUG1, "  %s (%s): appending 'metadataPrefix' > %s", __func__, state->requestVerb, state->metadataPrefix);
+			elog(DEBUG2, "  %s (%s): appending 'metadataPrefix' > %s", __func__, state->requestVerb, state->metadataPrefix);
 			appendStringInfo(&url_buffer, "&metadataPrefix=%s", state->metadataPrefix);
 		}
 	}
@@ -1243,7 +1243,7 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 		if (state->set)
 		{
 			char *encoded_set = curl_easy_escape(curl, state->set, 0);
-			elog(DEBUG1, "  %s (%s): appending 'set' > %s", __func__, state->requestVerb, state->set);
+			elog(DEBUG2, "  %s (%s): appending 'set' > %s", __func__, state->requestVerb, state->set);
 			appendStringInfo(&url_buffer, "&set=%s", encoded_set);
 			curl_free(encoded_set);
 		}
@@ -1251,7 +1251,7 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 		if (state->from)
 		{
 			char *encoded_from = curl_easy_escape(curl, state->from, 0);
-			elog(DEBUG1, "  %s (%s): appending 'from' > %s", __func__, state->requestVerb, state->from);
+			elog(DEBUG2, "  %s (%s): appending 'from' > %s", __func__, state->requestVerb, state->from);
 			appendStringInfo(&url_buffer, "&from=%s", encoded_from);
 			curl_free(encoded_from);
 		}
@@ -1259,7 +1259,7 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 		if (state->until)
 		{
 			char *encoded_until = curl_easy_escape(curl, state->until, 0);
-			elog(DEBUG1, "  %s (%s): appending 'until' > %s", __func__, state->requestVerb, state->until);
+			elog(DEBUG2, "  %s (%s): appending 'until' > %s", __func__, state->requestVerb, state->until);
 			appendStringInfo(&url_buffer, "&until=%s", encoded_until);
 			curl_free(encoded_until);
 		}
@@ -1267,7 +1267,7 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 		if (state->metadataPrefix)
 		{
 			char *encoded_metadataPrefix = curl_easy_escape(curl, state->metadataPrefix, 0);
-			elog(DEBUG1, "  %s (%s): appending 'metadataPrefix' > %s", __func__, state->requestVerb, state->metadataPrefix);
+			elog(DEBUG2, "  %s (%s): appending 'metadataPrefix' > %s", __func__, state->requestVerb, state->metadataPrefix);
 			appendStringInfo(&url_buffer, "&metadataPrefix=%s",encoded_metadataPrefix);
 			curl_free(encoded_metadataPrefix);
 		}
@@ -1276,21 +1276,21 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 		{
 			char *encoded_token;
 
-			elog(DEBUG1, "  %s (%s): appending 'resumptionToken' > %s", __func__, state->requestVerb, state->resumptionToken);
+			elog(DEBUG2, "  %s (%s): appending 'resumptionToken' > %s", __func__, state->requestVerb, state->resumptionToken);
 			resetStringInfo(&url_buffer);
 
 			/* URL-encode the resumption token to handle special characters like & */
 			encoded_token = curl_easy_escape(curl, state->resumptionToken, 0);
 			if (encoded_token)
 			{
-				elog(DEBUG1, "  %s (%s): encoded resumptionToken > %s", __func__, state->requestVerb, encoded_token);
+				elog(DEBUG2, "  %s (%s): encoded resumptionToken > %s", __func__, state->requestVerb, encoded_token);
 				appendStringInfo(&url_buffer, "verb=%s&resumptionToken=%s", state->requestVerb, encoded_token);
 				curl_free(encoded_token);
 			}
 			else
 			{
 				/* Fallback to unencoded if encoding fails */
-				elog(DEBUG1, "  %s (%s): encoding failed, using raw token", __func__, state->requestVerb);
+				elog(DEBUG2, "  %s (%s): encoding failed, using raw token", __func__, state->requestVerb);
 				appendStringInfo(&url_buffer, "verb=%s&resumptionToken=%s", state->requestVerb, state->resumptionToken);
 			}
 		}
@@ -1303,7 +1303,7 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 			return OAI_UNKNOWN_REQUEST;
 	}
 
-	elog(DEBUG1, "  %s (%s): url build > %s?%s", __func__, state->requestVerb, state->url, url_buffer.data);
+	elog(DEBUG1, "GET: %s?%s", state->url, url_buffer.data);
 
 	if (curl)
 	{
@@ -1320,37 +1320,37 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 		curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, errbuf);
 
 		curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, connectTimeout);
-		elog(DEBUG1, "  %s (%s): timeout > %ld", __func__, state->requestVerb, connectTimeout);
-		elog(DEBUG1, "  %s (%s): max retry > %ld", __func__, state->requestVerb, maxretries);
+		elog(DEBUG2, "  %s (%s): timeout > %ld", __func__, state->requestVerb, connectTimeout);
+		elog(DEBUG2, "  %s (%s): max retry > %ld", __func__, state->requestVerb, maxretries);
 
 		/* Proxy support: added in version 1.1.0 */
 		if (state->proxy)
 		{
 
-			elog(DEBUG1, "  %s (%s): proxy URL > '%s'", __func__, state->requestVerb, state->proxy);
+			elog(DEBUG2, "  %s (%s): proxy URL > '%s'", __func__, state->requestVerb, state->proxy);
 
 			curl_easy_setopt(curl, CURLOPT_PROXY, state->proxy);
 
 			if (strcmp(state->proxyType, OAI_NODE_HTTP_PROXY) == 0)
 			{
-				elog(DEBUG1, "  %s (%s): proxy protocol > 'HTTP'", __func__, state->requestVerb);
+				elog(DEBUG2, "  %s (%s): proxy protocol > 'HTTP'", __func__, state->requestVerb);
 				curl_easy_setopt(curl, CURLOPT_PROXYTYPE, CURLPROXY_HTTP);
 			}
 			else if (strcmp(state->proxyType, OAI_NODE_HTTPS_PROXY) == 0)
 			{
-				elog(DEBUG1, "  %s (%s): proxy protocol > 'HTTPS'", __func__, state->requestVerb);
+				elog(DEBUG2, "  %s (%s): proxy protocol > 'HTTPS'", __func__, state->requestVerb);
 				curl_easy_setopt(curl, CURLOPT_PROXYTYPE, CURLPROXY_HTTPS);
 			}
 
 			if (state->proxyUser)
 			{
-				elog(DEBUG1, "  %s (%s): entering proxy user ('%s').", __func__, state->requestVerb, state->proxyUser);
+				elog(DEBUG2, "  %s (%s): entering proxy user ('%s').", __func__, state->requestVerb, state->proxyUser);
 				curl_easy_setopt(curl, CURLOPT_PROXYUSERNAME, state->proxyUser);
 			}
 
 			if (state->proxyPassword)
 			{
-				elog(DEBUG1, "  %s (%s): entering proxy user's password.", __func__, state->requestVerb);
+				elog(DEBUG2, "  %s (%s): entering proxy user's password.", __func__, state->requestVerb);
 				curl_easy_setopt(curl, CURLOPT_PROXYUSERPWD, state->proxyPassword);
 			}
 		}
@@ -1358,12 +1358,12 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 		if (state->requestRedirect == true)
 		{
 
-			elog(DEBUG1, "  %s (%s): setting request redirect: %d", __func__, state->requestVerb, state->requestRedirect);
+			elog(DEBUG2, "  %s (%s): setting request redirect: %d", __func__, state->requestVerb, state->requestRedirect);
 			curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
 
 			if (state->requestMaxRedirect)
 			{
-				elog(DEBUG1, "  %s (%s): setting maxredirs: %ld", __func__, state->requestVerb, state->requestMaxRedirect);
+				elog(DEBUG2, "  %s (%s): setting maxredirs: %ld", __func__, state->requestVerb, state->requestMaxRedirect);
 				curl_easy_setopt(curl, CURLOPT_MAXREDIRS, state->requestMaxRedirect);
 			}
 		}
@@ -1446,9 +1446,11 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 			curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
 			state->xmldoc = xmlReadMemory(chunk.memory, chunk.size, NULL, NULL, XML_PARSE_NOBLANKS);
 
-			elog(DEBUG1, "  %s (%s): http response code = %ld", __func__, state->requestVerb, response_code);
-			elog(DEBUG1, "  %s (%s): http response size = %ld", __func__, state->requestVerb, chunk.size);
-			elog(DEBUG1, "  %s (%s): http response header = \n%s", __func__, state->requestVerb, chunk_header.memory);
+			elog(DEBUG1, "HTTP %ld, %ld bytes", response_code, chunk.size);
+
+			elog(DEBUG2, "  %s (%s): http response code = %ld", __func__, state->requestVerb, response_code);
+			elog(DEBUG2, "  %s (%s): http response size = %ld", __func__, state->requestVerb, chunk.size);
+			elog(DEBUG2, "  %s (%s): http response header = \n%s", __func__, state->requestVerb, chunk_header.memory);
 		}
 	}
 
@@ -1484,7 +1486,7 @@ static void OAIRequestPlanner(OAIFdwState *state, RelOptInfo *baserel)
 #endif
 
 	char *relname = NameStr(rel->rd_rel->relname);
-	elog(DEBUG1, "%s called.", __func__);
+	elog(DEBUG2, "%s called.", __func__);
 
 	tupdesc = rel->rd_att;
 
@@ -1577,7 +1579,7 @@ static void OAIRequestPlanner(OAIFdwState *state, RelOptInfo *baserel)
 	if (!hasContentForeignColumn)
 	{
 		state->requestVerb = OAI_REQUEST_LISTIDENTIFIERS;
-		elog(DEBUG1, "  %s: the foreign table '%s' has no 'content' OAI node. Request type set to '%s'",
+		elog(DEBUG2, "  %s: the foreign table '%s' has no 'content' OAI node. Request type set to '%s'",
 			 __func__, relname, OAI_REQUEST_LISTIDENTIFIERS);
 	}
 
@@ -1592,7 +1594,7 @@ static void OAIRequestPlanner(OAIFdwState *state, RelOptInfo *baserel)
 	table_close(rel, NoLock);
 #endif
 
-	elog(DEBUG1, "%s => finished.", __func__);
+	elog(DEBUG2, "%s => finished.", __func__);
 }
 
 static TupleTableSlot *OAIFdwExecForeignUpdate(EState *estate, ResultRelInfo *rinfo, TupleTableSlot *slot, TupleTableSlot *planSlot)
@@ -1640,7 +1642,7 @@ static char *GetOAINodeFromColumn(Oid foreigntableid, int16 attnum)
 	Relation rel = table_open(foreigntableid, NoLock);
 #endif
 
-	elog(DEBUG1, "  %s called", __func__);
+	elog(DEBUG2, "  %s called", __func__);
 	tupdesc = rel->rd_att;
 
 	for (int i = 0; i < rel->rd_att->natts; i++)
@@ -1689,7 +1691,7 @@ static char *datumToString(Datum datum, Oid type)
 
 	ReleaseSysCache(tuple);
 
-	elog(DEBUG1, "%s: type > %u", __func__, type);
+	elog(DEBUG2, "%s: type > %u", __func__, type);
 
 	switch (type)
 	{
@@ -1969,7 +1971,7 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState **state)
 {
 	if ((*state)->pageindex == (*state)->pagesize)
 	{
-		elog(DEBUG1, "%s: EOF > %d/%d", __func__, (*state)->pageindex, (*state)->pagesize);
+		elog(DEBUG3, "%s: EOF > %d/%d", __func__, (*state)->pageindex, (*state)->pagesize);
 		return NULL;
 	}
 	else
@@ -2078,8 +2080,11 @@ static void OAIExplainForeignScan(ForeignScanState *node, ExplainState *es)
 
 	if (state)
 	{
+		if (state->foreign_server && strlen(state->foreign_server->servername) > 0)
+			ExplainPropertyText("Foreign Server", state->foreign_server->servername, es);
+
 		if (state->url && strlen(state->url) > 0)
-			ExplainPropertyText("Server URL", state->url, es);
+			ExplainPropertyText("Foreign Server URL", state->url, es);
 
 		if (state->requestVerb && strlen(state->requestVerb) > 0)
 			ExplainPropertyText("requestVerb", state->requestVerb, es);
@@ -2142,7 +2147,7 @@ static TupleTableSlot *OAIFdwIterateForeignScan(ForeignScanState *node)
 		pfree(record);
 	}
 
-	elog(DEBUG1, "%s => returning tuple (rowcount: %d)", __func__, state->rowcount);
+	elog(DEBUG3, "%s => returning tuple (rowcount: %d)", __func__, state->rowcount);
 
 	return slot;
 }
@@ -2189,7 +2194,7 @@ static void LoadOAIRecords(struct OAIFdwState **state)
 	xmlNodePtr headerElements;
 	xmlNodePtr ListRecordsRequest;
 
-	elog(DEBUG1, "%s called.", __func__);
+	elog(DEBUG2, "%s called.", __func__);
 
 	/* Sets the page size and index to zero.*/
 	(*state)->pagesize = 0;
@@ -2273,7 +2278,7 @@ static void LoadOAIRecords(struct OAIFdwState **state)
 							xmlBufferFree(buffer);
 						}
 
-						elog(DEBUG1, "  %s (%s): APPENDING RECORDS LIST -> %s", __func__, (*state)->requestVerb, oai->identifier);
+						elog(DEBUG2, "  %s (%s): Appending record list -> %s", __func__, (*state)->requestVerb, oai->identifier);
 
 						(*state)->records = lappend((*state)->records, oai);
 						(*state)->pagesize++;
@@ -2470,7 +2475,7 @@ static void OAIFdwEndForeignScan(ForeignScanState *node)
 		state->oaicxt = NULL;
 	}
 
-	elog(DEBUG1, "%s exit oai_fdw: so long .. \n", __func__);
+	elog(DEBUG2, "%s exit oai_fdw: so long .. \n", __func__);
 }
 
 static List *OAIFdwImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid serverOid)
@@ -2483,12 +2488,12 @@ static List *OAIFdwImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid server
 	OAIFdwState *state;
 	ForeignServer *server = GetForeignServer(serverOid);
 
-	elog(DEBUG1, "%s called: '%s'", __func__, server->servername);
+	elog(DEBUG2, "%s called: '%s'", __func__, server->servername);
 	state = GetServerInfo(server->servername);
 
 	all_sets = GetSets(state);
 
-	elog(DEBUG1, "  %s: parsing statements", __func__);
+	elog(DEBUG2, "  %s: parsing statements", __func__);
 
 	foreach (cell, stmt->options)
 	{
@@ -2592,7 +2597,7 @@ static List *OAIFdwImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid server
 
 			sql_commands = lappend(sql_commands, pstrdup(buffer.data));
 
-			elog(DEBUG1, "%s: IMPORT FOREIGN SCHEMA (%s): \n%s", __func__, stmt->remote_schema, buffer.data);
+			elog(DEBUG2, "%s: IMPORT FOREIGN SCHEMA (%s): \n%s", __func__, stmt->remote_schema, buffer.data);
 		}
 
 		elog(NOTICE, "Foreign tables to be created in schema '%s': %d", stmt->local_schema, list_length(sql_commands));
@@ -2613,7 +2618,7 @@ static List *OAIFdwImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid server
 
 		sql_commands = lappend(sql_commands, pstrdup(buffer.data));
 
-		elog(DEBUG1, "%s: IMPORT FOREIGN SCHEMA: \n%s", __func__, buffer.data);
+		elog(DEBUG2, "%s: IMPORT FOREIGN SCHEMA: \n%s", __func__, buffer.data);
 	}
 	else
 		ereport(ERROR,
@@ -2674,7 +2679,7 @@ static void LoadOAIUserMapping(OAIFdwState *state)
 	ListCell *cell;
 	bool usermatch = true;
 
-	elog(DEBUG1, "%s called", __func__);
+	elog(DEBUG2, "%s called", __func__);
 
 	tp = SearchSysCache2(USERMAPPINGUSERSERVER,
 						 ObjectIdGetDatum(GetUserId()),
@@ -2729,13 +2734,13 @@ static void LoadOAIUserMapping(OAIFdwState *state)
 				if (strcmp(def->defname, OAI_USERMAPPING_OPTION_USER) == 0)
 				{
 					state->user = pstrdup(strVal(def->arg));
-					elog(DEBUG1, "%s: %s '%s'", __func__, def->defname, state->user);
+					elog(DEBUG2, "%s: %s '%s'", __func__, def->defname, state->user);
 				}
 
 				if (strcmp(def->defname, OAI_USERMAPPING_OPTION_PASSWORD) == 0)
 				{
 					state->password = pstrdup(strVal(def->arg));
-					elog(DEBUG1, "%s: %s '*******'", __func__, def->defname);
+					elog(DEBUG2, "%s: %s '*******'", __func__, def->defname);
 				}
 
 				if (strcmp(def->defname, OAI_NODE_PROXY_USER) == 0)
@@ -2762,7 +2767,7 @@ static void LoadOAITableInfo(OAIFdwState *state)
 	Relation rel;
 	ListCell *cell;
 
-	elog(DEBUG1, "%s called", __func__);
+	elog(DEBUG2, "%s called", __func__);
 
 #if PG_VERSION_NUM < 130000
 	rel = heap_open(state->foreign_table->relid, NoLock);
@@ -2887,7 +2892,7 @@ static void InitSession(OAIFdwState *state, RelOptInfo *baserel)
 	state->requestRedirect = false;
 	state->requestMaxRedirect = 0;
 
-	elog(DEBUG1, "%s called", __func__);
+	elog(DEBUG2, "%s called", __func__);
 
 	/*
 	 * Loading SERVER OPTIONS
@@ -2919,7 +2924,7 @@ static List *SerializePlanData(OAIFdwState *state)
 {
 	List *result = NIL;
 
-	elog(DEBUG1, "%s called", __func__);
+	elog(DEBUG2, "%s called", __func__);
 
 	result = lappend(result, IntToConst((int)state->numcols));
 	result = lappend(result, IntToConst((int)state->numfdwcols));
@@ -2967,7 +2972,7 @@ static List *SerializePlanData(OAIFdwState *state)
 		result = lappend(result, OidToConst(state->oaiTable->cols[i]->pgtype));
 	}
 
-	elog(DEBUG1, "%s exit", __func__);
+	elog(DEBUG2, "%s exit", __func__);
 	return result;
 }
 
@@ -2987,7 +2992,7 @@ static struct OAIFdwState *DeserializePlanData(List *list)
 	struct OAIFdwState *state = (struct OAIFdwState *)palloc0(sizeof(OAIFdwState));
 	ListCell *cell = list_head(list);
 
-	elog(DEBUG1, "%s called", __func__);
+	elog(DEBUG2, "%s called", __func__);
 
 	state->numcols = (int)DatumGetInt32(((Const *)lfirst(cell))->constvalue);
 	state->pagesize = 0;
@@ -3069,7 +3074,7 @@ static struct OAIFdwState *DeserializePlanData(List *list)
 		cell = list_next(list, cell);
 	}
 
-	elog(DEBUG1, "%s exit", __func__);
+	elog(DEBUG2, "%s exit", __func__);
 	return state;
 }
 

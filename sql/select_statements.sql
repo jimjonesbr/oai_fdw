@@ -1,3 +1,5 @@
+SET client_min_messages TO DEBUG1;
+
 CREATE FOREIGN TABLE dnb_zdb_oai_dc (
   id text OPTIONS (oai_node 'identifier'),
   content text OPTIONS (oai_node 'content'),

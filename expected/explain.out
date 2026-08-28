@@ -15,7 +15,7 @@ SELECT * FROM dnb_zdb_oai_dc;
                                   QUERY PLAN                                   
 -------------------------------------------------------------------------------
  Foreign Scan on dnb_zdb_oai_dc  (cost=10000.00..20000.00 rows=1000 width=136)
-   Server URL: https://services.dnb.de/oai/repository
+   Foreign Server URL: https://services.dnb.de/oai/repository
    requestVerb: ListRecords
    setSpec: zdb
    metadataPrefix: oai_dc
@@ -33,7 +33,7 @@ WHERE
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  Foreign Scan on dnb_zdb_oai_dc  (cost=10000.00..20000.00 rows=1000 width=136)
    Filter: ((datestamp >= 'Tue Mar 01 00:00:00 2022'::timestamp without time zone) AND (datestamp <= 'Wed Mar 02 00:00:00 2022'::timestamp without time zone) AND (setspec <@ '{dnb:reiheC}'::text[]) AND (meta = 'MARC21-xml'::text))
-   Server URL: https://services.dnb.de/oai/repository
+   Foreign Server URL: https://services.dnb.de/oai/repository
    requestVerb: ListRecords
    setSpec: dnb:reiheC
    metadataPrefix: MARC21-xml
