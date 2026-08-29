@@ -23,6 +23,7 @@ A PostgreSQL Foreign Data Wrapper to access OAI-PMH repositories (Open Archives 
     - [OAI\_ListSets](#oai_listsets)
     - [OAI\_Version](#oai_version)
     - [OAI\_HarvestTable](#oai_harvesttable)
+    - [EXPLAIN and Diagnostics](#explain-and-diagnostics)
   - [Deploy with Docker](#deploy-with-docker)
   - [Error Handling](#error-handling)
   - [Limitations](#limitations)
@@ -57,7 +58,7 @@ CREATE EXTENSION oai_fdw;
 To install an specific version add the full version number in the `WITH VERSION` clause
 
 ```sql
-CREATE EXTENSION oai_fdw WITH VERSION '1.13';
+CREATE EXTENSION oai_fdw WITH VERSION '1.14';
 ```
 
 To run the predefined regression tests run `make installcheck` with the user `postgres`:
@@ -78,7 +79,7 @@ ALTER EXTENSION oai_fdw UPDATE;
 To update to an specific version use `UPDATE TO` and the full version number
 
 ```sql
-ALTER EXTENSION oai_fdw UPDATE TO '1.13';
+ALTER EXTENSION oai_fdw UPDATE TO '1.14';
 ```
 
 ## [Usage](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#usage)
@@ -103,14 +104,12 @@ OPTIONS (url 'https://sammlungen.ulb.uni-muenster.de/oai');
 |---------------|----------------------|--------------------------------------------------------------------------------------------------------------------|
 | `url`         | **required**            | URL address of the OAI-PMH repository.
 | `http_proxy` | optional            | Proxy for HTTP requests.
-| `connect_timeout`         | optional            | Connection timeout for HTTP requests in seconds (default 300 seconds).
-| `connect_retry`         | optional            | Number of attempts to retry a request in case of failure (default 3 times).
-| `request_redirect`         | optional            | Enables URL redirect issued by the server (default 'false').
+| `connect_timeout`         | optional            | Connection timeout for establishing a HTTP request in seconds (default `300`).
+| `connect_retry`         | optional            | Number of attempts to retry a request in case of failure (default `3`).
+| `request_redirect`         | optional            | Enables URL redirect issued by the server (default `false`).
 | `request_max_redirect`         | optional            | Limit of how many times the URL redirection may occur. If that many redirections have been followed, the next redirect will cause an error. Not setting this parameter or setting it to `0` will allow an infinite number of redirects.
 
 ### [CREATE USER MAPPING](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#create-user-mapping)
-
-Availability: **1.9**
 
 [CREATE USER MAPPING](https://www.postgresql.org/docs/current/sql-createusermapping.html) defines a mapping of a PostgreSQL user to an user in the target OAI repository. For instance, to map the PostgreSQL user `postgres` to the user `admin` in the `SERVER` named `my_protected_oai`:
 
@@ -317,6 +316,7 @@ CREATE FOREIGN TABLE dnb_maps (
 | `datestamp`   | `timestamp`              | The date of creation, modification or deletion of the record for the purpose of selective harvesting. (OAI Header) |
 | `content`     | `text`, `varchar`, `xml` | The XML document representing the retrieved recored (OAI Record)                                                   |
 | `metadataprefix`     | `text`, `varchar` | A string that specifies the metadata format in OAI-PMH requests issued to the repository      |
+| `status` | `boolean` | Deleted-record flag from the OAI header (true if the record is marked deleted). |
 
 
 **Server Options**
@@ -588,8 +588,6 @@ These support functions help to retrieve additional information from an OAI Serv
 
 -------
 
-**Availability**: 1.0.0
-
 **Description**
 
 This function is used to retrieve information about a repository. Some of the information returned is required as part of the OAI-PMH. Repositories may also employ the Identify verb to return additional descriptive information.
@@ -626,8 +624,6 @@ SELECT * FROM OAI_Identify('oai_server_ulb');
 
 -------
 
-**Availability**: 1.0.0
-
 **Description**
 
 This function is used to retrieve the metadata formats available from a repository. An optional argument restricts the request to the formats available for a specific item.
@@ -659,11 +655,9 @@ SELECT * FROM OAI_ListMetadataFormats('oai_server_ulb');
 
 *SETOF OAI_Set* **OAI_ListSets**(server_name *text*);
 
-`server_name`: Name of a previously created OAI Foreign Data Wrapper `SERVER``
+`server_name`: Name of a previously created OAI Foreign Data Wrapper `SERVER`
 
 -------
-
-**Availability**: 1.0.0
 
 **Description**
 
@@ -702,8 +696,6 @@ SELECT * FROM OAI_ListSets('oai_server_ulb');
 
 -------
 
-**Availability**: 1.0.0
-
 **Description**
 
 Shows the version of the installed OAI FDW and its main libraries.
@@ -728,7 +720,7 @@ SELECT oai_version();
 
 *void* **OAI_HarvestTable**(oai_table *text*, target_table *text*, page_size *interval*, start_date *timestamp*, end_date *timestamp*, create_table *boolean*);
 
-*void* **OAI_HarvestTable**(oai_table *text*, target_table *text*, page_size *interval*, start_date *timestamp*, end_date *timestamp*, create_table *boolean*, verbose *boolean*);
+*void* **OAI_HarvestTable**(oai_table *text*, target_table *text*, page_size *interval*, start_date *timestamp*, end_date *timestamp*, create_table *boolean*, exec_verbose *boolean*);
 
 
 `oai_table`: OAI foreign table
@@ -743,11 +735,9 @@ SELECT oai_version();
 
 `create_table` (optional): Set this parameter to `false` in case the target table already exists. Default **TRUE**.
 
-`verbose` (optional): Set this parameter to `true` for more comprehensive output messages. Default **FALSE**.
+`exec_verbose` (optional): Set this parameter to `true` for more comprehensive output messages. Default **FALSE**.
 
 -------
-
-**Availability**: 1.2.0
 
 **Description**
 
@@ -759,12 +749,53 @@ For instance, an OAI ListRecords request for all records from the year 2021 (`20
 **Usage**
 
 ```sql
--- Cloning records from foreign table 'ulb_oai_dc' to a new table called 'clone_ulb_oai_dc'
+CALL OAI_HarvestTable('dnb_oai_dc','"clone-dnb:oai/dc"', interval '1 day', '2020-01-01 00:00:00', '2020-01-03 00:00:00',true,true);
 
-CALL OAI_HarvestTable('ulb_oai_dc','clone_ulb_oai_dc', interval '5 days', '2022-10-01 09:00:00', '2022-10-17 17:00:00');
+INFO:  target table "public."clone-dnb:oai/dc"" created
+INFO:  page stored into "public."clone-dnb:oai/dc"": 215 records inserted and 0 updated [2020-01-01 00:00:00 - 2020-01-02 00:00:00]
+INFO:  page stored into "public."clone-dnb:oai/dc"": 898 records inserted and 0 updated [2020-01-02 00:00:00 - 2020-01-03 00:00:00]
+INFO:  OAI harvester complete ("public.dnb_oai_dc" -> "public."clone-dnb:oai/dc""): 1113 records inserted and 0 updated [2020-01-01 00:00:00 - 2020-01-03 00:00:00]
 
-INFO:  target table "public.clone_ulb_oai_dc" successfully created.
-INFO:  90 records from "public.ulb_oai_dc" successfully inserted into "public.clone_ulb_oai_dc" [2022-10-01 09:00:00 - 2022-10-17 17:00:00].
+SELECT count(*) FROM "clone-dnb:oai/dc";
+ count 
+-------
+  1113
+```
+### [EXPLAIN and Diagnostics](#explain-and-diagnostics)
+
+The `oai_fdw` extension provides detailed diagnostics in PostgreSQL [EXPLAIN](https://www.postgresql.org/docs/current/sql-explain.html) output to help users understand which SQL clauses are pushed down to the remote SPARQL endpoint.
+
+The plan output includes FDW-specific lines for each Foreign Scan node:
+* `Foreign Server:` shows the foreign server related to the queried foreign table.
+* `Foreign Server URL`: shows the foreign server's URL.
+  `requestVerb`: shows the type of OAI request related to the foreign table.
+* `setSpec`: shows the set related to the foreign table.
+* `metadataPrefix`: shows the metadata format requested.
+* `from`: shows the lower bound for datestamp-based selective harvesting.
+* `until`: shows the upprer bound for datestamp-based selective harvesting.
+
+**Example:**
+```sql
+EXPLAIN (ANALYSE, COSTS OFF)
+SELECT * FROM dnb_zdb_oai_dc 
+WHERE 
+  meta = 'MARC21-xml' AND
+  datestamp BETWEEN '2022-03-01' AND '2022-03-02' AND
+  setspec <@ ARRAY['dnb:reiheC'];
+                                                                                                         QUERY PLAN                                                                                                          
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Foreign Scan on dnb_zdb_oai_dc (actual time=3755.595..3755.596 rows=1.00 loops=1)
+   Filter: ((datestamp >= '2022-03-01 00:00:00'::timestamp without time zone) AND (datestamp <= '2022-03-02 00:00:00'::timestamp without time zone) AND (setspec <@ '{dnb:reiheC}'::text[]) AND (meta = 'MARC21-xml'::text))
+   Foreign Server: oai_server_dnb
+   Foreign Server URL: https://services.dnb.de/oai/repository
+   requestVerb: ListRecords
+   setSpec: dnb:reiheC
+   metadataPrefix: MARC21-xml
+   from: 2022-03-01T00:00:00Z
+   until: 2022-03-02T00:00:00Z
+ Planning Time: 0.191 ms
+ Execution Time: 3755.631 ms
+(11 rows)
 ```
 
 ## [Deploy with Docker](#deploy-with-docker)
@@ -772,13 +803,13 @@ INFO:  90 records from "public.ulb_oai_dc" successfully inserted into "public.cl
 To deploy oai_fdw with docker just pick one of the supported PostgreSQL versions, install the [requirements](#requirements) and [compile](#build-and-install) the [source code](https://github.com/jimjonesbr/oai_fdw/releases). For instance, a oai_fdw `Dockerfile` for PostgreSQL 16 should look like this (minimal example):
 
 ```docker
-FROM postgres:16
+FROM postgres:18
 
 RUN apt-get update && \
-    apt-get install -y make gcc postgresql-server-dev-16 libxml2-dev libcurl4-openssl-dev
+    apt-get install -y make gcc postgresql-server-dev-18 libxml2-dev libcurl4-openssl-dev
 
-RUN tar xvzf oai_fdw-1.8.0.tar.gz && \
-    cd oai_fdw-1.8.0 && \
+RUN tar xvzf oai_fdw-1.14.0.tar.gz && \
+    cd oai_fdw-1.14.0 && \
     make -j && \
     make install
 ```
@@ -802,7 +833,7 @@ $ docker exec -u postgres my_oai_container psql -d mydatabase -c "CREATE EXTENSI
 ```
 ## [Error Handling](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#error-handling)
 
-If there is a network error or other condition that results in the loss of an incomplete list response, the OAI Foreign Data Wrapper will re-issue the most recent call, including the last resumptionToken to continue the list request sequence. The number of attempts and their interval are defined by the `connect_retry` and `connect_timeout` defined at the [CREATE SERVER](#create-server) statement.
+If there is a network error or other condition that results in the loss of an incomplete list response, the OAI Foreign Data Wrapper will re-issue the most recent call, including the last resumptionToken to continue the list request sequence. The number of attempts is defined by the `connect_retry` and `connect_timeout` defined at the [CREATE SERVER](#create-server) statement.
 
 If the OAI Foreign Data Wrapper receives a `badResumptionToken` error during a sequence of incomplete list requests it will assume that the `resumptionToken` has either expired or is invalid in some other way. There is no way to resume the list request sequence in this case; the user must start the list request again.
 
@@ -819,7 +850,7 @@ If a harvester receives some other error then there is an unrecoverable problem 
 | oai_node     | operator                     |
 |--------------|------------------------------|
 | `datestamp`  | `=`,`>`,`>=`,`<`,`<=`, `BETWEEN` |
-| `setspec`    | `<@`,`@>`                    |
+| `setspec`    | `<@`,`@>`, `&&`                    |
 | `identifier` | `=`                          |
 | `metadataprefix`       | `=`                          |
 |              |                              |

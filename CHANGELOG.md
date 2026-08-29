@@ -1,6 +1,10 @@
 ### oai_fdw 1.14
 **unreleased**
 
+* Enhancements
+
+  **Improved EXPLAIN diagnostics**: `EXPLAIN` output now include oai_fdw-specific details for each Foreign Scan node, showing which parameters are pushed down to the remote OAI Server.
+
 * Bug fixes
 
   **Fixed invalid libcurl lifecycle**: `curl_global_init()`/`curl_global_cleanup()` were being called on every SPARQL request instead of once per backend process. This could interfere with other libcurl users loaded in the same backend (e.g. other FDWs). Global initialization now happens once in `_PG_init()`; cleanup is left to the OS at process exit.
