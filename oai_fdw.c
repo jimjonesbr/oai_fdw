@@ -239,7 +239,7 @@ typedef struct OAIfdwColumn
 
 static struct OAIFdwOption valid_options[] =
 	{
-
+		/* Foreign Server */
 		{OAI_NODE_URL, ForeignServerRelationId, true, false},
 		{OAI_NODE_METADATAPREFIX, ForeignServerRelationId, false, false},
 		{OAI_NODE_HTTP_PROXY, ForeignServerRelationId, false, false},
@@ -249,20 +249,25 @@ static struct OAIFdwOption valid_options[] =
 		{OAI_NODE_REQUEST_REDIRECT, ForeignServerRelationId, false, false},
 		{OAI_NODE_REQUEST_MAX_REDIRECT, ForeignServerRelationId, false, false},
 
+		/* Foreign Table */
 		{OAI_NODE_IDENTIFIER, ForeignTableRelationId, false, false},
 		{OAI_NODE_METADATAPREFIX, ForeignTableRelationId, true, false},
 		{OAI_NODE_SETSPEC, ForeignTableRelationId, false, false},
 		{OAI_NODE_FROM, ForeignTableRelationId, false, false},
 		{OAI_NODE_UNTIL, ForeignTableRelationId, false, false},
 
+		/* Column OPTIONS */
 		{OAI_NODE_OPTION, AttributeRelationId, true, false},
+
 		/* User Mapping */
-		{OAI_USERMAPPING_OPTION_USER, UserMappingRelationId, false, false},
+		{OAI_USERMAPPING_OPTION_USER, UserMappingRelationId, true, false},
 		{OAI_USERMAPPING_OPTION_PASSWORD, UserMappingRelationId, false, false},
 		{OAI_NODE_PROXY_USER, UserMappingRelationId, false, false},
 		{OAI_NODE_PROXY_PASSWORD, UserMappingRelationId, false, false},
+
 		/* EOList option */
-		{NULL, InvalidOid, false, false}};
+		{NULL, InvalidOid, false, false}
+	};
 
 #define option_count (sizeof(valid_options) / sizeof(struct OAIFdwOption))
 
