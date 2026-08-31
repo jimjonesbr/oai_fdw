@@ -193,3 +193,38 @@ BEGIN
 END; $$;
 
 COMMENT ON PROCEDURE OAI_HarvestTable(text,text,interval,timestamp,timestamp,boolean,boolean) IS 'Harvests an OAI foreign table and stores its records in a local table';
+
+CREATE FUNCTION oai_fdw_settings()
+RETURNS text AS 'MODULE_PATHNAME', 'oai_fdw_settings'
+LANGUAGE C STABLE STRICT;
+
+COMMENT ON FUNCTION oai_fdw_settings() IS 'Returns detailed dependency information including optional components';
+
+CREATE VIEW oai_fdw_settings AS
+    WITH version_string AS (
+        SELECT oai_fdw_settings() AS v
+    )
+    SELECT component, version
+    FROM version_string,
+    LATERAL (VALUES
+        ('oai_fdw',    substring(v from 'oai_fdw\s+([^\s,]+)')),
+        ('PostgreSQL', substring(v from 'PostgreSQL\s+([^,]+)')),
+        ('libxml',     substring(v from 'libxml\s+([^,]+)')),
+        ('libcurl',    substring(v from 'libcurl\s+([^,]+)')),
+        ('ssl',        substring(v from ',ssl\s+([^,]+)')),
+        ('zlib',       substring(v from ',zlib\s+([^,]+)')),
+        ('libSSH',     substring(v from ',libSSH\s+([^,]+)')),
+        ('nghttp2',    substring(v from ',nghttp2\s+([^,]+)')),
+        ('compiler',   substring(v from 'compiled by\s+([^,]+)')),
+        ('built',      substring(v from 'built on\s+([^,]+)'))
+    ) AS components(component, version)
+    WHERE version IS NOT NULL;
+
+COMMENT ON VIEW oai_fdw_settings IS 'Parse detailed dependency information into component versions';
+
+/* new signature: oai_version -> oai_fdw_version */
+CREATE FUNCTION oai_fdw_version()
+RETURNS text AS 'MODULE_PATHNAME', 'oai_fdw_version'
+LANGUAGE C VOLATILE STRICT;
+  
+COMMENT ON FUNCTION oai_fdw_version() IS 'Shows current version of oai_fdw and its major libraries';

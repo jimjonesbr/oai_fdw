@@ -690,24 +690,44 @@ SELECT * FROM OAI_ListSets('oai_server_ulb');
 
 ### [OAI_Version](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#oai_version)
 
-**Synopsis**
-
-*text* **OAI_Version**();
+Shows the version of the installed OAI FDW and its main libraries.
 
 -------
+**Usage**
 
-**Description**
+```sql
+SELECT oai_fdw_version();
 
-Shows the version of the installed OAI FDW and its main libraries.
+                                               oai_fdw_version                                               
+-------------------------------------------------------------------------------------------------------------
+ oai_fdw 1.14-dev (PostgreSQL 18.4 (Debian 18.4-1.pgdg13+1), compiled by gcc, libxml 2.9.14, libcurl 8.14.1)
+(1 row)
+
+```
+ #### [oai_fdw_settings](#oai_fdw_settings)
+
+A system view that provides detailed version information for `oai_fdw` and all its dependencies, including core libraries (PostgreSQL, libxml, libcurl) and optional components (SSL, zlib, libSSH, nghttp2), along with compiler and build information. Returns individual component names and their corresponding versions for convenient programmatic access.
+
+-------
 
 **Usage**
 
 ```sql
-SELECT oai_version();
-                                                                                                         oai_version                                                                                                         
------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- oai fdw = 1.13, libxml = 2.9.14, libcurl = libcurl/8.14.1 GnuTLS/3.8.9 zlib/1.3.1 brotli/1.1.0 zstd/1.5.7 libidn2/2.3.8 libpsl/0.21.2 libssh2/1.11.1 nghttp2/1.64.0 ngtcp2/1.11.0 nghttp3/1.8.0 librtmp/2.3 OpenLDAP/2.6.10
-(1 row)
+SELECT * FROM oai_fdw_settings;
+
+ component  |            version            
+------------+-------------------------------
+ oai_fdw    | 1.14-dev
+ PostgreSQL | 18.4 (Debian 18.4-1.pgdg13+1)
+ libxml     | 2.9.14
+ libcurl    | 8.14.1
+ ssl        | GnuTLS/3.8.9
+ zlib       | 1.3.1
+ libSSH     | libssh2/1.11.1
+ nghttp2    | 1.64.0
+ compiler   | gcc
+ built      | 2026-07-20 18:57:19 UTC
+(10 rows)
 ```
 
 ### [OAI_HarvestTable](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#oai_harvesttable)

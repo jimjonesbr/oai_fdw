@@ -5,6 +5,9 @@
 
   **Improved EXPLAIN diagnostics**: `EXPLAIN` output now include oai_fdw-specific details for each Foreign Scan node, showing which parameters are pushed down to the remote OAI Server.
 
+  **Enhanced version information**: The `oai_fdw_version()` function now returns a comprehensive version string that includes PostgreSQL version, compiler information, and all dependency versions (libxml, librdf, libcurl) in a single formatted output. A new `oai_fdw_settings()` function provides extended dependency information including optional components like SSL, zlib, libSSH, and nghttp2. The `oai_fdw_settings` view parses this extended information into a table format for convenient programmatic access to individual component versions.
+
+
 * Bug fixes
 
   **Fixed invalid libcurl lifecycle**: `curl_global_init()`/`curl_global_cleanup()` were being called on every SPARQL request instead of once per backend process. This could interfere with other libcurl users loaded in the same backend (e.g. other FDWs). Global initialization now happens once in `_PG_init()`; cleanup is left to the OS at process exit.

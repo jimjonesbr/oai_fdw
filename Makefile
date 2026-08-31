@@ -22,10 +22,15 @@ DATA = oai_fdw--1.0.sql \
 REGRESS = create-extension upgrade create_server explain import_foreign_schema create_foreign_table select_statements exceptions functions harvest
 
 CURL_CONFIG = curl-config
+XML2_CONFIG = xml2-config
 PG_CONFIG = pg_config
 
-CFLAGS += $(shell $(CURL_CONFIG) --cflags)
+PG_CPPFLAGS += $(shell $(CURL_CONFIG) --cflags) \
+			   $(shell $(XML2_CONFIG) --cflags) \
+			   -DOAI_FDW_CC="\"$(CC)\"" \
+			   -DOAI_FDW_BUILD_DATE="\"$(shell date -u +'%Y-%m-%d %H:%M:%S UTC')\""
 LIBS += $(shell $(CURL_CONFIG) --libs)
+
 SHLIB_LINK := $(LIBS)
 
 PGXS := $(shell $(PG_CONFIG) --pgxs)
