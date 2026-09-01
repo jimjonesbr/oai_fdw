@@ -1,3 +1,7 @@
+CREATE SERVER oai_server_dnb FOREIGN DATA WRAPPER oai_fdw
+OPTIONS (url 'https://services.dnb.de/oai/repository',
+         request_redirect 'true',
+         request_max_redirect '1');
 CREATE FOREIGN TABLE IF NOT EXISTS dnb_oai_dc (
   id text                OPTIONS (oai_node 'identifier'), 
   xmldoc xml             OPTIONS (oai_node 'content'), 
@@ -137,3 +141,10 @@ CREATE FOREIGN TABLE IF NOT EXISTS table_without_oai_node (
 CALL OAI_HarvestTable('table_without_oai_node', 'clone_table_without_oai_node', interval '1 day', '2020-01-01 00:00:00', '2020-01-03 00:00:00',true,true); 
 ERROR:  foreign table "public.table_without_oai_node" has no datestamp column
 CONTEXT:  PL/pgSQL function oai_harvesttable(text,text,interval,timestamp without time zone,timestamp without time zone,boolean,boolean) line 68 at RAISE
+DROP SERVER IF EXISTS oai_server_dnb CASCADE;
+NOTICE:  drop cascades to 5 other objects
+DETAIL:  drop cascades to foreign table dnb_oai_dc
+drop cascades to foreign table table_without_identifier
+drop cascades to foreign table table_without_datestamp
+drop cascades to foreign table table_without_datestamp_identifier
+drop cascades to foreign table table_without_oai_node

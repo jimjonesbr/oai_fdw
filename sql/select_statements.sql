@@ -1,5 +1,10 @@
 SET client_min_messages TO DEBUG1;
 
+CREATE SERVER oai_server_dnb FOREIGN DATA WRAPPER oai_fdw
+OPTIONS (url 'https://services.dnb.de/oai/repository',
+         request_redirect 'true',
+         request_max_redirect '1');
+
 CREATE FOREIGN TABLE dnb_zdb_oai_dc (
   id text OPTIONS (oai_node 'identifier'),
   content text OPTIONS (oai_node 'content'),
@@ -74,3 +79,5 @@ FROM (VALUES ('zdb'), ('zdb'), ('zdb')) AS v(s);
 RESET enable_hashjoin;
 RESET enable_mergejoin;
 RESET enable_material;
+
+DROP SERVER oai_server_dnb CASCADE;

@@ -176,6 +176,20 @@ CREATE FOREIGN TABLE oai_table_err4 (
  SERVER oai_server_ulb OPTIONS (setspec 'ulbmsuo',
                                 metadataPrefix '');
                                        
+CREATE SERVER oai_server_dnb FOREIGN DATA WRAPPER oai_fdw
+OPTIONS (url 'https://services.dnb.de/oai/repository',
+         request_redirect 'true',
+         request_max_redirect '1');
+
+CREATE FOREIGN TABLE dnb_zdb_oai_dc (
+  id text OPTIONS (oai_node 'identifier'),
+  content text OPTIONS (oai_node 'content'),
+  setspec text[] OPTIONS (oai_node 'setspec'),
+  datestamp timestamp OPTIONS (oai_node 'datestamp'),
+  meta text OPTIONS (oai_node 'metadataprefix')
+ )
+SERVER oai_server_dnb OPTIONS (setspec 'zdb', 
+                               metadataPrefix 'oai_dc');
 
 -- No record found: noRecordsMatch: The value of argument 'until' lies before argument 'from'
 SELECT * FROM dnb_zdb_oai_dc
@@ -288,3 +302,5 @@ CREATE USER MAPPING FOR postgres SERVER oai_server_ulb OPTIONS (user 'foo', pass
 
 -- invalid option
 CREATE USER MAPPING FOR postgres SERVER oai_server_ulb OPTIONS (user 'jim', foo 'bar');
+
+DROP SERVER oai_server_dnb CASCADE;

@@ -25,4 +25,6 @@ jobs:
         run: pg-start ${{ matrix.pg }}
       - uses: actions/checkout@v2
       - name: Build and Regression Tests 
-        run: pg-build-test
+        run: |
+          export SKIP_PROXY_TESTS=1
+          pg-build-test

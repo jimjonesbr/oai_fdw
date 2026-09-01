@@ -1,6 +1,11 @@
 \set VERBOSITY terse
 SET client_min_messages TO DEBUG1;
 
+CREATE SERVER oai_server_dnb FOREIGN DATA WRAPPER oai_fdw
+OPTIONS (url 'https://services.dnb.de/oai/repository',
+         request_redirect 'true',
+         request_max_redirect '1');
+
 SELECT OAI_Version() IS NULL;
 SELECT * FROM OAI_ListMetadataFormats('oai_server_ulb') 
 ORDER BY metadataprefix COLLATE "C";
@@ -61,3 +66,5 @@ SELECT
     COUNT(*) FILTER (WHERE component = 'libxml') = 1 AS has_libxml,
     COUNT(*) FILTER (WHERE component = 'libcurl') = 1 AS has_libcurl
 FROM oai_fdw_settings;
+
+DROP SERVER oai_server_dnb CASCADE;

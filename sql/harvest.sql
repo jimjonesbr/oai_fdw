@@ -1,3 +1,8 @@
+CREATE SERVER oai_server_dnb FOREIGN DATA WRAPPER oai_fdw
+OPTIONS (url 'https://services.dnb.de/oai/repository',
+         request_redirect 'true',
+         request_max_redirect '1');
+
 CREATE FOREIGN TABLE IF NOT EXISTS dnb_oai_dc (
   id text                OPTIONS (oai_node 'identifier'), 
   xmldoc xml             OPTIONS (oai_node 'content'), 
@@ -80,3 +85,5 @@ CREATE FOREIGN TABLE IF NOT EXISTS table_without_oai_node (
  ) SERVER oai_server_dnb OPTIONS (metadataprefix 'oai_dc');
 
 CALL OAI_HarvestTable('table_without_oai_node', 'clone_table_without_oai_node', interval '1 day', '2020-01-01 00:00:00', '2020-01-03 00:00:00',true,true); 
+
+DROP SERVER IF EXISTS oai_server_dnb CASCADE;

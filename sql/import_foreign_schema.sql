@@ -57,9 +57,8 @@ OPTIONS (url 'https://services.dnb.de/oai/repository',
          request_redirect 'true',
          request_max_redirect '1');
 
--- This user mapping should be ignored, as the OAI repo does not require HTTP authentication
 CREATE USER MAPPING FOR postgres 
-SERVER oai_server_dnb OPTIONS (user 'admin', password 'secret', proxy_user 'proxyuser', proxy_password 'proxypass');
+SERVER oai_server_dnb OPTIONS (user 'foo', password 'bar', proxy_user 'foo', proxy_password 'bar');
 
 CREATE SCHEMA dnb_schema;
 
@@ -70,3 +69,5 @@ INTO dnb_schema
  
 SELECT * FROM dnb_schema."dnb:reiheC" 
 WHERE id = 'oai:dnb.de/dnb:reiheC/1253187622';
+
+DROP SERVER IF EXISTS oai_server_dnb CASCADE;

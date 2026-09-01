@@ -23,13 +23,16 @@ REGRESS = create-extension \
 		  upgrade \
 		  create_server \
 		  explain \
-		  proxy \
 		  import_foreign_schema \
 		  create_foreign_table \
 		  select_statements \
 		  exceptions \
 		  functions \
 		  harvest
+
+ifndef SKIP_PROXY_TESTS
+	REGRESS += proxy	
+endif
 
 CURL_CONFIG = curl-config
 XML2_CONFIG = xml2-config

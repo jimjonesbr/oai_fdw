@@ -1,5 +1,9 @@
 \set VERBOSITY terse
 SET client_min_messages TO DEBUG1;
+CREATE SERVER oai_server_dnb FOREIGN DATA WRAPPER oai_fdw
+OPTIONS (url 'https://services.dnb.de/oai/repository',
+         request_redirect 'true',
+         request_max_redirect '1');
 SELECT OAI_Version() IS NULL;
  ?column? 
 ----------
@@ -171,3 +175,4 @@ FROM oai_fdw_settings;
  t                      | t           | t              | t          | t
 (1 row)
 
+DROP SERVER oai_server_dnb CASCADE;
