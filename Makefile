@@ -19,7 +19,17 @@ DATA = oai_fdw--1.0.sql \
 	   oai_fdw--1.13--1.14.sql \
 	   oai_fdw--1.14.sql
 
-REGRESS = create-extension upgrade create_server explain import_foreign_schema create_foreign_table select_statements exceptions functions harvest
+REGRESS = create-extension \
+		  upgrade \
+		  create_server \
+		  explain \
+		  proxy \
+		  import_foreign_schema \
+		  create_foreign_table \
+		  select_statements \
+		  exceptions \
+		  functions \
+		  harvest
 
 CURL_CONFIG = curl-config
 XML2_CONFIG = xml2-config

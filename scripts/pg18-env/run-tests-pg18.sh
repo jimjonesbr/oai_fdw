@@ -4,6 +4,9 @@ CONTAINER_NAME=oai_pg18
 NETWORK_NAME=pgnet
 GRAPHDB_REPOSITORY="test"
 FUSEKI_DATASET="dt"
+TEST_ENV_PATH=~/git/oai_fdw/scripts
+
+bash $TEST_ENV_PATH/squid/deploy-proxy-env.sh
 
 # Build and install oai_fdw
 echo -e "\n== Building and Installing oai_fdw on PostgreSQL 18 ==\n"

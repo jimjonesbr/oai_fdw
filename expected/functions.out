@@ -8,7 +8,7 @@ SELECT OAI_Version() IS NULL;
 
 SELECT * FROM OAI_ListMetadataFormats('oai_server_ulb') 
 ORDER BY metadataprefix COLLATE "C";
-DEBUG:  GET: https://sammlungen.ulb.uni-muenster.de/oai?verb=ListMetadataFormats
+DEBUG:  GET "https://sammlungen.ulb.uni-muenster.de/oai?verb=ListMetadataFormats"
 DEBUG:  HTTP 200, 1853 bytes
  metadataprefix |                               schema                               |              metadatanamespace              
 ----------------+--------------------------------------------------------------------+---------------------------------------------
@@ -23,7 +23,7 @@ DEBUG:  HTTP 200, 1853 bytes
 
 SELECT * FROM OAI_ListMetadataFormats('oai_server_dnb') 
 ORDER BY metadataprefix COLLATE "C";
-DEBUG:  GET: https://services.dnb.de/oai/repository?verb=ListMetadataFormats
+DEBUG:  GET "https://services.dnb.de/oai/repository?verb=ListMetadataFormats"
 DEBUG:  HTTP 200, 4186 bytes
   metadataprefix  |                                   schema                                    |                            metadatanamespace                            
 ------------------+-----------------------------------------------------------------------------+-------------------------------------------------------------------------
@@ -50,7 +50,7 @@ SELECT * FROM OAI_ListSets('oai_server_ulb')
 WHERE setname IS NOT NULL AND setspec IS NOT NULL 
 ORDER BY setname  COLLATE "C"
 FETCH FIRST ROW ONLY;
-DEBUG:  GET: https://sammlungen.ulb.uni-muenster.de/oai?verb=ListSets
+DEBUG:  GET "https://sammlungen.ulb.uni-muenster.de/oai?verb=ListSets"
 DEBUG:  HTTP 200, 1386 bytes
  setspec |                         setname                          
 ---------+----------------------------------------------------------
@@ -61,7 +61,7 @@ SELECT * FROM OAI_ListSets('oai_server_dnb')
 WHERE setname IS NOT NULL AND setspec IS NOT NULL 
 ORDER BY setname  COLLATE "C"
 FETCH FIRST ROW ONLY;
-DEBUG:  GET: https://services.dnb.de/oai/repository?verb=ListSets
+DEBUG:  GET "https://services.dnb.de/oai/repository?verb=ListSets"
 DEBUG:  HTTP 200, 800458 bytes
      setspec     |                  setname                   
 -----------------+--------------------------------------------
@@ -71,7 +71,7 @@ DEBUG:  HTTP 200, 800458 bytes
 SELECT count(*) > 0 
 FROM OAI_ListSets('oai_server_dnb') 
 WHERE setname IS NOT NULL AND setspec IS NOT NULL;
-DEBUG:  GET: https://services.dnb.de/oai/repository?verb=ListSets
+DEBUG:  GET "https://services.dnb.de/oai/repository?verb=ListSets"
 DEBUG:  HTTP 200, 800458 bytes
  ?column? 
 ----------
@@ -80,7 +80,7 @@ DEBUG:  HTTP 200, 800458 bytes
 
 SELECT * FROM OAI_Identify('oai_server_ulb')
 ORDER BY name COLLATE "C";
-DEBUG:  GET: https://sammlungen.ulb.uni-muenster.de/oai?verb=Identify
+DEBUG:  GET "https://sammlungen.ulb.uni-muenster.de/oai?verb=Identify"
 DEBUG:  HTTP 200, 760 bytes
        name        |                             description                              
 -------------------+----------------------------------------------------------------------
@@ -95,7 +95,7 @@ DEBUG:  HTTP 200, 760 bytes
 
 SELECT * FROM OAI_Identify('oai_server_dnb')
 ORDER BY name COLLATE "C";
-DEBUG:  GET: https://services.dnb.de/oai/repository?verb=Identify
+DEBUG:  GET "https://services.dnb.de/oai/repository?verb=Identify"
 DEBUG:  HTTP 200, 779 bytes
        name        |                      description                      
 -------------------+-------------------------------------------------------

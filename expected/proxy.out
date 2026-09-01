@@ -1,0 +1,98 @@
+SET client_min_messages TO DEBUG1;
+ 
+/* tests for proxy servers without password */
+CREATE SERVER oai_server_dnb FOREIGN DATA WRAPPER oai_fdw
+OPTIONS (url 'https://services.dnb.de/oai/repository',
+         http_proxy 'http://172.19.42.100:3128');
+CREATE USER MAPPING FOR postgres 
+SERVER oai_server_dnb OPTIONS (user 'admin', password 'secret', proxy_user 'proxyuser', proxy_password 'will-be-ignored');
+CREATE FOREIGN TABLE dnb_zdb_oai_dc (
+  id text OPTIONS (oai_node 'identifier'),
+  content text OPTIONS (oai_node 'content'),
+  setspec text[] OPTIONS (oai_node 'setspec'),
+  datestamp timestamp OPTIONS (oai_node 'datestamp'),
+  meta text OPTIONS (oai_node 'metadataprefix')
+ )
+SERVER oai_server_dnb OPTIONS (setspec 'zdb', 
+                               metadataPrefix 'oai_dc');
+SELECT ROW_NUMBER() OVER (), id, content::xml IS DOCUMENT AS content, setspec, datestamp, meta
+FROM dnb_zdb_oai_dc
+WHERE
+  datestamp BETWEEN '2021-01-03' AND '2021-01-04';
+DEBUG:  GET "https://services.dnb.de/oai/repository?verb=ListRecords&set=zdb&from=2021-01-03T00%3A00%3A00Z&until=2021-01-04T00%3A00%3A00Z&metadataPrefix=oai_dc"
+DEBUG:  HTTP 200, 2539 bytes
+ row_number |            id             | content | setspec |        datestamp         |  meta  
+------------+---------------------------+---------+---------+--------------------------+--------
+          1 | oai:dnb.de/zdb/01950022X  | t       | {zdb}   | Sun Jan 03 16:38:59 2021 | oai_dc
+          2 | oai:dnb.de/zdb/1224394720 | t       | {zdb}   | Sun Jan 03 16:34:54 2021 | oai_dc
+          3 | oai:dnb.de/zdb/1224398580 | t       | {zdb}   | Sun Jan 03 17:42:56 2021 | oai_dc
+(3 rows)
+
+ALTER USER MAPPING FOR postgres
+SERVER oai_server_dnb OPTIONS (DROP proxy_password);
+SELECT ROW_NUMBER() OVER (), id, content::xml IS DOCUMENT AS content, setspec, datestamp, meta
+FROM dnb_zdb_oai_dc
+WHERE
+  datestamp BETWEEN '2021-01-03' AND '2021-01-04';
+DEBUG:  GET "https://services.dnb.de/oai/repository?verb=ListRecords&set=zdb&from=2021-01-03T00%3A00%3A00Z&until=2021-01-04T00%3A00%3A00Z&metadataPrefix=oai_dc"
+DEBUG:  HTTP 200, 2539 bytes
+ row_number |            id             | content | setspec |        datestamp         |  meta  
+------------+---------------------------+---------+---------+--------------------------+--------
+          1 | oai:dnb.de/zdb/01950022X  | t       | {zdb}   | Sun Jan 03 16:38:59 2021 | oai_dc
+          2 | oai:dnb.de/zdb/1224394720 | t       | {zdb}   | Sun Jan 03 16:34:54 2021 | oai_dc
+          3 | oai:dnb.de/zdb/1224398580 | t       | {zdb}   | Sun Jan 03 17:42:56 2021 | oai_dc
+(3 rows)
+
+DROP SERVER oai_server_dnb CASCADE;
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to user mapping for postgres on server oai_server_dnb
+drop cascades to foreign table dnb_zdb_oai_dc
+/* tests for proxy servers with password */
+CREATE SERVER oai_server_dnb FOREIGN DATA WRAPPER oai_fdw
+OPTIONS (url 'https://services.dnb.de/oai/repository',
+         http_proxy 'http://172.19.42.101:3128');
+CREATE FOREIGN TABLE dnb_zdb_oai_dc (
+  id text OPTIONS (oai_node 'identifier'),
+  content text OPTIONS (oai_node 'content'),
+  setspec text[] OPTIONS (oai_node 'setspec'),
+  datestamp timestamp OPTIONS (oai_node 'datestamp'),
+  meta text OPTIONS (oai_node 'metadataprefix')
+ )
+SERVER oai_server_dnb OPTIONS (setspec 'zdb', 
+                               metadataPrefix 'oai_dc');
+CREATE USER MAPPING FOR postgres 
+SERVER oai_server_dnb OPTIONS (user 'admin', password 'secret', proxy_user 'proxyuser', proxy_password 'proxypass');
+SELECT ROW_NUMBER() OVER (), id, content::xml IS DOCUMENT AS content, setspec, datestamp, meta
+FROM dnb_zdb_oai_dc
+WHERE
+  datestamp BETWEEN '2021-01-03' AND '2021-01-04';
+DEBUG:  GET "https://services.dnb.de/oai/repository?verb=ListRecords&set=zdb&from=2021-01-03T00%3A00%3A00Z&until=2021-01-04T00%3A00%3A00Z&metadataPrefix=oai_dc"
+DEBUG:  HTTP 200, 2539 bytes
+ row_number |            id             | content | setspec |        datestamp         |  meta  
+------------+---------------------------+---------+---------+--------------------------+--------
+          1 | oai:dnb.de/zdb/01950022X  | t       | {zdb}   | Sun Jan 03 16:38:59 2021 | oai_dc
+          2 | oai:dnb.de/zdb/1224394720 | t       | {zdb}   | Sun Jan 03 16:34:54 2021 | oai_dc
+          3 | oai:dnb.de/zdb/1224398580 | t       | {zdb}   | Sun Jan 03 17:42:56 2021 | oai_dc
+(3 rows)
+
+ALTER USER MAPPING FOR postgres
+SERVER oai_server_dnb OPTIONS (SET proxy_password 'WRONGPASS!!!');
+SELECT ROW_NUMBER() OVER (), id, content::xml IS DOCUMENT AS content, setspec, datestamp, meta
+FROM dnb_zdb_oai_dc
+WHERE
+  datestamp BETWEEN '2021-01-03' AND '2021-01-04';
+DEBUG:  GET "https://services.dnb.de/oai/repository?verb=ListRecords&set=zdb&from=2021-01-03T00%3A00%3A00Z&until=2021-01-04T00%3A00%3A00Z&metadataPrefix=oai_dc"
+WARNING:  unsupported content-type: "Content-Type: text/html;charset=utf-8"
+WARNING:  request to 'oai_server_dnb' failed (1/3)
+WARNING:  unsupported content-type: "Content-Type: text/html;charset=utf-8"
+WARNING:  request to 'oai_server_dnb' failed (2/3)
+WARNING:  unsupported content-type: "Content-Type: text/html;charset=utf-8"
+WARNING:  request to 'oai_server_dnb' failed (3/3)
+WARNING:  unsupported content-type: "Content-Type: text/html;charset=utf-8"
+ERROR:  OAI request failed: HTTP 0
+DETAIL:  URL: "verb=ListRecords&set=zdb&from=2021-01-03T00%3A00%3A00Z&until=2021-01-04T00%3A00%3A00Z&metadataPrefix=oai_dc"
+HINT:  Check your request parameters and try again.
+DROP SERVER oai_server_dnb CASCADE;
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to foreign table dnb_zdb_oai_dc
+drop cascades to user mapping for postgres on server oai_server_dnb
