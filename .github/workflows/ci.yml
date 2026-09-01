@@ -22,7 +22,10 @@ jobs:
       - name: Prepare environment 
         run: sudo apt-get update && sudo apt-get install -y make gcc libxml2-dev libcurl4-openssl-dev
       - name: Start PostgreSQL ${{ matrix.pg }}
-        run: pg-start ${{ matrix.pg }}
+        run: |
+          pg-start ${{ matrix.pg }}
+          psql -U postgres -c "ALTER SYSTEM SET max_locks_per_transaction = 128;"
+          pg-restart
       - uses: actions/checkout@v2
       - name: Build and Regression Tests 
         run: |
