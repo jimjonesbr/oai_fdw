@@ -89,6 +89,7 @@ WARNING:  request to 'oai_server_dnb' failed (2/3)
 WARNING:  unsupported content-type: "Content-Type: text/html;charset=utf-8"
 WARNING:  request to 'oai_server_dnb' failed (3/3)
 WARNING:  unsupported content-type: "Content-Type: text/html;charset=utf-8"
+DEBUG:  ExecuteOAIRequest: no response body available for HTTP error 0
 ERROR:  OAI request failed: HTTP 0
 DETAIL:  URL: "verb=ListRecords&set=zdb&from=2021-01-03T00%3A00%3A00Z&until=2021-01-04T00%3A00%3A00Z&metadataPrefix=oai_dc"
 HINT:  Check your request parameters and try again.

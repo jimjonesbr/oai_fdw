@@ -7,6 +7,8 @@
 
   **Enhanced version information**: The `oai_fdw_version()` function now returns a comprehensive version string that includes PostgreSQL version, compiler information, and all dependency versions (libxml, librdf, libcurl) in a single formatted output. A new `oai_fdw_settings()` function provides extended dependency information including optional components like SSL, zlib, libSSH, and nghttp2. The `oai_fdw_settings` view parses this extended information into a table format for convenient programmatic access to individual component versions.
 
+  **HTTP error response bodies are now truncated in log and error messages**: Error bodies included in `errdetail()` and server-log `elog()` calls were previously unbounded. A misconfigured proxy returning a large HTML error page would be written verbatim into the PostgreSQL server log. Error bodies are now truncated to 512 bytes (`OAI_FDW_MAX_ERROR_BODY`) before being included in any message.
+
 
 * Bug fixes
 

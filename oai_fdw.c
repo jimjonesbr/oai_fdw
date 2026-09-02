@@ -82,6 +82,12 @@
 #define OAI_REQUEST_LISTSETS "ListSets"
 #define OAI_REQUEST_CONNECTTIMEOUT 300
 #define OAI_REQUEST_MAXRETRY 3
+/*
+ * Maximum number of bytes from an HTTP error response body to include in
+ * error messages and server logs.  Prevents huge HTML error pages (e.g.
+ * from misconfigured proxies) from flooding PostgreSQL logs.
+ */
+#define OAI_FDW_MAX_ERROR_BODY 512
 
 #define OAI_USERMAPPING_OPTION_USER "user"
 #define OAI_USERMAPPING_OPTION_PASSWORD "password"
@@ -1455,7 +1461,35 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 		if (res != CURLE_OK)
 		{
 			long response_code = 0;
-            curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
+			bool has_body = (chunk.size > 0 && chunk.memory);
+			StringInfoData display_body;
+
+			initStringInfo(&display_body);
+
+			if (has_body)
+			{
+				/*
+				 * Truncate the error body before logging or including in
+				 * error messages.  Endpoints may return large HTML pages on
+				 * errors (e.g. from misconfigured proxies), which would
+				 * flood server logs.
+				 */
+				if (chunk.size > OAI_FDW_MAX_ERROR_BODY)
+				{
+					appendBinaryStringInfo(&display_body, chunk.memory, OAI_FDW_MAX_ERROR_BODY);
+					appendStringInfoString(&display_body, "... (truncated)");
+				}
+				else
+				{
+					appendStringInfoString(&display_body, chunk.memory);
+				}
+				elog(DEBUG1, "%s: error response body: %s", __func__, display_body.data);
+			}
+			else
+			{
+				elog(DEBUG1, "%s: no response body available for HTTP error %ld", __func__, response_code);
+			}
+			curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
 
 			if (chunk.memory)
 				pfree(chunk.memory);
