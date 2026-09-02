@@ -70,4 +70,6 @@ INTO dnb_schema
 SELECT * FROM dnb_schema."dnb:reiheC" 
 WHERE id = 'oai:dnb.de/dnb:reiheC/1253187622';
 
+\set VERBOSITY terse
+
 DROP SERVER IF EXISTS oai_server_dnb CASCADE;
