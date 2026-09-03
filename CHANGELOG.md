@@ -7,9 +7,6 @@
 
   **Enhanced version information**: The `oai_fdw_version()` function now returns a comprehensive version string that includes PostgreSQL version, compiler information, and all dependency versions (libxml, librdf, libcurl) in a single formatted output. A new `oai_fdw_settings()` function provides extended dependency information including optional components like SSL, zlib, libSSH, and nghttp2. The `oai_fdw_settings` view parses this extended information into a table format for convenient programmatic access to individual component versions.
 
-  **HTTP error response bodies are now truncated in log and error messages**: Error bodies included in `errdetail()` and server-log `elog()` calls were previously unbounded. A misconfigured proxy returning a large HTML error page would be written verbatim into the PostgreSQL server log. Error bodies are now truncated to 512 bytes (`OAI_FDW_MAX_ERROR_BODY`) before being included in any message.
-
-
 * Bug fixes
 
   **Fixed invalid libcurl lifecycle**: `curl_global_init()`/`curl_global_cleanup()` were being called on every SPARQL request instead of once per backend process. This could interfere with other libcurl users loaded in the same backend (e.g. other FDWs). Global initialization now happens once in `_PG_init()`; cleanup is left to the OS at process exit.
@@ -17,6 +14,10 @@
   **Fixed catalog lookup overhead**: Foreign table column metadata (name, OAI node mapping, PostgreSQL type, type modifier, and attribute number) is now loaded once during session initialization and cached in the scan state, then passed to the executor via the serialized plan. Previously this information was looked up from the system catalogs (`GetForeignColumnOptions`) for every column of every row during `CreateOAITuple()`, causing significant syscache overhead on large result sets.
 
   **Add missing user mapping in helper functions**: GetIdentity, ListSets, and ListMetadataFormats were being executed without loading the `USER MAPPINGS`, which could fail requests if the server needed any sort of authentication. This has now been solved.
+
+  **Encoded credentials are no longer written to server logs via libcurl verbose output**: When `client_min_messages` is set to `DEBUG3`, libcurl's verbose output is now routed through PostgreSQL's `elog(DEBUG3)` via a custom `CURLOPT_DEBUGFUNCTION` callback (`CurlDebugCallback`) instead of being written directly to `stderr`. Crucially, any outgoing or incoming HTTP header whose name matches `Authorization:` or `Proxy-Authorization:` has its value replaced with `[REDACTED]` before being logged, so Bearer tokens, Basic auth credentials (base64-encoded), and proxy passwords never appear in plaintext in the PostgreSQL server log.
+  
+  **HTTP error response bodies are now truncated in log and error messages**: Error bodies included in `errdetail()` and server-log `elog()` calls were previously unbounded. A misconfigured proxy returning a large HTML error page would be written verbatim into the PostgreSQL server log. Error bodies are now truncated to 512 bytes (`OAI_FDW_MAX_ERROR_BODY`) before being included in any message.
 
 ### oai_fdw 1.13
 2026-02-20

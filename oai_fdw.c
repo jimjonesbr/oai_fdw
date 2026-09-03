@@ -1152,6 +1152,129 @@ static size_t HeaderCallbackFunction(char *contents, size_t size, size_t nmemb, 
 }
 
 /*
+ * IsSensitiveHeader
+ * -----------------
+ * Returns the field-name of a sensitive HTTP header if `line` begins with
+ * one, or NULL otherwise.  Comparison is case-insensitive (RFC 9110 §5.1).
+ */
+static const char *
+IsSensitiveHeader(const char *line)
+{
+	static const struct
+	{
+		const char *name;
+		size_t      len;
+	} sensitive_headers[] = {
+		{ "Authorization:",       sizeof("Authorization:")       - 1 },
+		{ "Proxy-Authorization:", sizeof("Proxy-Authorization:") - 1 },
+		{ NULL, 0 }
+	};
+
+	for (int i = 0; sensitive_headers[i].name != NULL; i++)
+	{
+		if (strncasecmp(line, sensitive_headers[i].name,
+						sensitive_headers[i].len) == 0)
+			return sensitive_headers[i].name;
+	}
+
+	return NULL;
+}
+
+/*
+ * CURLDebugCallback
+ * -----------------
+ * Custom libcurl debug callback. Routes all verbose output through
+ * PostgreSQL's elog() at DEBUG3 level rather than writing directly to
+ * stderr, and redacts Authorization headers so credentials are never
+ * written to server logs.
+ *
+ * handle  : the curl handle (unused)
+ * type    : category of the debug data
+ * data    : pointer to the debug data (NOT null-terminated)
+ * size    : number of bytes in data
+ * userptr : user-supplied pointer (unused)
+ */
+static int
+CURLDebugCallback(CURL *handle, curl_infotype type, char *data, size_t size, void *userptr)
+{
+	const char    *prefix;
+	StringInfoData buf;
+
+	switch (type)
+	{
+		case CURLINFO_TEXT:       prefix = "* "; break;
+		case CURLINFO_HEADER_IN:  prefix = "< "; break;
+		case CURLINFO_HEADER_OUT: prefix = "> "; break;
+		default:
+			return 0;	/* skip raw data blobs (bodies, SSL frames) */
+	}
+
+	/*
+	 * curl's data pointer is NOT null-terminated, so copy it into a palloc'd
+	 * buffer before using any string functions on it.
+	 */
+	initStringInfo(&buf);
+	appendBinaryStringInfo(&buf, data, (int) size);
+
+	if (type == CURLINFO_HEADER_OUT)
+	{
+		/*
+		 * CURLINFO_HEADER_OUT delivers the entire outgoing request header
+		 * block (request line + all headers) as one multi-line chunk per
+		 * invocation.  Split it line-by-line so each sensitive header can be
+		 * redacted individually.
+		 */
+		char *pos = buf.data;
+
+		while (*pos != '\0')
+		{
+			char       *eol   = pos + strcspn(pos, "\r\n");
+			char        saved = *eol;
+			const char *match;
+
+			*eol = '\0';	/* temporarily terminate the line */
+
+			if (*pos != '\0')	/* skip blank lines */
+			{
+				match = IsSensitiveHeader(pos);
+				if (match)
+					elog(DEBUG3, "[curl] > %s [REDACTED]", match);
+				else
+					elog(DEBUG3, "[curl] > %s", pos);
+			}
+
+			*eol = saved;
+			pos  = eol;
+			while (*pos == '\r' || *pos == '\n')
+				pos++;
+		}
+	}
+	else
+	{
+		const char *match;
+
+		/* Strip trailing CRLF for cleaner log output. */
+		while (buf.len > 0 &&
+			   (buf.data[buf.len - 1] == '\n' || buf.data[buf.len - 1] == '\r'))
+			buf.data[--buf.len] = '\0';
+
+		/*
+		 * Redact sensitive response headers.  Informational text lines
+		 * (CURLINFO_TEXT) are logged as-is — they never contain raw
+		 * credential values.
+		 */
+		match = (type == CURLINFO_HEADER_IN) ? IsSensitiveHeader(buf.data) : NULL;
+		if (match)
+			elog(DEBUG3, "[curl] %s%s [REDACTED]", prefix, match);
+		else
+			elog(DEBUG3, "[curl] %s%s", prefix, buf.data);
+	}
+
+	pfree(buf.data);
+	return 0;
+}
+
+/*
  * CURLProgressCallback
  * --------------------
  * Progress callback function for cURL requests. This allows us to
@@ -1413,7 +1536,16 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 		curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
 		curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, CURLProgressCallback);
 
+		/*
+		 * Enable libcurl verbose output, but route it exclusively through
+		 * CURLDebugCallback instead of stderr. The callback emits at DEBUG3
+		 * (gated by log_min_messages) and redacts Authorization headers so
+		 * credentials are never written to server logs.
+		 */
 		curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
+		curl_easy_setopt(curl, CURLOPT_DEBUGFUNCTION, CURLDebugCallback);
+		curl_easy_setopt(curl, CURLOPT_DEBUGDATA, NULL);
+
 		curl_easy_setopt(curl, CURLOPT_POSTFIELDS, url_buffer.data);
 		curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, HeaderCallbackFunction);
 		curl_easy_setopt(curl, CURLOPT_HEADERDATA, (void *)&chunk_header);
