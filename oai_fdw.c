@@ -72,7 +72,6 @@
 #include "access/reloptions.h"
 #include "catalog/pg_namespace.h"
 
-
 #define OAI_FDW_VERSION "1.14-dev"
 #define OAI_REQUEST_LISTRECORDS "ListRecords"
 #define OAI_REQUEST_LISTIDENTIFIERS "ListIdentifiers"
@@ -93,6 +92,8 @@
 
 #define OAI_USERMAPPING_OPTION_USER "user"
 #define OAI_USERMAPPING_OPTION_PASSWORD "password"
+#define OAI_USERMAPPING_OPTION_PROXY_USER "proxy_user"
+#define OAI_USERMAPPING_OPTION_PROXY_PASSWORD "proxy_password"
 
 #define OAI_RESPONSE_ELEMENT_RECORD "record"
 #define OAI_RESPONSE_ELEMENT_METADATA "metadata"
@@ -105,22 +106,19 @@
 #define OAI_RESPONSE_ELEMENT_METADATAPREFIX "metadataPrefix"
 #define OAI_RESPONSE_ELEMENT_METADATAFORMAT "metadataFormat"
 #define OAI_RESPONSE_ELEMENT_SCHEMA "schema"
-
 #define OAI_RESPONSE_ELEMENT_DELETED "deleted"
 #define OAI_RESPONSE_ELEMENT_RESUMPTIONTOKEN "resumptionToken"
 #define OAI_RESPONSE_ELEMENT_COMPLETELISTSIZE "completeListSize"
 
 #define OAI_XML_ROOT_ELEMENT "OAI-PMH"
-#define OAI_NODE_IDENTIFIER "identifier"
 #define OAI_NODE_URL "url"
-#define OAI_NODE_HTTP_PROXY "http_proxy"
-#define OAI_NODE_PROXY_USER "proxy_user"
-#define OAI_NODE_PROXY_PASSWORD "proxy_password"
-#define OAI_NODE_CONNECTTIMEOUT "connect_timeout"
-#define OAI_NODE_REQUEST_TIMEOUT "request_timeout"
-#define OAI_NODE_CONNECTRETRY "connect_retry"
-#define OAI_NODE_REQUEST_REDIRECT "request_redirect"
-#define OAI_NODE_REQUEST_MAX_REDIRECT "request_max_redirect"
+#define OAI_SERVER_OPTION_HTTP_PROXY "http_proxy"
+#define OAI_SERVER_OPTION_CONNECT_TIMEOUT "connect_timeout"
+#define OAI_SERVER_OPTION_REQUEST_TIMEOUT "request_timeout"
+#define OAI_SERVER_OPTION_CONNECTRETRY "connect_retry"
+#define OAI_SERVER_OPTION_REQUEST_REDIRECT "request_redirect"
+#define OAI_SERVER_OPTION_REQUEST_MAX_REDIRECT "request_max_redirect"
+#define OAI_NODE_IDENTIFIER "identifier"
 #define OAI_NODE_CONTENT "content"
 #define OAI_NODE_DATESTAMP "datestamp"
 #define OAI_NODE_SETSPEC "setspec"
@@ -128,7 +126,7 @@
 #define OAI_NODE_FROM "from"
 #define OAI_NODE_UNTIL "until"
 #define OAI_NODE_STATUS "status"
-#define OAI_NODE_OPTION "oai_node"
+#define OAI_NODE_COLUMN_OPTION "oai_node"
 #define OAI_ERROR_ID_DOES_NOT_EXIST "idDoesNotExist"
 #define OAI_ERROR_NO_RECORD_MATCH "noRecordsMatch"
 
@@ -166,7 +164,7 @@ typedef struct OAIFdwState
 	char *proxy;			 /* Proxy for HTTP requests, if necessary. */
 	char *proxyType;		 /* Proxy protocol (HTTPS, HTTP). */
 	char *proxyUser;		 /* User name for proxy authentication. */
-	char *proxyPassword; /* Password for proxy authentication. */
+	char *proxyPassword;	 /* Password for proxy authentication. */
 	char *from;				 /* Beginning of am interval to filter an OAI request. */
 	char *until;			 /* End of an interval to filter an OAI request. */
 	char *resumptionToken;	 /* Token to retrieve the next page of a result set. */
@@ -185,7 +183,7 @@ typedef struct OAIFdwState
 	Cost startup_cost;
 	Cost total_cost;
 
-	struct OAIfdwTable *oaiTable;	   /* All necessary information of the FOREIGN TABLE used in a SQL statement */
+	struct OAIfdwTable *oaiTable; /* All necessary information of the FOREIGN TABLE used in a SQL statement */
 } OAIFdwState;
 
 typedef struct OAIRecord
@@ -239,11 +237,11 @@ typedef struct OAIfdwTable
 
 typedef struct OAIfdwColumn
 {
-	char *name;			 /* Column name */
-	char *oai_node;		 /* OAI node identifier */
-	Oid pgtype;			 /* PostgreSQL data type */
-	int pgtypmod;		 /* PostgreSQL type modifier */
-	int pgattnum;		 /* PostgreSQL attribute number */
+	char *name;		/* Column name */
+	char *oai_node; /* OAI node identifier */
+	Oid pgtype;		/* PostgreSQL data type */
+	int pgtypmod;	/* PostgreSQL type modifier */
+	int pgattnum;	/* PostgreSQL attribute number */
 
 } OAIfdwColumn;
 
@@ -252,12 +250,12 @@ static struct OAIFdwOption valid_options[] =
 		/* Foreign Server */
 		{OAI_NODE_URL, ForeignServerRelationId, true, false},
 		{OAI_NODE_METADATAPREFIX, ForeignServerRelationId, false, false},
-		{OAI_NODE_HTTP_PROXY, ForeignServerRelationId, false, false},
-		{OAI_NODE_CONNECTTIMEOUT, ForeignServerRelationId, false, false},
-		{OAI_NODE_REQUEST_TIMEOUT, ForeignServerRelationId, false, false},
-		{OAI_NODE_CONNECTRETRY, ForeignServerRelationId, false, false},
-		{OAI_NODE_REQUEST_REDIRECT, ForeignServerRelationId, false, false},
-		{OAI_NODE_REQUEST_MAX_REDIRECT, ForeignServerRelationId, false, false},
+		{OAI_SERVER_OPTION_HTTP_PROXY, ForeignServerRelationId, false, false},
+		{OAI_SERVER_OPTION_CONNECT_TIMEOUT, ForeignServerRelationId, false, false},
+		{OAI_SERVER_OPTION_REQUEST_TIMEOUT, ForeignServerRelationId, false, false},
+		{OAI_SERVER_OPTION_CONNECTRETRY, ForeignServerRelationId, false, false},
+		{OAI_SERVER_OPTION_REQUEST_REDIRECT, ForeignServerRelationId, false, false},
+		{OAI_SERVER_OPTION_REQUEST_MAX_REDIRECT, ForeignServerRelationId, false, false},
 
 		/* Foreign Table */
 		{OAI_NODE_IDENTIFIER, ForeignTableRelationId, false, false},
@@ -267,17 +265,16 @@ static struct OAIFdwOption valid_options[] =
 		{OAI_NODE_UNTIL, ForeignTableRelationId, false, false},
 
 		/* Column OPTIONS */
-		{OAI_NODE_OPTION, AttributeRelationId, true, false},
+		{OAI_NODE_COLUMN_OPTION, AttributeRelationId, true, false},
 
 		/* User Mapping */
 		{OAI_USERMAPPING_OPTION_USER, UserMappingRelationId, true, false},
 		{OAI_USERMAPPING_OPTION_PASSWORD, UserMappingRelationId, false, false},
-		{OAI_NODE_PROXY_USER, UserMappingRelationId, false, false},
-		{OAI_NODE_PROXY_PASSWORD, UserMappingRelationId, false, false},
+		{OAI_USERMAPPING_OPTION_PROXY_USER, UserMappingRelationId, false, false},
+		{OAI_USERMAPPING_OPTION_PROXY_PASSWORD, UserMappingRelationId, false, false},
 
 		/* EOList option */
-		{NULL, InvalidOid, false, false}
-	};
+		{NULL, InvalidOid, false, false}};
 
 #define option_count (sizeof(valid_options) / sizeof(struct OAIFdwOption))
 
@@ -377,7 +374,6 @@ Datum oai_fdw_handler(PG_FUNCTION_ARGS)
 	PG_RETURN_POINTER(fdwroutine);
 }
 
-
 Datum oai_fdw_version(PG_FUNCTION_ARGS)
 {
 	StringInfoData buffer;
@@ -459,48 +455,48 @@ OAIFdwState *GetServerInfo(const char *srvname)
 			{
 				state->url = defGetString(def);
 			}
-			else if (strcmp(def->defname, OAI_NODE_HTTP_PROXY) == 0)
+			else if (strcmp(def->defname, OAI_SERVER_OPTION_HTTP_PROXY) == 0)
 			{
 				state->proxy = defGetString(def);
-				state->proxyType = OAI_NODE_HTTP_PROXY;
+				state->proxyType = OAI_SERVER_OPTION_HTTP_PROXY;
 			}
-			else if (strcmp(OAI_NODE_CONNECTRETRY, def->defname) == 0)
+			else if (strcmp(OAI_SERVER_OPTION_CONNECTRETRY, def->defname) == 0)
 			{
 				char *tailpt;
 				char *maxretry_str = defGetString(def);
 				state->maxretries = strtol(maxretry_str, &tailpt, 0);
 			}
-			else if (strcmp(def->defname, OAI_NODE_CONNECTTIMEOUT) == 0)
+			else if (strcmp(def->defname, OAI_SERVER_OPTION_CONNECT_TIMEOUT) == 0)
 			{
 				char *tailpt;
 				char *timeout_str = defGetString(def);
 
 				state->connectTimeout = strtol(timeout_str, &tailpt, 0);
 			}
-			else if (strcmp(def->defname, OAI_NODE_REQUEST_TIMEOUT) == 0)
+			else if (strcmp(def->defname, OAI_SERVER_OPTION_REQUEST_TIMEOUT) == 0)
 			{
 				char *tailpt;
 				char *timeout_str = defGetString(def);
 
 				state->request_timeout = strtol(timeout_str, &tailpt, 0);
 			}
-			else if (strcmp(def->defname, OAI_NODE_REQUEST_REDIRECT) == 0)
+			else if (strcmp(def->defname, OAI_SERVER_OPTION_REQUEST_REDIRECT) == 0)
 			{
 				state->requestRedirect = defGetBoolean(def);
 
-				elog(DEBUG2, "  %s: setting \"%s\": %d", __func__, OAI_NODE_REQUEST_REDIRECT, state->requestRedirect);
+				elog(DEBUG2, "  %s: setting \"%s\": %d", __func__, OAI_SERVER_OPTION_REQUEST_REDIRECT, state->requestRedirect);
 			}
-			else if (strcmp(def->defname, OAI_NODE_REQUEST_MAX_REDIRECT) == 0)
+			else if (strcmp(def->defname, OAI_SERVER_OPTION_REQUEST_MAX_REDIRECT) == 0)
 			{
 				char *tailpt;
 				char *maxredirect_str = defGetString(def);
 
 				state->requestMaxRedirect = strtol(maxredirect_str, &tailpt, 10);
 
-				elog(DEBUG2, "  %s: setting \"%s\": %ld", __func__, OAI_NODE_REQUEST_MAX_REDIRECT, state->requestMaxRedirect);
+				elog(DEBUG2, "  %s: setting \"%s\": %ld", __func__, OAI_SERVER_OPTION_REQUEST_MAX_REDIRECT, state->requestMaxRedirect);
 
 				if (strcmp(defGetString(def), "0") != 0 && state->requestMaxRedirect == 0)
-					elog(ERROR, "invalid value for \"%s\"", OAI_NODE_REQUEST_MAX_REDIRECT);
+					elog(ERROR, "invalid value for \"%s\"", OAI_SERVER_OPTION_REQUEST_MAX_REDIRECT);
 			}
 		}
 	}
@@ -782,7 +778,7 @@ Datum oai_fdw_validator(PG_FUNCTION_ARGS)
 							(errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
 							 errmsg("empty value in option '%s'", opt->optname)));
 
-				if (strcmp(opt->optname, OAI_NODE_URL) == 0 || strcmp(opt->optname, OAI_NODE_HTTP_PROXY) == 0)
+				if (strcmp(opt->optname, OAI_NODE_URL) == 0 || strcmp(opt->optname, OAI_SERVER_OPTION_HTTP_PROXY) == 0)
 				{
 					int return_code = CheckURL(defGetString(def));
 
@@ -792,7 +788,7 @@ Datum oai_fdw_validator(PG_FUNCTION_ARGS)
 								 errmsg("invalid %s: '%s'", opt->optname, defGetString(def))));
 				}
 
-				if (strcmp(opt->optname, OAI_NODE_CONNECTTIMEOUT) == 0)
+				if (strcmp(opt->optname, OAI_SERVER_OPTION_CONNECT_TIMEOUT) == 0)
 				{
 					char *endptr;
 					char *timeout_str = defGetString(def);
@@ -805,7 +801,7 @@ Datum oai_fdw_validator(PG_FUNCTION_ARGS)
 								 errhint("expected values are positive integers (timeout in seconds)")));
 				}
 
-				if (strcmp(opt->optname, OAI_NODE_REQUEST_TIMEOUT) == 0)
+				if (strcmp(opt->optname, OAI_SERVER_OPTION_REQUEST_TIMEOUT) == 0)
 				{
 					char *endptr;
 					char *timeout_str = defGetString(def);
@@ -818,7 +814,7 @@ Datum oai_fdw_validator(PG_FUNCTION_ARGS)
 								 errhint("expected values are positive integers (timeout in seconds)")));
 				}
 
-				if (strcmp(opt->optname, OAI_NODE_CONNECTRETRY) == 0)
+				if (strcmp(opt->optname, OAI_SERVER_OPTION_CONNECTRETRY) == 0)
 				{
 					char *endptr;
 					char *retry_str = defGetString(def);
@@ -831,7 +827,7 @@ Datum oai_fdw_validator(PG_FUNCTION_ARGS)
 								 errhint("expected values are positive integers (retry attempts in case of failure)")));
 				}
 
-				if (strcmp(opt->optname, OAI_NODE_OPTION) == 0)
+				if (strcmp(opt->optname, OAI_NODE_COLUMN_OPTION) == 0)
 				{
 					if (strcmp(defGetString(def), OAI_NODE_IDENTIFIER) != 0 &&
 						strcmp(defGetString(def), OAI_NODE_METADATAPREFIX) != 0 &&
@@ -842,7 +838,7 @@ Datum oai_fdw_validator(PG_FUNCTION_ARGS)
 					{
 						ereport(ERROR,
 								(errcode(ERRCODE_FDW_INVALID_OPTION_NAME),
-								 errmsg("invalid %s option '%s'", OAI_NODE_OPTION, defGetString(def)),
+								 errmsg("invalid %s option '%s'", OAI_NODE_COLUMN_OPTION, defGetString(def)),
 								 errhint("Valid column options for oai_fdw are:\nCREATE SERVER: '%s', '%s'\nCREATE TABLE: '%s','%s', '%s', '%s' and '%s'",
 										 OAI_NODE_URL,
 										 OAI_NODE_METADATAPREFIX,
@@ -893,7 +889,6 @@ static List *GetIdentity(OAIFdwState *state)
 
 	if (!state->xmldoc)
 		elog(ERROR, "invalid %s response from '%s'", state->requestVerb, state->url);
-
 
 	if (oaiExecuteResponse == OAI_SUCCESS)
 	{
@@ -956,7 +951,6 @@ static List *GetSets(OAIFdwState *state)
 	if (!state->xmldoc)
 		elog(ERROR, "invalid %s response from '%s'", state->requestVerb, state->url);
 
-
 	if (oaiExecuteResponse == OAI_SUCCESS)
 	{
 		xmlNodePtr oai_root;
@@ -992,13 +986,13 @@ static List *GetSets(OAIFdwState *state)
 					if (xmlStrcmp(SetElement->name, (xmlChar *)OAI_RESPONSE_ELEMENT_SETSPEC) == 0)
 					{
 						xmlChar *el = xmlNodeGetContent(SetElement);
-						set->setSpec = pstrdup((char *) el);
+						set->setSpec = pstrdup((char *)el);
 						xmlFree(el);
 					}
 					else if (xmlStrcmp(SetElement->name, (xmlChar *)OAI_RESPONSE_ELEMENT_SETNAME) == 0)
 					{
 						xmlChar *el = xmlNodeGetContent(SetElement);
-						set->setName = pstrdup((char *) el);
+						set->setName = pstrdup((char *)el);
 						xmlFree(el);
 					}
 				}
@@ -1069,19 +1063,19 @@ static List *GetMetadataFormats(OAIFdwState *state)
 					if (xmlStrcmp(MetadataElement->name, (xmlChar *)OAI_RESPONSE_ELEMENT_METADATAPREFIX) == 0)
 					{
 						xmlChar *el = xmlNodeGetContent(MetadataElement);
-						format->metadataPrefix = pstrdup((char *) el);
+						format->metadataPrefix = pstrdup((char *)el);
 						xmlFree(el);
 					}
 					else if (xmlStrcmp(MetadataElement->name, (xmlChar *)OAI_RESPONSE_ELEMENT_SCHEMA) == 0)
 					{
 						xmlChar *el = xmlNodeGetContent(MetadataElement);
-						format->schema = pstrdup((char *) el);
+						format->schema = pstrdup((char *)el);
 						xmlFree(el);
 					}
 					else if (xmlStrcmp(MetadataElement->name, (xmlChar *)OAI_RESPONSE_ELEMENT_METADATANAMESPACE) == 0)
 					{
 						xmlChar *el = xmlNodeGetContent(MetadataElement);
-						format->metadataNamespace = pstrdup((char *) el);
+						format->metadataNamespace = pstrdup((char *)el);
 						xmlFree(el);
 					}
 				}
@@ -1189,12 +1183,11 @@ IsSensitiveHeader(const char *line)
 	static const struct
 	{
 		const char *name;
-		size_t      len;
+		size_t len;
 	} sensitive_headers[] = {
-		{ "Authorization:",       sizeof("Authorization:")       - 1 },
-		{ "Proxy-Authorization:", sizeof("Proxy-Authorization:") - 1 },
-		{ NULL, 0 }
-	};
+		{"Authorization:", sizeof("Authorization:") - 1},
+		{"Proxy-Authorization:", sizeof("Proxy-Authorization:") - 1},
+		{NULL, 0}};
 
 	for (int i = 0; sensitive_headers[i].name != NULL; i++)
 	{
@@ -1223,16 +1216,22 @@ IsSensitiveHeader(const char *line)
 static int
 CURLDebugCallback(CURL *handle, curl_infotype type, char *data, size_t size, void *userptr)
 {
-	const char    *prefix;
+	const char *prefix;
 	StringInfoData buf;
 
 	switch (type)
 	{
-		case CURLINFO_TEXT:       prefix = "* "; break;
-		case CURLINFO_HEADER_IN:  prefix = "< "; break;
-		case CURLINFO_HEADER_OUT: prefix = "> "; break;
-		default:
-			return 0;	/* skip raw data blobs (bodies, SSL frames) */
+	case CURLINFO_TEXT:
+		prefix = "* ";
+		break;
+	case CURLINFO_HEADER_IN:
+		prefix = "< ";
+		break;
+	case CURLINFO_HEADER_OUT:
+		prefix = "> ";
+		break;
+	default:
+		return 0; /* skip raw data blobs (bodies, SSL frames) */
 	}
 
 	/*
@@ -1240,7 +1239,7 @@ CURLDebugCallback(CURL *handle, curl_infotype type, char *data, size_t size, voi
 	 * buffer before using any string functions on it.
 	 */
 	initStringInfo(&buf);
-	appendBinaryStringInfo(&buf, data, (int) size);
+	appendBinaryStringInfo(&buf, data, (int)size);
 
 	if (type == CURLINFO_HEADER_OUT)
 	{
@@ -1254,13 +1253,13 @@ CURLDebugCallback(CURL *handle, curl_infotype type, char *data, size_t size, voi
 
 		while (*pos != '\0')
 		{
-			char       *eol   = pos + strcspn(pos, "\r\n");
-			char        saved = *eol;
+			char *eol = pos + strcspn(pos, "\r\n");
+			char saved = *eol;
 			const char *match;
 
-			*eol = '\0';	/* temporarily terminate the line */
+			*eol = '\0'; /* temporarily terminate the line */
 
-			if (*pos != '\0')	/* skip blank lines */
+			if (*pos != '\0') /* skip blank lines */
 			{
 				match = IsSensitiveHeader(pos);
 				if (match)
@@ -1270,7 +1269,7 @@ CURLDebugCallback(CURL *handle, curl_infotype type, char *data, size_t size, voi
 			}
 
 			*eol = saved;
-			pos  = eol;
+			pos = eol;
 			while (*pos == '\r' || *pos == '\n')
 				pos++;
 		}
@@ -1335,7 +1334,7 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 	long maxretries = OAI_DEFAULT_MAX_RETRY;
 	long connectTimeout = OAI_DEFAULT_CONNECT_TIMEOUT;
 	long request_timeout = OAI_DEFAULT_REQUEST_TIMEOUT;
-	
+
 	struct curl_slist *headers = NULL;
 
 	if (state->maxretries)
@@ -1395,7 +1394,7 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 		{
 			char *encoded_metadataPrefix = curl_easy_escape(curl, state->metadataPrefix, 0);
 			elog(DEBUG2, "  %s (%s): appending 'metadataPrefix' > %s", __func__, state->requestVerb, state->metadataPrefix);
-			appendStringInfo(&url_buffer, "&metadataPrefix=%s",encoded_metadataPrefix);
+			appendStringInfo(&url_buffer, "&metadataPrefix=%s", encoded_metadataPrefix);
 			curl_free(encoded_metadataPrefix);
 		}
 
@@ -1470,7 +1469,7 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 		{
 			char *encoded_metadataPrefix = curl_easy_escape(curl, state->metadataPrefix, 0);
 			elog(DEBUG2, "  %s (%s): appending 'metadataPrefix' > %s", __func__, state->requestVerb, state->metadataPrefix);
-			appendStringInfo(&url_buffer, "&metadataPrefix=%s",encoded_metadataPrefix);
+			appendStringInfo(&url_buffer, "&metadataPrefix=%s", encoded_metadataPrefix);
 			curl_free(encoded_metadataPrefix);
 		}
 
@@ -1535,7 +1534,7 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 
 			curl_easy_setopt(curl, CURLOPT_PROXY, state->proxy);
 
-			if (strcmp(state->proxyType, OAI_NODE_HTTP_PROXY) == 0)
+			if (strcmp(state->proxyType, OAI_SERVER_OPTION_HTTP_PROXY) == 0)
 			{
 				elog(DEBUG2, "%s (%s): proxy protocol > 'HTTP'", __func__, state->requestVerb);
 				curl_easy_setopt(curl, CURLOPT_PROXYTYPE, CURLPROXY_HTTP);
@@ -1612,7 +1611,7 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 		for (long i = 1; res != CURLE_OK && i <= maxretries; i++)
 		{
 			elog(WARNING, "request to '%s' failed (%ld/%ld)",
-				state->foreign_server->servername, i, maxretries);
+				 state->foreign_server->servername, i, maxretries);
 
 			/* discard any partial data from the failed attempt */
 			chunk.size = 0;
@@ -1736,7 +1735,7 @@ static void OAIRequestPlanner(OAIFdwState *state, RelOptInfo *baserel)
 		{
 			DefElem *def = (DefElem *)lfirst(lc);
 
-			if (strcmp(def->defname, OAI_NODE_OPTION) == 0)
+			if (strcmp(def->defname, OAI_NODE_COLUMN_OPTION) == 0)
 			{
 				char *option_value = defGetString(def);
 				char *attname = NameStr(attr->attname);
@@ -1886,7 +1885,7 @@ static char *GetOAINodeFromColumn(Oid foreigntableid, int16 attnum)
 			{
 				DefElem *def = (DefElem *)lfirst(lc);
 
-				if (strcmp(def->defname, OAI_NODE_OPTION) == 0)
+				if (strcmp(def->defname, OAI_NODE_COLUMN_OPTION) == 0)
 				{
 					optionValue = defGetString(def);
 					break;
@@ -2146,7 +2145,7 @@ static void OAIFdwGetForeignPaths(PlannerInfo *root, RelOptInfo *baserel, Oid fo
 												 0, /* no parallel pathflags */
 #endif
 												 state->startup_cost, /* startup cost */
-												 state->total_cost,   /* total cost */
+												 state->total_cost,	  /* total cost */
 												 NIL,				  /* no pathkeys */
 												 NULL,				  /* no required outer relids */
 												 NULL,				  /* no fdw_outerpath */
@@ -2182,14 +2181,14 @@ static void OAIFdwBeginForeignScan(ForeignScanState *node, int eflags)
 	ForeignScan *fs = (ForeignScan *)node->ss.ps.plan;
 	struct OAIFdwState *state = DeserializePlanData(fs->fdw_private);
 
-	node->fdw_state = (void *) state;
+	node->fdw_state = (void *)state;
 
 	if (eflags & EXEC_FLAG_EXPLAIN_ONLY)
 		return;
 
-	state->foreign_table  = GetForeignTable(state->foreigntableid);
+	state->foreign_table = GetForeignTable(state->foreigntableid);
 	state->foreign_server = GetForeignServer(state->foreign_table->serverid);
-	LoadOAIUserMapping(state);   /* restores user/password/proxy creds */
+	LoadOAIUserMapping(state); /* restores user/password/proxy creds */
 
 	state->oaicxt = AllocSetContextCreate(CurrentMemoryContext,
 										  "oai_fdw_ctx",
@@ -2676,11 +2675,11 @@ static void appendTextArray(ArrayType **array, char *text_element)
 
 static void OAIFdwReScanForeignScan(ForeignScanState *node)
 {
-	struct OAIFdwState *state = (struct OAIFdwState *) node->fdw_state;
+	struct OAIFdwState *state = (struct OAIFdwState *)node->fdw_state;
 
 	if (!state)
 		return;
-	
+
 	if (state->oaicxt)
 		MemoryContextReset(state->oaicxt);
 
@@ -2694,7 +2693,7 @@ static void OAIFdwReScanForeignScan(ForeignScanState *node)
 
 static void OAIFdwEndForeignScan(ForeignScanState *node)
 {
-	struct OAIFdwState *state = (struct OAIFdwState *) node->fdw_state;
+	struct OAIFdwState *state = (struct OAIFdwState *)node->fdw_state;
 	if (!state)
 		return;
 
@@ -2972,13 +2971,13 @@ static void LoadOAIUserMapping(OAIFdwState *state)
 					elog(DEBUG2, "%s: %s '*******'", __func__, def->defname);
 				}
 
-				if (strcmp(def->defname, OAI_NODE_PROXY_USER) == 0)
+				if (strcmp(def->defname, OAI_USERMAPPING_OPTION_PROXY_USER) == 0)
 				{
 					state->proxyUser = pstrdup(defGetString(def));
 					elog(DEBUG2, "%s: proxy user '%s'", __func__, state->proxyUser);
 				}
 
-				if (strcmp(def->defname, OAI_NODE_PROXY_PASSWORD) == 0)
+				if (strcmp(def->defname, OAI_USERMAPPING_OPTION_PROXY_PASSWORD) == 0)
 				{
 					state->proxyPassword = pstrdup(defGetString(def));
 					elog(DEBUG2, "%s: proxy password '*******'", __func__);
@@ -3029,7 +3028,7 @@ static void LoadOAITableInfo(OAIFdwState *state)
 		{
 			DefElem *def = (DefElem *)lfirst(lc);
 
-			if (strcmp(def->defname, OAI_NODE_OPTION) == 0)
+			if (strcmp(def->defname, OAI_NODE_COLUMN_OPTION) == 0)
 			{
 				elog(DEBUG2, "  %s: (%d) adding oai_node > '%s'", __func__, i, defGetString(def));
 				state->oaiTable->cols[i]->oai_node = pstrdup(defGetString(def));
@@ -3074,38 +3073,38 @@ static void LoadOAIServerInfo(OAIFdwState *state)
 				state->url = defGetString(def);
 			else if (strcmp(OAI_NODE_METADATAPREFIX, def->defname) == 0)
 				state->metadataPrefix = defGetString(def);
-			else if (strcmp(OAI_NODE_HTTP_PROXY, def->defname) == 0)
+			else if (strcmp(OAI_SERVER_OPTION_HTTP_PROXY, def->defname) == 0)
 			{
 				state->proxy = defGetString(def);
-				state->proxyType = OAI_NODE_HTTP_PROXY;
+				state->proxyType = OAI_SERVER_OPTION_HTTP_PROXY;
 			}
-			else if (strcmp(OAI_NODE_PROXY_USER, def->defname) == 0)
+			else if (strcmp(OAI_USERMAPPING_OPTION_PROXY_USER, def->defname) == 0)
 			{
 				state->proxyUser = defGetString(def);
 			}
-			else if (strcmp(OAI_NODE_PROXY_PASSWORD, def->defname) == 0)
+			else if (strcmp(OAI_USERMAPPING_OPTION_PROXY_PASSWORD, def->defname) == 0)
 				state->proxyPassword = defGetString(def);
-			else if (strcmp(OAI_NODE_CONNECTTIMEOUT, def->defname) == 0)
+			else if (strcmp(OAI_SERVER_OPTION_CONNECT_TIMEOUT, def->defname) == 0)
 			{
 				char *tailpt;
 				char *timeout_str = defGetString(def);
 				state->connectTimeout = strtol(timeout_str, &tailpt, 0);
 			}
-			else if (strcmp(OAI_NODE_REQUEST_TIMEOUT, def->defname) == 0)
+			else if (strcmp(OAI_SERVER_OPTION_REQUEST_TIMEOUT, def->defname) == 0)
 			{
 				char *tailpt;
 				char *timeout_str = defGetString(def);
 				state->request_timeout = strtol(timeout_str, &tailpt, 0);
 			}
-			else if (strcmp(OAI_NODE_CONNECTRETRY, def->defname) == 0)
+			else if (strcmp(OAI_SERVER_OPTION_CONNECTRETRY, def->defname) == 0)
 			{
 				char *tailpt;
 				char *maxretry_str = defGetString(def);
 				state->maxretries = strtol(maxretry_str, &tailpt, 0);
 			}
-			else if (strcmp(OAI_NODE_REQUEST_REDIRECT, def->defname) == 0)
+			else if (strcmp(OAI_SERVER_OPTION_REQUEST_REDIRECT, def->defname) == 0)
 				state->requestRedirect = defGetBoolean(def);
-			else if (strcmp(OAI_NODE_REQUEST_MAX_REDIRECT, def->defname) == 0)
+			else if (strcmp(OAI_SERVER_OPTION_REQUEST_MAX_REDIRECT, def->defname) == 0)
 			{
 				char *tailpt;
 				char *maxredirect_str = defGetString(def);
