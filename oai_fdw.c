@@ -80,8 +80,10 @@
 #define OAI_REQUEST_GETRECORD "GetRecord"
 #define OAI_REQUEST_LISTMETADATAFORMATS "ListMetadataFormats"
 #define OAI_REQUEST_LISTSETS "ListSets"
-#define OAI_REQUEST_CONNECTTIMEOUT 300
-#define OAI_REQUEST_MAXRETRY 3
+
+#define OAI_DEFAULT_REQUEST_TIMEOUT 0
+#define OAI_DEFAULT_CONNECT_TIMEOUT 300
+#define OAI_DEFAULT_MAX_RETRY 3
 /*
  * Maximum number of bytes from an HTTP error response body to include in
  * error messages and server logs.  Prevents huge HTML error pages (e.g.
@@ -115,6 +117,7 @@
 #define OAI_NODE_PROXY_USER "proxy_user"
 #define OAI_NODE_PROXY_PASSWORD "proxy_password"
 #define OAI_NODE_CONNECTTIMEOUT "connect_timeout"
+#define OAI_NODE_REQUEST_TIMEOUT "request_timeout"
 #define OAI_NODE_CONNECTRETRY "connect_retry"
 #define OAI_NODE_REQUEST_REDIRECT "request_redirect"
 #define OAI_NODE_REQUEST_MAX_REDIRECT "request_max_redirect"
@@ -155,6 +158,7 @@ typedef struct OAIFdwState
 	long requestMaxRedirect; /* Limit of how many times the URL redirection (jump) may occur. */
 	long maxretries;		 /* Max number of retries in case a request returns an error message. */
 	long connectTimeout;	 /* Connection timeout for OAI requests in seconds. */
+	long request_timeout;	 /* Timeout for the entire HTTP request (connect + transfer) */
 	char *identifier;		 /* The unique identifier of an item in a repository. */
 	char *set;				 /* The set membership of the item for the purpose of selective harvesting. */
 	char *url;				 /* Concatenated URL with the OAI request. */
@@ -180,6 +184,7 @@ typedef struct OAIFdwState
 	char *password;
 	Cost startup_cost;
 	Cost total_cost;
+
 	struct OAIfdwTable *oaiTable;	   /* All necessary information of the FOREIGN TABLE used in a SQL statement */
 } OAIFdwState;
 
@@ -249,6 +254,7 @@ static struct OAIFdwOption valid_options[] =
 		{OAI_NODE_METADATAPREFIX, ForeignServerRelationId, false, false},
 		{OAI_NODE_HTTP_PROXY, ForeignServerRelationId, false, false},
 		{OAI_NODE_CONNECTTIMEOUT, ForeignServerRelationId, false, false},
+		{OAI_NODE_REQUEST_TIMEOUT, ForeignServerRelationId, false, false},
 		{OAI_NODE_CONNECTRETRY, ForeignServerRelationId, false, false},
 		{OAI_NODE_REQUEST_REDIRECT, ForeignServerRelationId, false, false},
 		{OAI_NODE_REQUEST_MAX_REDIRECT, ForeignServerRelationId, false, false},
@@ -470,6 +476,13 @@ OAIFdwState *GetServerInfo(const char *srvname)
 				char *timeout_str = defGetString(def);
 
 				state->connectTimeout = strtol(timeout_str, &tailpt, 0);
+			}
+			else if (strcmp(def->defname, OAI_NODE_REQUEST_TIMEOUT) == 0)
+			{
+				char *tailpt;
+				char *timeout_str = defGetString(def);
+
+				state->request_timeout = strtol(timeout_str, &tailpt, 0);
 			}
 			else if (strcmp(def->defname, OAI_NODE_REQUEST_REDIRECT) == 0)
 			{
@@ -780,6 +793,19 @@ Datum oai_fdw_validator(PG_FUNCTION_ARGS)
 				}
 
 				if (strcmp(opt->optname, OAI_NODE_CONNECTTIMEOUT) == 0)
+				{
+					char *endptr;
+					char *timeout_str = defGetString(def);
+					long timeout_val = strtol(timeout_str, &endptr, 0);
+
+					if (timeout_str[0] == '\0' || *endptr != '\0' || timeout_val < 0)
+						ereport(ERROR,
+								(errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
+								 errmsg("invalid %s: %s", def->defname, timeout_str),
+								 errhint("expected values are positive integers (timeout in seconds)")));
+				}
+
+				if (strcmp(opt->optname, OAI_NODE_REQUEST_TIMEOUT) == 0)
 				{
 					char *endptr;
 					char *timeout_str = defGetString(def);
@@ -1306,8 +1332,10 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 	char errbuf[CURL_ERROR_SIZE];
 	struct MemoryStruct chunk;
 	struct MemoryStruct chunk_header;
-	long maxretries = OAI_REQUEST_MAXRETRY;
-	long connectTimeout = OAI_REQUEST_CONNECTTIMEOUT;
+	long maxretries = OAI_DEFAULT_MAX_RETRY;
+	long connectTimeout = OAI_DEFAULT_CONNECT_TIMEOUT;
+	long request_timeout = OAI_DEFAULT_REQUEST_TIMEOUT;
+	
 	struct curl_slist *headers = NULL;
 
 	if (state->maxretries)
@@ -1315,6 +1343,9 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 
 	if (state->connectTimeout)
 		connectTimeout = state->connectTimeout;
+
+	if (state->request_timeout)
+		request_timeout = state->request_timeout;
 
 	chunk.memory = palloc(1);
 	chunk.size = 0; /* no data at this point */
@@ -1491,6 +1522,8 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 		curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, errbuf);
 
 		curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, connectTimeout);
+		curl_easy_setopt(curl, CURLOPT_TIMEOUT, request_timeout);
+
 		elog(DEBUG2, "  %s (%s): timeout > %ld", __func__, state->requestVerb, connectTimeout);
 		elog(DEBUG2, "  %s (%s): max retry > %ld", __func__, state->requestVerb, maxretries);
 
@@ -3058,6 +3091,12 @@ static void LoadOAIServerInfo(OAIFdwState *state)
 				char *timeout_str = defGetString(def);
 				state->connectTimeout = strtol(timeout_str, &tailpt, 0);
 			}
+			else if (strcmp(OAI_NODE_REQUEST_TIMEOUT, def->defname) == 0)
+			{
+				char *tailpt;
+				char *timeout_str = defGetString(def);
+				state->request_timeout = strtol(timeout_str, &tailpt, 0);
+			}
 			else if (strcmp(OAI_NODE_CONNECTRETRY, def->defname) == 0)
 			{
 				char *tailpt;
@@ -3124,6 +3163,7 @@ static List *SerializePlanData(OAIFdwState *state)
 	result = lappend(result, IntToConst((int)state->requestMaxRedirect));
 	result = lappend(result, IntToConst((int)state->maxretries));
 	result = lappend(result, IntToConst((int)state->connectTimeout));
+	result = lappend(result, IntToConst((int)state->request_timeout));
 	result = lappend(result, CStringToConst(state->identifier));
 	result = lappend(result, CStringToConst(state->set));
 	result = lappend(result, CStringToConst(state->url));
@@ -3205,6 +3245,9 @@ static struct OAIFdwState *DeserializePlanData(List *list)
 	cell = list_next(list, cell);
 
 	state->connectTimeout = (int)DatumGetInt32(((Const *)lfirst(cell))->constvalue);
+	cell = list_next(list, cell);
+
+	state->request_timeout = (int)DatumGetInt32(((Const *)lfirst(cell))->constvalue);
 	cell = list_next(list, cell);
 
 	state->identifier = ConstToCString(lfirst(cell));

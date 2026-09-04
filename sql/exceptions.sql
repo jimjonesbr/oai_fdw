@@ -142,6 +142,25 @@ OPTIONS (url 'https://services.dnb.de/oai/repository',
          request_redirect 'true',
          request_max_redirect '');
 
+-- Empty timeout
+CREATE SERVER oai_server_err22 FOREIGN DATA WRAPPER oai_fdw
+OPTIONS (url 'https://services.dnb.de/oai/repository',
+         metadataprefix 'oai_dc',
+         request_timeout '');  
+
+-- Nevative timeout
+CREATE SERVER oai_server_err23 FOREIGN DATA WRAPPER oai_fdw
+OPTIONS (url 'https://services.dnb.de/oai/repository',
+         metadataprefix 'oai_dc',
+         request_timeout '-1');
+         
+-- Invalid timeout
+CREATE SERVER oai_server_err24 FOREIGN DATA WRAPPER oai_fdw
+OPTIONS (url 'https://services.dnb.de/oai/repository',
+         metadataprefix 'oai_dc',
+         request_timeout 'foo');         
+
+
 SELECT * FROM OAI_Identify('oai_server_err21');
 
 -- Unknown COLUMN OPTION value
