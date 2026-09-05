@@ -1,5 +1,3 @@
-
----------------------------------------------
 # PostgreSQL Foreign Data Wrapper for OAI-PMH (oai_fdw)
 
 A PostgreSQL Foreign Data Wrapper to access OAI-PMH repositories (Open Archives Initiative Protocol for Metadata Harvesting). This wrapper supports the [OAI-PMH 2.0 Protocol](http://www.openarchives.org/OAI/openarchivesprotocol.html).
@@ -23,6 +21,7 @@ A PostgreSQL Foreign Data Wrapper to access OAI-PMH repositories (Open Archives 
     - [OAI\_ListSets](#oai_listsets)
     - [OAI\_Version](#oai_version)
     - [OAI\_HarvestTable](#oai_harvesttable)
+    - [oai\_fdw\_settings](#oai_fdw_settings)
     - [EXPLAIN and Diagnostics](#explain-and-diagnostics)
   - [Deploy with Docker](#deploy-with-docker)
   - [Error Handling](#error-handling)
@@ -55,7 +54,7 @@ After building and installing the extension you're ready to create the extension
 CREATE EXTENSION oai_fdw;
 ```
 
-To install an specific version add the full version number in the `WITH VERSION` clause
+To install a specific version add the full version number in the `WITH VERSION` clause
 
 ```sql
 CREATE EXTENSION oai_fdw WITH VERSION '1.14';
@@ -76,7 +75,7 @@ To update the oai_fdw's version you must first build and install the binaries an
 ALTER EXTENSION oai_fdw UPDATE;
 ```
 
-To update to an specific version use `UPDATE TO` and the full version number
+To update to a specific version use `UPDATE TO` and the full version number
 
 ```sql
 ALTER EXTENSION oai_fdw UPDATE TO '1.14';
@@ -88,7 +87,7 @@ To use the OAI Foreign Data Wrapper you must first create a `SERVER` to connect 
 
 ### [CREATE SERVER](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#create_server)
 
-The SQL command [CREATE SERVER](https://www.postgresql.org/docs/current/sql-createserver.html) defines a new foreign server. The user who defines the server becomes its owner. An OAI Foreign repository requires an `url`, so that the Foreign Data Wrapper knows where to sent the http requests.
+The SQL command [CREATE SERVER](https://www.postgresql.org/docs/current/sql-createserver.html) defines a new foreign server. The user who defines the server becomes its owner. An OAI Foreign repository requires an `url`, so that the Foreign Data Wrapper knows where to send the HTTP requests.
 
 The following example creates a `SERVER` that connects to the OAI-PMH repository of the Münster University Library:
 
@@ -102,7 +101,7 @@ OPTIONS (url 'https://sammlungen.ulb.uni-muenster.de/oai');
 
 | Server Option | Type          | Description                                                                                                        |
 |---------------|----------------------|--------------------------------------------------------------------------------------------------------------------|
-| `url`         | **required**            | URL address of the OAI-PMH repository.
+| `url`         | **required**            | URL address of the OAI-PMH repository. |
 | `http_proxy` | optional            | Proxy for HTTP requests.
 | `connect_timeout`         | optional            | Connection timeout for establishing a HTTP request in seconds (default `300`).
 | `connect_retry`         | optional            | Number of attempts to retry a request in case of failure (default `3`).
@@ -112,12 +111,12 @@ OPTIONS (url 'https://sammlungen.ulb.uni-muenster.de/oai');
 
 ### [CREATE USER MAPPING](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#create-user-mapping)
 
-[CREATE USER MAPPING](https://www.postgresql.org/docs/current/sql-createusermapping.html) defines a mapping of a PostgreSQL user to an user in the target OAI repository. For instance, to map the PostgreSQL user `postgres` to the user `admin` in the `SERVER` named `my_protected_oai`:
+[CREATE USER MAPPING](https://www.postgresql.org/docs/current/sql-createusermapping.html) defines a mapping of a PostgreSQL user to a user in the target OAI repository. For instance, to map the PostgreSQL user `postgres` to the user `admin` in the `SERVER` named `my_protected_oai`:
 
 ```sql
 CREATE SERVER my_protected_oai
 FOREIGN DATA WRAPPER oai_fdw 
-OPTIONS (url 'https://my.proteceted.oai.de/oai'); 
+OPTIONS (url 'https://my.protected.oai.de/oai'); 
 
 CREATE USER MAPPING FOR postgres
 SERVER my_protected_oai OPTIONS (user 'admin', password 'secret');
@@ -145,7 +144,7 @@ OAI-PMH repositories publish data sets in many different customizable data forma
 
 **Foreign Schema Options**:
 
-| Server Option | Type          | Description                                                                                                        |
+| Schema Option | Type          | Description                                                                                                        |
 |---------------|--------------------------|--------------------------------------------------------------------------------------------------------------------|
 | `metadataprefix`  | **required**        | A string that specifies the metadata format in OAI-PMH requests issued to the repository.  
 
@@ -288,7 +287,7 @@ FROM information_schema.foreign_tables;
 
 ### [CREATE FOREIGN TABLE](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#create_foreign_table)
 
-Foreign Tables from the OAI Foreign Data Wrapper work as a proxy between PostgreSQL clients and OAI-PMH Repositories. Each `FOREIGN TABLE` column must be mapped to an `oai_node`, so that PostgreSQL knows where to display the OAI documents and header data. It is mandatory to set a `metadataprefix` to the `SERVER` clause of the `CREATE FOREIGN TABLE` statement, so that the OAI-PMH repository knows which XML format is supposed to be returned (see [OAI_ListMetadataFormats](#oai_listmetadataformats)). Optionally, it is possible to constraint a `FOREIGN TABLE` to specific OAI sets using the `setspec` option from the `SERVER` clause - omitting this option means that every SQL query will harvest *all sets* in the OAI repository.
+Foreign Tables from the OAI Foreign Data Wrapper work as a proxy between PostgreSQL clients and OAI-PMH Repositories. Each `FOREIGN TABLE` column must be mapped to an `oai_node`, so that PostgreSQL knows where to display the OAI documents and header data. It is mandatory to set a `metadataprefix` to the `SERVER` clause of the `CREATE FOREIGN TABLE` statement, so that the OAI-PMH repository knows which XML format is supposed to be returned (see [OAI_ListMetadataFormats](#oai_listmetadataformats)). Optionally, it is possible to constrain a `FOREIGN TABLE` to specific OAI sets using the `setspec` option from the `SERVER` clause - omitting this option means that every SQL query will harvest *all sets* in the OAI repository.
 
 The following example creates a `FOREIGN TABLE` connected to the server `oai_server_dnb`. Queries executed against this table will harvest the set `dnb:reiheC` and will return the documents encoded as `oai_dc`. Each column is set with an `oai_node` in the `OPTION` clause:
 
@@ -315,7 +314,7 @@ CREATE FOREIGN TABLE dnb_maps (
 | `identifier`  | `text`, `varchar`        | The unique identifier of an item in a repository (OAI Header).                                                     |
 | `setspec`     | `text[]`, `varchar[]`    | The set membership of the item for the purpose of selective harvesting. (OAI Header)                               |
 | `datestamp`   | `timestamp`              | The date of creation, modification or deletion of the record for the purpose of selective harvesting. (OAI Header) |
-| `content`     | `text`, `varchar`, `xml` | The XML document representing the retrieved recored (OAI Record)                                                   |
+| `content`     | `text`, `varchar`, `xml` | The XML document representing the retrieved record (OAI Record)                                                   |
 | `metadataprefix`     | `text`, `varchar` | A string that specifies the metadata format in OAI-PMH requests issued to the repository      |
 | `status` | `boolean` | Deleted-record flag from the OAI header (true if the record is marked deleted). |
 
@@ -326,7 +325,7 @@ CREATE FOREIGN TABLE dnb_maps (
 |---------------|--------------------------|--------------------------------------------------------------------------------------------------------------------|
 | `metadataprefix`  | **required**        | an argument that specifies the metadataPrefix of the format that should be included in the metadata part of the returned records. Records should be included only for items from which the metadata format matching the metadataPrefix can be disseminated. The metadata formats supported by a repository and for a particular item can be retrieved using the [ListMetadataFormats](http://www.openarchives.org/OAI/openarchivesprotocol.html#ListMetadataFormats) request.  
 | `from`  | optional        | an argument with a UTCdatetime value, which specifies a lower bound for datestamp-based selective harvesting.  
-| `until`  | optional        | an argument with a UTCdatetime value, which specifies a upper bound for datestamp-based selective harvesting.  
+| `until`  | optional        | an argument with a UTCdatetime value, which specifies an upper bound for datestamp-based selective harvesting.  
 | `setspec`  | optional        | an argument with a setSpec value , which specifies set criteria for selective harvesting. 
 
 #### [Examples](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#examples)
@@ -705,7 +704,7 @@ SELECT oai_fdw_version();
 (1 row)
 
 ```
- #### [oai_fdw_settings](#oai_fdw_settings)
+### [oai_fdw_settings](#oai_fdw_settings)
 
 A system view that provides detailed version information for `oai_fdw` and all its dependencies, including core libraries (PostgreSQL, libxml, libcurl) and optional components (SSL, zlib, libSSH, nghttp2), along with compiler and build information. Returns individual component names and their corresponding versions for convenient programmatic access.
 
@@ -762,9 +761,9 @@ SELECT * FROM oai_fdw_settings;
 
 **Description**
 
-Often it is the case that a OAI repository contains so much data, that a requests over large time intervals become just too expensive and end up being denied by the server. This stored procedure addresses this issue by internally partitioning a single request into several small ones using the a given [time interval](https://www.postgresql.org/docs/current/datatype-datetime.html) as partition unit - parameter `page_size`. 
+Often it is the case that an OAI repository contains so much data, that requests over large time intervals become just too expensive and end up being denied by the server. This stored procedure addresses this issue by internally partitioning a single request into several small ones using the given [time interval](https://www.postgresql.org/docs/current/datatype-datetime.html) as partition unit - parameter `page_size`. 
 
-For instance, an OAI ListRecords request for all records from the year 2021 (`2021-01-01` to `2021-12-31`) can be split into 12 smaller requests by setting the `page_size` parameter to `interval '1 month'`. Although in the end the result sets from both approaches are pretty much the same, both client and server may significantly profit from having  smaller result sets instead of single large one.
+For instance, an OAI ListRecords request for all records from the year 2021 (`2021-01-01` to `2021-12-31`) can be split into 12 smaller requests by setting the `page_size` parameter to `interval '1 month'`. Although in the end the result sets from both approaches are pretty much the same, both client and server may significantly profit from having smaller result sets instead of a single large one.
 
 
 **Usage**
@@ -784,16 +783,16 @@ SELECT count(*) FROM "clone-dnb:oai/dc";
 ```
 ### [EXPLAIN and Diagnostics](#explain-and-diagnostics)
 
-The `oai_fdw` extension provides detailed diagnostics in PostgreSQL [EXPLAIN](https://www.postgresql.org/docs/current/sql-explain.html) output to help users understand which SQL clauses are pushed down to the remote SPARQL endpoint.
+The `oai_fdw` extension provides detailed diagnostics in PostgreSQL [EXPLAIN](https://www.postgresql.org/docs/current/sql-explain.html) output to help users understand which SQL clauses are pushed down to the remote OAI-PMH repository.
 
 The plan output includes FDW-specific lines for each Foreign Scan node:
 * `Foreign Server:` shows the foreign server related to the queried foreign table.
 * `Foreign Server URL`: shows the foreign server's URL.
-  `requestVerb`: shows the type of OAI request related to the foreign table.
+* `requestVerb`: shows the type of OAI request related to the foreign table.
 * `setSpec`: shows the set related to the foreign table.
 * `metadataPrefix`: shows the metadata format requested.
 * `from`: shows the lower bound for datestamp-based selective harvesting.
-* `until`: shows the upprer bound for datestamp-based selective harvesting.
+* `until`: shows the upper bound for datestamp-based selective harvesting.
 
 **Example:**
 ```sql
@@ -821,7 +820,7 @@ WHERE
 
 ## [Deploy with Docker](#deploy-with-docker)
 
-To deploy oai_fdw with docker just pick one of the supported PostgreSQL versions, install the [requirements](#requirements) and [compile](#build-and-install) the [source code](https://github.com/jimjonesbr/oai_fdw/releases). For instance, a oai_fdw `Dockerfile` for PostgreSQL 16 should look like this (minimal example):
+To deploy oai_fdw with docker just pick one of the supported PostgreSQL versions, install the [requirements](#requirements) and [compile](#build-and-install) the [source code](https://github.com/jimjonesbr/oai_fdw/releases). For instance, an oai_fdw `Dockerfile` for PostgreSQL 18 should look like this (minimal example):
 
 ```docker
 FROM postgres:18
@@ -835,13 +834,13 @@ RUN tar xvzf oai_fdw-1.14.0.tar.gz && \
     make install
 ```
 
-To build the image save it in a `Dockerfile` and  run the following command in the root directory - this will create an image called `oai_fdw_image`.:
+To build the image save it in a `Dockerfile` and run the following command in the root directory - this will create an image called `oai_fdw_image`:
  
 ```bash
  $ docker build -t oai_fdw_image .
 ```
 
-After successfully building the image you're ready to `run` or `create` the container ..
+After successfully building the image you're ready to `run` or `create` the container.
  
 ```bash
 $ docker run --name my_oai_container -e POSTGRES_HOST_AUTH_METHOD=trust oai_fdw_image
@@ -858,13 +857,13 @@ If there is a network error or other condition that results in the loss of an in
 
 If the OAI Foreign Data Wrapper receives a `badResumptionToken` error during a sequence of incomplete list requests it will assume that the `resumptionToken` has either expired or is invalid in some other way. There is no way to resume the list request sequence in this case; the user must start the list request again.
 
-If a harvester receives some other error then there is an unrecoverable problem with the list request sequence; the user must start the list request again.
+If a harvester receives some other error, there is an unrecoverable problem with the list request sequence; the user must start the list request again.
 
 ## [Limitations](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#limitations)
 
 * **PostgreSQL**: The OAI Foreign Data Wrapper currently supports only PostgreSQL 11 or higher.
-* **Aggregate and Join Push-down**: Aggregate functions and joins are not pushed down to the OAI repository, as such features are not foreseen by the OAI-PMH protocol. This means that aggregate and join operations will pull all necessary data from the server and then will perform the operations on the client side. The same applies for [Aggregate Expressions](https://www.postgresql.org/docs/14/sql-expressions.html#SYNTAX-AGGREGATES) and [Window Functions](https://www.postgresql.org/docs/current/tutorial-window.html).
-* **Data from OAI Requests are always pulled entirely**: The OAI Foreign Data Wrapper sort of translates SQL Queries to standard OAI-PMH HTTP requests in order access the data sets, which is basically limited to [ListRecords](http://www.openarchives.org/OAI/openarchivesprotocol.html#ListRecords) or [ListIdentifiers](http://www.openarchives.org/OAI/openarchivesprotocol.html#ListIdentifiers) requests (in case the node `content` isn't listed in the `SELECT` clause). These OAI requests cannot be altered to only partially retrieve information, so the requests result sets will always be downloaded entirely - even if not used in the `SELECT` clause. 
+* **Aggregate and Join Push-down**: Aggregate functions and joins are not pushed down to the OAI repository, as such features are not foreseen by the OAI-PMH protocol. This means that aggregate and join operations will pull all necessary data from the server and then will perform the operations on the client side. The same applies for [Aggregate Expressions](https://www.postgresql.org/docs/current/sql-expressions.html#SYNTAX-AGGREGATES) and [Window Functions](https://www.postgresql.org/docs/current/tutorial-window.html).
+* **Data from OAI Requests are always pulled entirely**: The OAI Foreign Data Wrapper sort of translates SQL Queries to standard OAI-PMH HTTP requests in order to access the data sets, which is basically limited to [ListRecords](http://www.openarchives.org/OAI/openarchivesprotocol.html#ListRecords) or [ListIdentifiers](http://www.openarchives.org/OAI/openarchivesprotocol.html#ListIdentifiers) requests (in case the node `content` isn't listed in the `SELECT` clause). These OAI requests cannot be altered to only partially retrieve information, so the requests result sets will always be downloaded entirely - even if not used in the `SELECT` clause. 
 * **Operators**: The OAI-PMH supports [selective harvesting](http://www.openarchives.org/OAI/openarchivesprotocol.html#SelectiveHarvesting) with only a few attributes and operators and `oai_nodes`:
 
 
@@ -874,7 +873,6 @@ If a harvester receives some other error then there is an unrecoverable problem 
 | `setspec`    | `<@`,`@>`, `&&`                    |
 | `identifier` | `=`                          |
 | `metadataprefix`       | `=`                          |
-|              |                              |
 * **Response Compression**: Response compression from OAI-PMH servers is currently not supported. 
 
 Note that all operators supported in PostgreSQL can be used to filter result sets, but only the supported operators listed above will be used in the OAI-PMH requests. In other words, non supported filters will be performed **locally** in the client.
