@@ -36,7 +36,7 @@ WHERE
   meta = 'MARC21-xml' AND
   setspec <@ ARRAY['dnb:reiheC'];
 DEBUG:  GET "https://services.dnb.de/oai/repository?verb=ListRecords&set=dnb%3AreiheC&from=2022-02-01T00%3A00%3A00Z&until=2022-02-02T00%3A00%3A00Z&metadataPrefix=MARC21-xml"
-DEBUG:  HTTP 200, 158034 bytes
+DEBUG:  HTTP 200, 158253 bytes
  row_number |                id                | content |   setspec    |        datestamp         |    meta    
 ------------+----------------------------------+---------+--------------+--------------------------+------------
           1 | oai:dnb.de/dnb:reiheC/116804152X | t       | {dnb:reiheC} | Tue Feb 01 14:11:46 2022 | MARC21-xml
