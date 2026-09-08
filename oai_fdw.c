@@ -1434,8 +1434,10 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 
 		if (state->metadataPrefix)
 		{
+			char *encoded_metadataPrefix = curl_easy_escape(curl, state->metadataPrefix, 0);
 			elog(DEBUG2, "  %s (%s): appending 'metadataPrefix' > %s", __func__, state->requestVerb, state->metadataPrefix);
-			appendStringInfo(&url_buffer, "&metadataPrefix=%s", state->metadataPrefix);
+			appendStringInfo(&url_buffer, "&metadataPrefix=%s", encoded_metadataPrefix);
+			curl_free(encoded_metadataPrefix);
 		}
 	}
 	else if (strcmp(state->requestVerb, OAI_REQUEST_LISTIDENTIFIERS) == 0)
@@ -2821,7 +2823,7 @@ static List *OAIFdwImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid server
 			appendStringInfo(&buffer, "  updatedate timestamp   OPTIONS (oai_node 'datestamp'),\n");
 			appendStringInfo(&buffer, "  format text            OPTIONS (oai_node 'metadataprefix'),\n");
 			appendStringInfo(&buffer, "  status boolean         OPTIONS (oai_node 'status')\n");
-			appendStringInfo(&buffer, ") SERVER %s OPTIONS (metadataPrefix '%s', setspec '%s');\n", server->servername, format, set->setSpec);
+			appendStringInfo(&buffer, ") SERVER %s OPTIONS (metadataPrefix %s, setspec %s);\n", quote_identifier(server->servername), quote_literal_cstr(format), quote_literal_cstr(set->setSpec));
 
 			sql_commands = lappend(sql_commands, pstrdup(buffer.data));
 
@@ -2833,16 +2835,18 @@ static List *OAIFdwImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid server
 	else if (strcmp(stmt->remote_schema, "oai_repository") == 0)
 	{
 		StringInfoData buffer;
+		StringInfoData tblname;
 		initStringInfo(&buffer);
-
-		appendStringInfo(&buffer, "\nCREATE FOREIGN TABLE %s_repository (\n", server->servername);
+		initStringInfo(&tblname);
+		appendStringInfo(&tblname, "%s_repository", server->servername);
+		appendStringInfo(&buffer, "\nCREATE FOREIGN TABLE %s (\n", quote_identifier(tblname.data));
 		appendStringInfo(&buffer, "  id text                OPTIONS (oai_node 'identifier'),\n");
 		appendStringInfo(&buffer, "  xmldoc xml             OPTIONS (oai_node 'content'),\n");
 		appendStringInfo(&buffer, "  sets text[]            OPTIONS (oai_node 'setspec'),\n");
 		appendStringInfo(&buffer, "  updatedate timestamp   OPTIONS (oai_node 'datestamp'),\n");
 		appendStringInfo(&buffer, "  format text            OPTIONS (oai_node 'metadataprefix'),\n");
 		appendStringInfo(&buffer, "  status boolean         OPTIONS (oai_node 'status')\n");
-		appendStringInfo(&buffer, ") SERVER %s OPTIONS (metadataPrefix '%s');\n", server->servername, format);
+		appendStringInfo(&buffer, ") SERVER %s OPTIONS (metadataPrefix %s);\n", quote_identifier(server->servername), quote_literal_cstr(format));
 
 		sql_commands = lappend(sql_commands, pstrdup(buffer.data));
 
