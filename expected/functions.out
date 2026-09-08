@@ -130,10 +130,14 @@ SELECT
  t                   | t                      | t                  | t
 (1 row)
 
--- Test nominatim_fdw_settings() C function returns a non-empty string
-SELECT length(nominatim_fdw_settings()) > 0 AS settings_exists;
-ERROR:  function nominatim_fdw_settings() does not exist at character 15
--- Test nominatim_fdw_settings() C function contains expected core components
+-- Test oai_fdw_settings() C function returns a non-empty string
+SELECT length(oai_fdw_settings()) > 0 AS settings_exists;
+ settings_exists 
+-----------------
+ t
+(1 row)
+
+-- Test oai_fdw_settings() C function contains expected core components
 SELECT 
     oai_fdw_settings() ~ 'oai_fdw\s+[0-9]+\.[0-9]+' AS has_oai_fdw,
     oai_fdw_settings() ~ 'PostgreSQL\s+[0-9]+' AS has_postgresql,
@@ -173,6 +177,25 @@ FROM oai_fdw_settings;
  has_minimum_components | has_oai_fdw | has_postgresql | has_libxml | has_libcurl 
 ------------------------+-------------+----------------+------------+-------------
  t                      | t           | t              | t          | t
+(1 row)
+
+-- Server name requiring quotes: exercises quote_identifier() on both the
+-- SERVER reference and the generated <servername>_repository table name.
+CREATE SERVER "oai-server ulb" FOREIGN DATA WRAPPER oai_fdw
+OPTIONS (url 'https://sammlungen.ulb.uni-muenster.de/oai', request_redirect 'true');
+CREATE SCHEMA quoting_schema;
+IMPORT FOREIGN SCHEMA oai_repository
+FROM SERVER "oai-server ulb" INTO quoting_schema
+  OPTIONS (metadataprefix 'oai_dc');
+DEBUG:  GET "https://sammlungen.ulb.uni-muenster.de/oai?verb=ListSets"
+DEBUG:  HTTP 200, 1386 bytes
+DEBUG:  GET "https://sammlungen.ulb.uni-muenster.de/oai?verb=ListMetadataFormats"
+DEBUG:  HTTP 200, 1853 bytes
+SELECT foreign_table_name FROM information_schema.foreign_tables
+WHERE foreign_table_schema = 'quoting_schema';
+    foreign_table_name     
+---------------------------
+ oai-server ulb_repository
 (1 row)
 
 DROP SERVER oai_server_dnb CASCADE;

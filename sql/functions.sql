@@ -43,10 +43,10 @@ SELECT
     oai_fdw_version() ~ 'libxml\s+[0-9]+\.[0-9]+' AS has_libxml_version,
     oai_fdw_version() ~ 'libcurl\s+[0-9]+\.[0-9]+' AS has_libcurl_version;
 
--- Test nominatim_fdw_settings() C function returns a non-empty string
-SELECT length(nominatim_fdw_settings()) > 0 AS settings_exists;
+-- Test oai_fdw_settings() C function returns a non-empty string
+SELECT length(oai_fdw_settings()) > 0 AS settings_exists;
 
--- Test nominatim_fdw_settings() C function contains expected core components
+-- Test oai_fdw_settings() C function contains expected core components
 SELECT 
     oai_fdw_settings() ~ 'oai_fdw\s+[0-9]+\.[0-9]+' AS has_oai_fdw,
     oai_fdw_settings() ~ 'PostgreSQL\s+[0-9]+' AS has_postgresql,
@@ -66,5 +66,21 @@ SELECT
     COUNT(*) FILTER (WHERE component = 'libxml') = 1 AS has_libxml,
     COUNT(*) FILTER (WHERE component = 'libcurl') = 1 AS has_libcurl
 FROM oai_fdw_settings;
+
+-- Server name requiring quotes: exercises quote_identifier() on both the
+-- SERVER reference and the generated <servername>_repository table name.
+CREATE SERVER "oai-server ulb" FOREIGN DATA WRAPPER oai_fdw
+OPTIONS (url 'https://sammlungen.ulb.uni-muenster.de/oai', request_redirect 'true');
+
+CREATE SCHEMA quoting_schema;
+
+IMPORT FOREIGN SCHEMA oai_repository
+FROM SERVER "oai-server ulb" INTO quoting_schema
+  OPTIONS (metadataprefix 'oai_dc');
+
+SELECT foreign_table_name FROM information_schema.foreign_tables
+WHERE foreign_table_schema = 'quoting_schema';
+
+
 
 DROP SERVER oai_server_dnb CASCADE;
