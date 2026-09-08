@@ -21,7 +21,7 @@ CREATE OR REPLACE FUNCTION OAI_Identify(text)
   LANGUAGE C VOLATILE STRICT;
 
 /* unused PG type */
-DROP TYPE oai_node;
+DROP TYPE IF EXISTS oai_node;
 
 /* new function */
 CREATE FUNCTION oai_fdw_settings()
