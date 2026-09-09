@@ -50,6 +50,12 @@
 #include <catalog/pg_collation.h>
 #include <funcapi.h>
 #include "lib/stringinfo.h"
+#include "storage/latch.h"
+#if PG_VERSION_NUM >= 160000
+#include "utils/wait_event.h"
+#else
+#include "pgstat.h"
+#endif
 #include <utils/lsyscache.h>
 #include "nodes/pg_list.h"
 #include "nodes/nodes.h"
@@ -133,6 +139,31 @@
 #define OAI_SUCCESS 0
 #define OAI_FAIL 1
 #define OAI_UNKNOWN_REQUEST 2
+
+/*
+ * OAI-PMH flow control (protocol spec, section 3.4): a repository may answer
+ * "503 Service Unavailable" together with a "Retry-After" header to throttle a
+ * harvester. Retrying such a response immediately is both useless and abusive,
+ * so the wait is honoured before the next attempt.
+ *
+ * OAI_FDW_MAX_RETRY_AFTER caps how long a single wait may last, so that a
+ * repository asking for an implausible delay cannot pin a backend down
+ * indefinitely. OAI_FDW_DEFAULT_RETRY_AFTER is used when a 503 arrives with no
+ * usable Retry-After header at all.
+ */
+/*
+ * WL_EXIT_ON_PM_DEATH only exists from PostgreSQL 12 on; on 11 the caller has
+ * to watch for postmaster death explicitly.
+ */
+#if PG_VERSION_NUM >= 120000
+#define OAI_WAIT_LATCH_FLAGS (WL_LATCH_SET | WL_TIMEOUT | WL_EXIT_ON_PM_DEATH)
+#else
+#define OAI_WAIT_LATCH_FLAGS (WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH)
+#endif
+
+#define OAI_HTTP_SERVICE_UNAVAILABLE 503
+#define OAI_FDW_MAX_RETRY_AFTER 300
+#define OAI_FDW_DEFAULT_RETRY_AFTER 5
 #define IntToConst(x) makeConst(INT4OID, -1, InvalidOid, 4, Int32GetDatum((int32)(x)), false, true)
 #define OidToConst(x) makeConst(OIDOID, -1, InvalidOid, 4, ObjectIdGetDatum(x), false, true)
 
@@ -173,6 +204,7 @@ typedef struct OAIFdwState
 	Oid foreigntableid;
 	xmlDocPtr xmldoc;	  /* Result of an OAI request. */
 	MemoryContext oaicxt; /* Memory Context for data manipulation. */
+	MemoryContext tokencxt; /* Holds the resumption token across a reset of oaicxt. */
 	List *records;		  /* List of OAI records retrieved. */
 	int pageindex;		  /* Index of a record within a retrieved page (list). */
 	int pagesize;		  /* Number of OAI records retrieved. */
@@ -227,6 +259,18 @@ struct MemoryStruct
 {
 	char *memory;
 	size_t size;
+	/*
+	 * Set by the libcurl callbacks when an allocation fails. The callbacks
+	 * must not raise errors themselves (see WriteMemoryCallback), so the
+	 * condition is recorded here and reported once the transfer has ended.
+	 */
+	bool alloc_failed;
+	/*
+	 * Content-type reported by the server when it is not one of the XML types
+	 * oai_fdw expects; empty otherwise. Warned about after the transfer, for
+	 * the same reason.
+	 */
+	char unsupported_ctype[128];
 };
 
 typedef struct OAIfdwTable
@@ -320,6 +364,9 @@ static void deparseSelectColumns(OAIFdwState *state, List *exprs);
 static void OAIRequestPlanner(OAIFdwState *state, RelOptInfo *baserel);
 static char *deparseTimestamp(Datum datum);
 static int CheckURL(char *url);
+static long ParseRetryAfter(const char *headers);
+static void OAIWaitRetryAfter(long seconds, const char *servername);
+static void OAIFreeXmlDoc(OAIFdwState *state);
 static OAIFdwState *GetServerInfo(const char *srvname);
 static List *GetMetadataFormats(OAIFdwState *state);
 static List *GetIdentity(OAIFdwState *state);
@@ -926,7 +973,7 @@ static List *GetIdentity(OAIFdwState *state)
 		}
 	}
 
-	xmlFreeDoc(state->xmldoc);
+	OAIFreeXmlDoc(state);
 
 	elog(DEBUG2, "%s => finished", __func__);
 
@@ -1002,7 +1049,7 @@ static List *GetSets(OAIFdwState *state)
 		}
 	}
 
-	xmlFreeDoc(state->xmldoc);
+	OAIFreeXmlDoc(state);
 
 	elog(DEBUG2, "%s => finished", __func__);
 
@@ -1085,7 +1132,7 @@ static List *GetMetadataFormats(OAIFdwState *state)
 		}
 	}
 
-	xmlFreeDoc(state->xmldoc);
+	OAIFreeXmlDoc(state);
 
 	elog(DEBUG2, "  %s => finished.", __func__);
 
@@ -1119,16 +1166,30 @@ static int CheckURL(char *url)
 	return OAI_SUCCESS;
 }
 
+/*
+ * WriteMemoryCallback / HeaderCallbackFunction
+ * --------------------------------------------
+ * These run inside curl_easy_perform(). They must therefore never raise a
+ * PostgreSQL error: doing so longjmps straight out of libcurl, leaving its
+ * handle and connection state inconsistent and skipping every cleanup below
+ * the transfer. For the same reason they use malloc() rather than palloc(),
+ * whose out-of-memory path throws.
+ *
+ * A failure is recorded in the MemoryStruct and signalled to libcurl by
+ * returning a short count, which makes curl_easy_perform() fail cleanly with
+ * CURLE_WRITE_ERROR; the caller then reports it as an ordinary error.
+ */
 static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp)
 {
 	size_t realsize = size * nmemb;
 	struct MemoryStruct *mem = (struct MemoryStruct *)userp;
-	char *ptr = repalloc(mem->memory, mem->size + realsize + 1);
+	char *ptr = realloc(mem->memory, mem->size + realsize + 1);
 
 	if (!ptr)
-		ereport(ERROR,
-				(errcode(ERRCODE_FDW_OUT_OF_MEMORY),
-				 errmsg("out of memory (repalloc returned NULL)")));
+	{
+		mem->alloc_failed = true;
+		return 0; /* abort the transfer */
+	}
 
 	mem->memory = ptr;
 	memcpy(&(mem->memory[mem->size]), contents, realsize);
@@ -1143,27 +1204,35 @@ static size_t HeaderCallbackFunction(char *contents, size_t size, size_t nmemb, 
 	size_t nbytes = size * nmemb;
 	struct MemoryStruct *mem = (struct MemoryStruct *)userp;
 	char *ptr;
-	char *line = palloc(nbytes + 1);
-	size_t linelen = nbytes;
+	char line[256];
+	size_t linelen = Min(nbytes, sizeof(line) - 1);
 
-	memcpy(line, contents, nbytes);
-	line[nbytes] = '\0';
+	memcpy(line, contents, linelen);
+	line[linelen] = '\0';
 
 	while (linelen > 0 && (line[linelen - 1] == '\r' || line[linelen - 1] == '\n'))
 		line[--linelen] = '\0';
 
+	/*
+	 * Record an unexpected content-type instead of warning from here: this
+	 * runs inside libcurl, where raising an error is unsafe and even a WARNING
+	 * would allocate. The caller emits the warning once the transfer is done.
+	 */
 	if (pg_strncasecmp(line, "content-type:", 13) == 0 &&
 		pg_strncasecmp(line, "content-type: text/xml", 22) != 0 &&
 		pg_strncasecmp(line, "content-type: application/xml", 29) != 0)
 	{
-		elog(WARNING, "unsupported content-type: \"%s\"", line);
+		strlcpy(mem->unsupported_ctype, line, sizeof(mem->unsupported_ctype));
 	}
-	pfree(line);
 
-	ptr = repalloc(mem->memory, mem->size + nbytes + 1);
+	ptr = realloc(mem->memory, mem->size + nbytes + 1);
+
 	if (!ptr)
-		ereport(ERROR, (errcode(ERRCODE_FDW_OUT_OF_MEMORY),
-						errmsg("[%s] out of memory", __func__)));
+	{
+		mem->alloc_failed = true;
+		return 0; /* abort the transfer */
+	}
+
 	mem->memory = ptr;
 	memcpy(&(mem->memory[mem->size]), contents, nbytes);
 	mem->size += nbytes;
@@ -1321,12 +1390,156 @@ static int CURLProgressCallback(void *clientp, curl_off_t dltotal, curl_off_t dl
  * Executes the HTTP request to the OAI repository using the
  * libcurl library.
  */
+/*
+ * OAIFreeXmlDoc
+ * -------------
+ * Releases the parsed response document and clears the pointer.
+ *
+ * libxml2 allocates these documents with malloc(), so they are invisible to
+ * PostgreSQL's memory contexts and are not reclaimed when a query ends or a
+ * transaction aborts - they have to be freed explicitly on every path.
+ * Clearing the pointer keeps a later call from freeing it a second time.
+ */
+static void
+OAIFreeXmlDoc(OAIFdwState *state)
+{
+	if (state->xmldoc)
+	{
+		xmlFreeDoc(state->xmldoc);
+		state->xmldoc = NULL;
+	}
+}
+
+/*
+ * ParseRetryAfter
+ * ---------------
+ * Looks for a "Retry-After" header in the raw header block collected during a
+ * request and returns the delay it asks for, in seconds.
+ *
+ * RFC 9110 section 10.2.3 permits either delta-seconds or an HTTP-date, and
+ * both forms are accepted here. When a request followed redirects the header
+ * block holds one set of headers per hop, so the last occurrence wins.
+ *
+ * Returns -1 when no usable Retry-After header is present.
+ */
+static long
+ParseRetryAfter(const char *headers)
+{
+	static const char field[] = "retry-after:";
+	const char *line;
+	long result = -1;
+
+	if (!headers)
+		return -1;
+
+	for (line = headers; *line != '\0';)
+	{
+		const char *eol = strpbrk(line, "\r\n");
+		size_t len = eol ? (size_t)(eol - line) : strlen(line);
+
+		if (len > sizeof(field) - 1 &&
+			pg_strncasecmp(line, field, sizeof(field) - 1) == 0)
+		{
+			const char *v = line + sizeof(field) - 1;
+			char value[128];
+			size_t vlen;
+
+			/* skip the optional whitespace between colon and field value */
+			while (v < line + len && (*v == ' ' || *v == '\t'))
+				v++;
+
+			vlen = (size_t)(line + len - v);
+
+			if (vlen > 0 && vlen < sizeof(value))
+			{
+				char *tail;
+				long secs;
+
+				memcpy(value, v, vlen);
+				value[vlen] = '\0';
+
+				/* delta-seconds */
+				secs = strtol(value, &tail, 10);
+
+				if (tail != value && *tail == '\0' && secs >= 0)
+					result = secs;
+				else
+				{
+					/* HTTP-date */
+					time_t when = curl_getdate(value, NULL);
+
+					if (when != (time_t)-1)
+					{
+						double diff = difftime(when, time(NULL));
+
+						result = diff > 0 ? (long)diff : 0;
+					}
+				}
+			}
+		}
+
+		if (!eol)
+			break;
+
+		line = eol + strspn(eol, "\r\n");
+	}
+
+	return result;
+}
+
+/*
+ * OAIWaitRetryAfter
+ * -----------------
+ * Sleeps for the delay a repository requested through its Retry-After header.
+ *
+ * The wait is broken into one second slices driven by WaitLatch so that query
+ * cancellation and backend termination stay responsive - a plain pg_usleep()
+ * would ignore both until the whole delay had elapsed. Delays beyond
+ * OAI_FDW_MAX_RETRY_AFTER are clamped, so that a repository cannot pin a
+ * backend down for an arbitrary amount of time.
+ */
+static void
+OAIWaitRetryAfter(long seconds, const char *servername)
+{
+	long remaining = seconds;
+
+	if (remaining <= 0)
+		return;
+
+	if (remaining > OAI_FDW_MAX_RETRY_AFTER)
+	{
+		elog(WARNING, "'%s' asked to be retried after %ld seconds; waiting %d seconds instead",
+			 servername, remaining, OAI_FDW_MAX_RETRY_AFTER);
+		remaining = OAI_FDW_MAX_RETRY_AFTER;
+	}
+
+	elog(DEBUG1, "%s: honouring Retry-After from '%s': waiting %ld seconds",
+		 __func__, servername, remaining);
+
+	while (remaining > 0)
+	{
+		int rc;
+
+		CHECK_FOR_INTERRUPTS();
+
+		rc = WaitLatch(MyLatch, OAI_WAIT_LATCH_FLAGS, 1000L, PG_WAIT_EXTENSION);
+
+		if (rc & WL_LATCH_SET)
+			ResetLatch(MyLatch);
+
+		remaining--;
+	}
+
+	CHECK_FOR_INTERRUPTS();
+}
+
 static int ExecuteOAIRequest(OAIFdwState *state)
 {
 
 	CURL *curl;
 	CURLcode res;
 	StringInfoData url_buffer;
+	StringInfoData request_url;
 	StringInfoData user_agent;
 	char errbuf[CURL_ERROR_SIZE];
 	struct MemoryStruct chunk;
@@ -1346,10 +1559,27 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 	if (state->request_timeout)
 		request_timeout = state->request_timeout;
 
-	chunk.memory = palloc(1);
-	chunk.size = 0; /* no data at this point */
-	chunk_header.memory = palloc(1);
-	chunk_header.size = 0; /* no data at this point */
+	/*
+	 * These buffers are filled by libcurl callbacks, so they are malloc'd
+	 * rather than palloc'd; see WriteMemoryCallback. They are released on
+	 * every exit path below.
+	 */
+	memset(&chunk, 0, sizeof(chunk));
+	memset(&chunk_header, 0, sizeof(chunk_header));
+	chunk.memory = malloc(1);
+	chunk_header.memory = malloc(1);
+
+	if (!chunk.memory || !chunk_header.memory)
+	{
+		free(chunk.memory);
+		free(chunk_header.memory);
+		ereport(ERROR,
+				(errcode(ERRCODE_FDW_OUT_OF_MEMORY),
+				 errmsg("%s: out of memory", __func__)));
+	}
+
+	chunk.memory[0] = '\0';
+	chunk_header.memory[0] = '\0';
 
 	initStringInfo(&url_buffer);
 
@@ -1503,16 +1733,40 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 		if (strcmp(state->requestVerb, OAI_REQUEST_LISTMETADATAFORMATS) != 0 &&
 			strcmp(state->requestVerb, OAI_REQUEST_LISTSETS) != 0 &&
 			strcmp(state->requestVerb, OAI_REQUEST_IDENTIFY) != 0)
+		{
+			/*
+			 * Nothing was requested, so no document is produced. Clear any
+			 * document left over from a previous request, so that the caller
+			 * cannot mistake it for the response to this one and free it twice.
+			 */
+			OAIFreeXmlDoc(state);
+			free(chunk.memory);
+			free(chunk_header.memory);
+			curl_easy_cleanup(curl);
+
 			return OAI_UNKNOWN_REQUEST;
+		}
 	}
 
-	elog(DEBUG1, "GET \"%s?%s\"", state->url, url_buffer.data);
+	/*
+	 * Build the full request URL. OAI-PMH arguments used to be sent through
+	 * CURLOPT_POSTFIELDS, which made every request a POST: libcurl turns a POST
+	 * into a GET on a 301/302 and drops the body while doing so, meaning that a
+	 * redirected request reached the repository with no arguments at all. Using
+	 * a plain GET with a query string keeps the arguments across redirects.
+	 */
+	initStringInfo(&request_url);
+	appendStringInfo(&request_url, "%s%c%s", state->url,
+					 strchr(state->url, '?') ? '&' : '?', url_buffer.data);
+
+	elog(DEBUG1, "GET \"%s\"", request_url.data);
 
 	if (curl)
 	{
 		errbuf[0] = 0;
 
-		curl_easy_setopt(curl, CURLOPT_URL, state->url);
+		curl_easy_setopt(curl, CURLOPT_URL, request_url.data);
+		curl_easy_setopt(curl, CURLOPT_HTTPGET, 1L);
 
 #if ((LIBCURL_VERSION_MAJOR == 7 && LIBCURL_VERSION_MINOR < 85) || LIBCURL_VERSION_MAJOR < 7)
 		curl_easy_setopt(curl, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
@@ -1580,7 +1834,6 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 		curl_easy_setopt(curl, CURLOPT_DEBUGFUNCTION, CURLDebugCallback);
 		curl_easy_setopt(curl, CURLOPT_DEBUGDATA, NULL);
 
-		curl_easy_setopt(curl, CURLOPT_POSTFIELDS, url_buffer.data);
 		curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, HeaderCallbackFunction);
 		curl_easy_setopt(curl, CURLOPT_HEADERDATA, (void *)&chunk_header);
 		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
@@ -1612,23 +1865,80 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 
 		for (long i = 1; res != CURLE_OK && i <= maxretries; i++)
 		{
-			elog(WARNING, "request to '%s' failed (%ld/%ld)",
-				 state->foreign_server->servername, i, maxretries);
+			long attempt_code = 0;
+
+			curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &attempt_code);
+
+			/*
+			 * OAI-PMH flow control (spec section 3.4): "503 Service Unavailable"
+			 * is the repository asking the harvester to slow down, not a failure.
+			 * Retrying it immediately - as every other error is retried - would
+			 * simply hammer a server that has just said it is overloaded, so the
+			 * requested delay is honoured before the next attempt.
+			 *
+			 * Note that the Retry-After header has to be read before the header
+			 * buffer is cleared for the next attempt.
+			 */
+			if (attempt_code == OAI_HTTP_SERVICE_UNAVAILABLE)
+			{
+				long retry_after = ParseRetryAfter(chunk_header.memory);
+
+				if (retry_after < 0)
+					retry_after = OAI_FDW_DEFAULT_RETRY_AFTER;
+
+				elog(WARNING, "'%s' is applying flow control (HTTP 503), retrying in %ld seconds (%ld/%ld)",
+					 state->foreign_server->servername, retry_after, i, maxretries);
+
+				OAIWaitRetryAfter(retry_after, state->foreign_server->servername);
+			}
+			else
+				elog(WARNING, "request to '%s' failed (%ld/%ld)",
+					 state->foreign_server->servername, i, maxretries);
 
 			/* discard any partial data from the failed attempt */
 			chunk.size = 0;
 			chunk.memory[0] = '\0';
+			chunk.alloc_failed = false;
 			chunk_header.size = 0;
 			chunk_header.memory[0] = '\0';
+			chunk_header.alloc_failed = false;
+			chunk_header.unsupported_ctype[0] = '\0';
 
 			res = curl_easy_perform(curl);
 		}
+
+		/*
+		 * Report the conditions the libcurl callbacks recorded rather than
+		 * raising: an allocation failure is fatal, an unexpected content-type
+		 * is only worth a warning.
+		 */
+		if (chunk.alloc_failed || chunk_header.alloc_failed)
+		{
+			free(chunk.memory);
+			free(chunk_header.memory);
+			curl_slist_free_all(headers);
+			curl_easy_cleanup(curl);
+
+			ereport(ERROR,
+					(errcode(ERRCODE_FDW_OUT_OF_MEMORY),
+					 errmsg("%s: out of memory while reading the response from '%s'",
+							__func__, state->url)));
+		}
+
+		if (chunk_header.unsupported_ctype[0] != '\0')
+			elog(WARNING, "unsupported content-type: \"%s\"", chunk_header.unsupported_ctype);
 
 		if (res != CURLE_OK)
 		{
 			long response_code = 0;
 			bool has_body = (chunk.size > 0 && chunk.memory);
 			StringInfoData display_body;
+
+			/*
+			 * Retrieve the status code up front: it is reported in the messages
+			 * below, including the DEBUG1 line taken when there is no body.
+			 */
+			curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
 
 			initStringInfo(&display_body);
 
@@ -1655,20 +1965,21 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 			{
 				elog(DEBUG1, "%s: no response body available for HTTP error %ld", __func__, response_code);
 			}
-			curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
-
 			if (chunk.memory)
-				pfree(chunk.memory);
+				free(chunk.memory);
 			if (chunk_header.memory)
-				pfree(chunk_header.memory);
+				free(chunk_header.memory);
 			curl_slist_free_all(headers);
 			curl_easy_cleanup(curl);
 
 			ereport(ERROR,
 					(errcode(ERRCODE_FDW_UNABLE_TO_CREATE_EXECUTION),
 					 errmsg("OAI request failed: HTTP %ld", response_code),
-					 errhint("Check your request parameters and try again."),
-					 errdetail("URL: \"%s\"", url_buffer.data)));
+					 response_code == OAI_HTTP_SERVICE_UNAVAILABLE
+						 ? errhint("The repository is still applying flow control after %ld retries. Raise '%s' on the FOREIGN SERVER or harvest again later.",
+								   maxretries, OAI_SERVER_OPTION_CONNECTRETRY)
+						 : errhint("Check your request parameters and try again."),
+					 errdetail("URL: \"%s\"", request_url.data)));
 		}
 		else
 		{
@@ -1685,9 +1996,9 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 	}
 
 	if (chunk.memory)
-		pfree(chunk.memory);
+		free(chunk.memory);
 	if (chunk_header.memory)
-		pfree(chunk_header.memory);
+		free(chunk_header.memory);
 	curl_slist_free_all(headers);
 	curl_easy_cleanup(curl);
 
@@ -2195,6 +2506,13 @@ static void OAIFdwBeginForeignScan(ForeignScanState *node, int eflags)
 	state->oaicxt = AllocSetContextCreate(CurrentMemoryContext,
 										  "oai_fdw_ctx",
 										  ALLOCSET_DEFAULT_SIZES);
+	/*
+	 * Kept separate from oaicxt, which is reset for every page: the resumption
+	 * token has to outlive the page it arrived with.
+	 */
+	state->tokencxt = AllocSetContextCreate(CurrentMemoryContext,
+											"oai_fdw_token_ctx",
+											ALLOCSET_SMALL_SIZES);
 }
 
 static OAIRecord *FetchNextOAIRecord(OAIFdwState **state)
@@ -2352,14 +2670,26 @@ static TupleTableSlot *OAIFdwIterateForeignScan(ForeignScanState *node)
 	old_cxt = MemoryContextSwitchTo(state->oaicxt);
 
 	/*
-	 * Load OAI records in case that this function is called for the first time
-	 * or a page contains a resumption token and the index reached the end of
-	 * the page.
+	 * Load the first page when this function is called for the first time.
 	 */
-	if (state->rowcount == 0 || (state->resumptionToken && state->pageindex == state->pagesize))
+	if (state->rowcount == 0)
 		LoadOAIRecords(&state);
 
 	record = FetchNextOAIRecord(&state);
+
+	/*
+	 * The current page is exhausted. Keep requesting pages for as long as the
+	 * repository hands out resumption tokens and none of them has produced a
+	 * record yet: a page may legitimately come back empty while still carrying
+	 * a token, and returning here would end the scan silently, dropping every
+	 * record behind that token. ExecuteOAIRequest() checks for interrupts, so
+	 * the loop stays cancellable.
+	 */
+	while (record == NULL && state->resumptionToken)
+	{
+		LoadOAIRecords(&state);
+		record = FetchNextOAIRecord(&state);
+	}
 
 	MemoryContextSwitchTo(old_cxt);
 
@@ -2424,201 +2754,249 @@ static void LoadOAIRecords(struct OAIFdwState **state)
 	xmlNodePtr headerElements;
 	xmlNodePtr ListRecordsRequest;
 
+	char *token = NULL;
+
 	elog(DEBUG2, "%s called.", __func__);
 
+	/*
+	 * The records of the page that has just been consumed are not needed any
+	 * more, so the scan context is reset before the next page is requested.
+	 * Without this, a harvest accumulates every page it has already returned
+	 * and memory use grows with the size of the whole repository rather than
+	 * with the size of a single page.
+	 *
+	 * The resumption token pointing at the next page was allocated in that
+	 * same context, so it has to be carried across the reset. tokencxt is
+	 * reset first, releasing the copy made for the previous page - which has
+	 * by now been used to build the request that produced this one.
+	 */
+	if ((*state)->resumptionToken)
+	{
+		MemoryContextReset((*state)->tokencxt);
+		token = MemoryContextStrdup((*state)->tokencxt, (*state)->resumptionToken);
+	}
+
+	MemoryContextReset((*state)->oaicxt);
+
+	(*state)->resumptionToken = token;
+	/* Removes all retrieved records, if any.*/
+	(*state)->records = NIL;
 	/* Sets the page size and index to zero.*/
 	(*state)->pagesize = 0;
 	(*state)->pageindex = 0;
-	/* Removes all retrieved records, if any.*/
-	(*state)->records = NIL;
 
 	if (ExecuteOAIRequest(*state) == OAI_SUCCESS)
 	{
-		/*
-		 * After executing an OAI request the resumption token is no longer
-		 * needed. A new resumption token will be loaded in case there are
-		 * still records left to be retrieved.
-		 */
-		(*state)->resumptionToken = NULL;
-
-		if (!(*state)->xmldoc)
-			ereport(ERROR, (errmsg("invalid XML response from '%s'", (*state)->url)));
-
-		xmlroot = xmlDocGetRootElement((*state)->xmldoc);
-
-		if (!xmlroot)
-			ereport(ERROR, (errmsg("empty XML document from '%s'", (*state)->url)));
-
-		if (strcmp((*state)->requestVerb, OAI_REQUEST_LISTIDENTIFIERS) == 0)
+		PG_TRY();
 		{
-			for (oaipmh = xmlroot->children; oaipmh != NULL; oaipmh = oaipmh->next)
+			/*
+			 * After executing an OAI request the resumption token is no longer
+			 * needed. A new resumption token will be loaded in case there are
+			 * still records left to be retrieved.
+			 */
+			(*state)->resumptionToken = NULL;
+
+			if (!(*state)->xmldoc)
+				ereport(ERROR, (errmsg("invalid XML response from '%s'", (*state)->url)));
+
+			xmlroot = xmlDocGetRootElement((*state)->xmldoc);
+
+			if (!xmlroot)
+				ereport(ERROR, (errmsg("empty XML document from '%s'", (*state)->url)));
+
+			if (strcmp((*state)->requestVerb, OAI_REQUEST_LISTIDENTIFIERS) == 0)
 			{
-				if (xmlStrcmp(oaipmh->name, (xmlChar *)"error") == 0)
-					RaiseOAIException(oaipmh);
-				else if (xmlStrcmp(oaipmh->name, (xmlChar *)(*state)->requestVerb) != 0)
-					continue;
-
-				for (ListRecordsRequest = oaipmh->children; ListRecordsRequest != NULL; ListRecordsRequest = ListRecordsRequest->next)
+				for (oaipmh = xmlroot->children; oaipmh != NULL; oaipmh = oaipmh->next)
 				{
+					if (xmlStrcmp(oaipmh->name, (xmlChar *)"error") == 0)
+						RaiseOAIException(oaipmh);
+					else if (xmlStrcmp(oaipmh->name, (xmlChar *)(*state)->requestVerb) != 0)
+						continue;
 
-					if (xmlStrcmp(ListRecordsRequest->name, (xmlChar *)OAI_RESPONSE_ELEMENT_RESUMPTIONTOKEN) == 0)
-					{
-						xmlChar *tokenContent = xmlNodeGetContent(ListRecordsRequest);
-						if (tokenContent && strlen((char *)tokenContent) != 0)
-						{
-							(*state)->resumptionToken = pstrdup((char *)tokenContent);
-							elog(DEBUG2, "  %s: (%s): Token detected in current page > %s", __func__, (*state)->requestVerb, (char *)tokenContent);
-						}
-						xmlFree(tokenContent);
-					}
-					else if (xmlStrcmp(ListRecordsRequest->name, (xmlChar *)OAI_RESPONSE_ELEMENT_HEADER) == 0)
+					for (ListRecordsRequest = oaipmh->children; ListRecordsRequest != NULL; ListRecordsRequest = ListRecordsRequest->next)
 					{
 
-						OAIRecord *oai = (OAIRecord *)palloc0(sizeof(OAIRecord));
-						xmlChar *status;
-
-						oai->setsArray = NULL;
-						oai->isDeleted = false;
-						oai->metadataPrefix = pstrdup((*state)->metadataPrefix);
-						status = xmlGetProp(ListRecordsRequest, (xmlChar *)OAI_NODE_STATUS);
-
-						if (status)
+						if (xmlStrcmp(ListRecordsRequest->name, (xmlChar *)OAI_RESPONSE_ELEMENT_RESUMPTIONTOKEN) == 0)
 						{
-							if (xmlStrcmp(status, (xmlChar *)OAI_RESPONSE_ELEMENT_DELETED) == 0)
-								oai->isDeleted = true;
-							xmlFree(status);
-						}
-
-						for (headerElements = ListRecordsRequest->children; headerElements != NULL; headerElements = headerElements->next)
-						{
-
-							xmlBufferPtr buffer = xmlBufferCreate();
-							xmlNodeDump(buffer, (*state)->xmldoc, headerElements->children, 0, 0);
-
-							if (xmlStrcmp(headerElements->name, (xmlChar *)OAI_RESPONSE_ELEMENT_IDENTIFIER) == 0)
-								oai->identifier = pstrdup((char *)buffer->content);
-							else if (xmlStrcmp(headerElements->name, (xmlChar *)OAI_RESPONSE_ELEMENT_SETSPEC) == 0)
+							xmlChar *tokenContent = xmlNodeGetContent(ListRecordsRequest);
+							if (tokenContent && strlen((char *)tokenContent) != 0)
 							{
-								char *array_element = pstrdup((char *)buffer->content);
-								appendTextArray(&oai->setsArray, array_element);
+								(*state)->resumptionToken = pstrdup((char *)tokenContent);
+								elog(DEBUG2, "  %s: (%s): Token detected in current page > %s", __func__, (*state)->requestVerb, (char *)tokenContent);
 							}
-							else if (xmlStrcmp(headerElements->name, (xmlChar *)OAI_RESPONSE_ELEMENT_DATESTAMP) == 0)
-								oai->datestamp = pstrdup((char *)buffer->content);
-
-							xmlBufferFree(buffer);
+							xmlFree(tokenContent);
 						}
+						else if (xmlStrcmp(ListRecordsRequest->name, (xmlChar *)OAI_RESPONSE_ELEMENT_HEADER) == 0)
+						{
 
-						elog(DEBUG2, "  %s (%s): Appending record list -> %s", __func__, (*state)->requestVerb, oai->identifier);
+							OAIRecord *oai = (OAIRecord *)palloc0(sizeof(OAIRecord));
+							xmlChar *status;
 
-						(*state)->records = lappend((*state)->records, oai);
-						(*state)->pagesize++;
+							oai->setsArray = NULL;
+							oai->isDeleted = false;
+							oai->metadataPrefix = pstrdup((*state)->metadataPrefix);
+							status = xmlGetProp(ListRecordsRequest, (xmlChar *)OAI_NODE_STATUS);
+
+							if (status)
+							{
+								if (xmlStrcmp(status, (xmlChar *)OAI_RESPONSE_ELEMENT_DELETED) == 0)
+									oai->isDeleted = true;
+								xmlFree(status);
+							}
+
+							for (headerElements = ListRecordsRequest->children; headerElements != NULL; headerElements = headerElements->next)
+							{
+								/*
+								 * OAI header values are plain text, so they must be read with
+								 * xmlNodeGetContent(), which resolves XML escapes. Serialising
+								 * the node instead (xmlNodeDump) yields the *escaped* markup and
+								 * would turn an identifier such as "oai:ex.org/a&b" into
+								 * "oai:ex.org/a&amp;b".
+								 */
+								xmlChar *content = xmlNodeGetContent(headerElements);
+
+								if (!content)
+									continue;
+
+								if (xmlStrcmp(headerElements->name, (xmlChar *)OAI_RESPONSE_ELEMENT_IDENTIFIER) == 0)
+									oai->identifier = pstrdup((char *)content);
+								else if (xmlStrcmp(headerElements->name, (xmlChar *)OAI_RESPONSE_ELEMENT_SETSPEC) == 0)
+									appendTextArray(&oai->setsArray, pstrdup((char *)content));
+								else if (xmlStrcmp(headerElements->name, (xmlChar *)OAI_RESPONSE_ELEMENT_DATESTAMP) == 0)
+									oai->datestamp = pstrdup((char *)content);
+
+								xmlFree(content);
+							}
+
+							elog(DEBUG2, "  %s (%s): Appending record list -> %s", __func__, (*state)->requestVerb, oai->identifier);
+
+							(*state)->records = lappend((*state)->records, oai);
+							(*state)->pagesize++;
+						}
 					}
 				}
 			}
-		}
-		else if (strcmp((*state)->requestVerb, OAI_REQUEST_LISTRECORDS) == 0 || strcmp((*state)->requestVerb, OAI_REQUEST_GETRECORD) == 0)
-		{
-
-			for (oaipmh = xmlroot->children; oaipmh != NULL; oaipmh = oaipmh->next)
+			else if (strcmp((*state)->requestVerb, OAI_REQUEST_LISTRECORDS) == 0 || strcmp((*state)->requestVerb, OAI_REQUEST_GETRECORD) == 0)
 			{
 
-				if (xmlStrcmp(oaipmh->name, (xmlChar *)"error") == 0)
-					RaiseOAIException(oaipmh);
-				else if (xmlStrcmp(oaipmh->name, (xmlChar *)(*state)->requestVerb) != 0)
-					continue;
-
-				for (ListRecordsRequest = oaipmh->children; ListRecordsRequest != NULL; ListRecordsRequest = ListRecordsRequest->next)
+				for (oaipmh = xmlroot->children; oaipmh != NULL; oaipmh = oaipmh->next)
 				{
 
-					if (xmlStrcmp(ListRecordsRequest->name, (xmlChar *)OAI_RESPONSE_ELEMENT_RESUMPTIONTOKEN) == 0)
-					{
-						xmlChar *tokenContent = xmlNodeGetContent(ListRecordsRequest);
-						if (tokenContent && strlen((char *)tokenContent) != 0)
-							(*state)->resumptionToken = pstrdup((char *)tokenContent);
-						xmlFree(tokenContent);
-					}
-					else if (xmlStrcmp(ListRecordsRequest->name, (xmlChar *)OAI_RESPONSE_ELEMENT_RECORD) == 0)
-					{
-						OAIRecord *oai = (OAIRecord *)palloc0(sizeof(OAIRecord));
-						xmlNodePtr record;
+					if (xmlStrcmp(oaipmh->name, (xmlChar *)"error") == 0)
+						RaiseOAIException(oaipmh);
+					else if (xmlStrcmp(oaipmh->name, (xmlChar *)(*state)->requestVerb) != 0)
+						continue;
 
-						oai->metadataPrefix = pstrdup((*state)->metadataPrefix);
-						oai->isDeleted = false;
-						oai->setsArray = NULL;
+					for (ListRecordsRequest = oaipmh->children; ListRecordsRequest != NULL; ListRecordsRequest = ListRecordsRequest->next)
+					{
 
-						for (record = ListRecordsRequest->children; record != NULL; record = record->next)
+						if (xmlStrcmp(ListRecordsRequest->name, (xmlChar *)OAI_RESPONSE_ELEMENT_RESUMPTIONTOKEN) == 0)
 						{
+							xmlChar *tokenContent = xmlNodeGetContent(ListRecordsRequest);
+							if (tokenContent && strlen((char *)tokenContent) != 0)
+								(*state)->resumptionToken = pstrdup((char *)tokenContent);
+							xmlFree(tokenContent);
+						}
+						else if (xmlStrcmp(ListRecordsRequest->name, (xmlChar *)OAI_RESPONSE_ELEMENT_RECORD) == 0)
+						{
+							OAIRecord *oai = (OAIRecord *)palloc0(sizeof(OAIRecord));
+							xmlNodePtr record;
 
-							if (xmlStrcmp(record->name, (xmlChar *)OAI_RESPONSE_ELEMENT_METADATA) == 0)
+							oai->metadataPrefix = pstrdup((*state)->metadataPrefix);
+							oai->isDeleted = false;
+							oai->setsArray = NULL;
+
+							for (record = ListRecordsRequest->children; record != NULL; record = record->next)
 							{
 
-								/* Copy necessary to include the namespaces in the buffer output */
-								xmlNodePtr copy = xmlCopyNode(record->children, 1);
-
-								xmlBufferPtr buffer = xmlBufferCreate();
-								xmlNodeDump(buffer, (*state)->xmldoc, copy, 0, 1);
-
-								elog(DEBUG2, "  %s (%s): XML Buffer size: %d", __func__, (*state)->requestVerb, buffer->size);
-
-								oai->content = pstrdup((char *)buffer->content);
-
-								elog(DEBUG2, "  %s (%s): freeing node copy.", __func__, (*state)->requestVerb);
-								xmlFreeNode(copy);
-								elog(DEBUG2, "  %s (%s): freeing xml content buffer.", __func__, (*state)->requestVerb);
-								xmlBufferFree(buffer);
-							}
-
-							if (xmlStrcmp(record->name, (xmlChar *)OAI_RESPONSE_ELEMENT_HEADER) == 0)
-							{
-
-								xmlChar *status = xmlGetProp(record, (xmlChar *)OAI_NODE_STATUS);
-								if (status)
+								if (xmlStrcmp(record->name, (xmlChar *)OAI_RESPONSE_ELEMENT_METADATA) == 0)
 								{
-									if (xmlStrcmp(status, (xmlChar *)OAI_RESPONSE_ELEMENT_DELETED) == 0)
-										oai->isDeleted = true;
-									xmlFree(status);
-								}
 
-								for (headerElements = record->children; headerElements != NULL; headerElements = headerElements->next)
-								{
+									/* Copy necessary to include the namespaces in the buffer output */
+									xmlNodePtr copy = xmlCopyNode(record->children, 1);
 
 									xmlBufferPtr buffer = xmlBufferCreate();
-									xmlNodeDump(buffer, (*state)->xmldoc, headerElements->children, 0, 0);
+									xmlNodeDump(buffer, (*state)->xmldoc, copy, 0, 1);
 
-									if (xmlStrcmp(headerElements->name, (xmlChar *)OAI_RESPONSE_ELEMENT_IDENTIFIER) == 0)
-									{
-										oai->identifier = pstrdup((char *)buffer->content);
-										elog(DEBUG2, "  %s (%s): setting identifier to OAI object > '%s'", __func__, (*state)->requestVerb, oai->identifier);
-									}
-									else if (xmlStrcmp(headerElements->name, (xmlChar *)OAI_RESPONSE_ELEMENT_SETSPEC) == 0)
-									{
-										char *array_element = pstrdup((char *)buffer->content);
-										elog(DEBUG2, "  %s (%s): setting setspec to OAI object > '%s'", __func__, (*state)->requestVerb, array_element);
+									elog(DEBUG2, "  %s (%s): XML Buffer size: %d", __func__, (*state)->requestVerb, buffer->size);
 
-										appendTextArray(&oai->setsArray, array_element);
-									}
-									else if (xmlStrcmp(headerElements->name, (xmlChar *)OAI_RESPONSE_ELEMENT_DATESTAMP) == 0)
-									{
-										oai->datestamp = pstrdup((char *)buffer->content);
-										elog(DEBUG2, "  %s (%s): setting datestamp to OAI object > '%s'", __func__, (*state)->requestVerb, oai->datestamp);
-									}
+									oai->content = pstrdup((char *)buffer->content);
 
-									elog(DEBUG3, "  %s (%s): freeing header buffer.", __func__, (*state)->requestVerb);
+									elog(DEBUG2, "  %s (%s): freeing node copy.", __func__, (*state)->requestVerb);
+									xmlFreeNode(copy);
+									elog(DEBUG2, "  %s (%s): freeing xml content buffer.", __func__, (*state)->requestVerb);
 									xmlBufferFree(buffer);
 								}
-							}
-						}
 
-						(*state)->records = lappend((*state)->records, oai);
-						(*state)->pagesize++;
+								if (xmlStrcmp(record->name, (xmlChar *)OAI_RESPONSE_ELEMENT_HEADER) == 0)
+								{
+
+									xmlChar *status = xmlGetProp(record, (xmlChar *)OAI_NODE_STATUS);
+									if (status)
+									{
+										if (xmlStrcmp(status, (xmlChar *)OAI_RESPONSE_ELEMENT_DELETED) == 0)
+											oai->isDeleted = true;
+										xmlFree(status);
+									}
+
+									for (headerElements = record->children; headerElements != NULL; headerElements = headerElements->next)
+									{
+										/*
+										 * See the note in the ListIdentifiers branch above: header
+										 * values must be read with xmlNodeGetContent() so that XML
+										 * escapes are resolved into the plain text they represent.
+										 */
+										xmlChar *content = xmlNodeGetContent(headerElements);
+
+										if (!content)
+											continue;
+
+										if (xmlStrcmp(headerElements->name, (xmlChar *)OAI_RESPONSE_ELEMENT_IDENTIFIER) == 0)
+										{
+											oai->identifier = pstrdup((char *)content);
+											elog(DEBUG2, "  %s (%s): setting identifier to OAI object > '%s'", __func__, (*state)->requestVerb, oai->identifier);
+										}
+										else if (xmlStrcmp(headerElements->name, (xmlChar *)OAI_RESPONSE_ELEMENT_SETSPEC) == 0)
+										{
+											char *array_element = pstrdup((char *)content);
+											elog(DEBUG2, "  %s (%s): setting setspec to OAI object > '%s'", __func__, (*state)->requestVerb, array_element);
+
+											appendTextArray(&oai->setsArray, array_element);
+										}
+										else if (xmlStrcmp(headerElements->name, (xmlChar *)OAI_RESPONSE_ELEMENT_DATESTAMP) == 0)
+										{
+											oai->datestamp = pstrdup((char *)content);
+											elog(DEBUG2, "  %s (%s): setting datestamp to OAI object > '%s'", __func__, (*state)->requestVerb, oai->datestamp);
+										}
+
+										elog(DEBUG3, "  %s (%s): freeing header content.", __func__, (*state)->requestVerb);
+										xmlFree(content);
+									}
+								}
+							}
+
+							(*state)->records = lappend((*state)->records, oai);
+							(*state)->pagesize++;
+						}
 					}
 				}
 			}
 		}
+		PG_CATCH();
+		{
+			/*
+			 * RaiseOAIException() and the checks above raise errors from the
+			 * middle of the walk. Without this the document would never be
+			 * freed, and since libxml2 memory is outside PostgreSQL's memory
+			 * contexts it would stay lost for the life of the backend.
+			 */
+			OAIFreeXmlDoc(*state);
+			PG_RE_THROW();
+		}
+		PG_END_TRY();
 	}
 
-	if ((*state)->xmldoc)
-		xmlFreeDoc((*state)->xmldoc);
+	OAIFreeXmlDoc(*state);
 }
 
 static void appendTextArray(ArrayType **array, char *text_element)
@@ -2685,12 +3063,16 @@ static void OAIFdwReScanForeignScan(ForeignScanState *node)
 	if (state->oaicxt)
 		MemoryContextReset(state->oaicxt);
 
+	if (state->tokencxt)
+		MemoryContextReset(state->tokencxt);
+
+	OAIFreeXmlDoc(state);
+
 	state->rowcount = 0;
 	state->pageindex = 0;
 	state->pagesize = 0;
 	state->records = NIL;
 	state->resumptionToken = NULL;
-	state->xmldoc = NULL;
 }
 
 static void OAIFdwEndForeignScan(ForeignScanState *node)
@@ -2699,10 +3081,18 @@ static void OAIFdwEndForeignScan(ForeignScanState *node)
 	if (!state)
 		return;
 
+	OAIFreeXmlDoc(state);
+
 	if (state->oaicxt)
 	{
 		MemoryContextDelete(state->oaicxt);
 		state->oaicxt = NULL;
+	}
+
+	if (state->tokencxt)
+	{
+		MemoryContextDelete(state->tokencxt);
+		state->tokencxt = NULL;
 	}
 
 	elog(DEBUG2, "%s exit oai_fdw: so long .. \n", __func__);
