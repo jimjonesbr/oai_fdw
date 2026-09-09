@@ -1,5 +1,5 @@
 ### oai_fdw 1.14
-**unreleased**
+2026-09-09
 
 * Enhancements
 
