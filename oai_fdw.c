@@ -77,6 +77,7 @@
 #include "catalog/pg_type.h"
 #include "access/reloptions.h"
 #include "catalog/pg_namespace.h"
+#include "utils/acl.h"
 
 #define OAI_FDW_VERSION "1.15-dev"
 #define OAI_REQUEST_LISTRECORDS "ListRecords"
@@ -491,6 +492,7 @@ OAIFdwState *GetServerInfo(const char *srvname)
 	if (server)
 	{
 		ListCell *cell;
+		AclResult aclresult;
 		ForeignDataWrapper *fdw = GetForeignDataWrapper(server->fdwid);
 
 		if (!OidIsValid(fdw->fdwhandler) ||
@@ -498,6 +500,14 @@ OAIFdwState *GetServerInfo(const char *srvname)
 			ereport(ERROR,
 					(errcode(ERRCODE_FDW_INVALID_HANDLE),
 					 errmsg("FOREIGN SERVER '%s' does not belong to oai_fdw", srvname)));
+
+#if PG_VERSION_NUM >= 160000
+		aclresult = object_aclcheck(ForeignServerRelationId, server->serverid, GetUserId(), ACL_USAGE);
+#else
+		aclresult = pg_foreign_server_aclcheck(server->serverid, GetUserId(), ACL_USAGE);
+#endif
+		if (aclresult != ACLCHECK_OK)
+			aclcheck_error(aclresult, OBJECT_FOREIGN_SERVER, server->servername);
 
 		foreach (cell, server->options)
 		{
