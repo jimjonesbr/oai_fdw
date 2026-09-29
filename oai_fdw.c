@@ -2268,6 +2268,10 @@ static void deparseExpr(Expr *expr, OAIFdwState *state)
 		elog(DEBUG2, "  %s: case T_OpExpr", __func__);
 		oper = (OpExpr *)expr;
 
+		/* only binary operators can be pushed down */
+		if (list_length(oper->args) != 2)
+			break;
+
 		tuple = SearchSysCache1(OPEROID, ObjectIdGetDatum(oper->opno));
 
 		if (!HeapTupleIsValid(tuple))
