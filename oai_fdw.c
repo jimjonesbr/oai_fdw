@@ -865,6 +865,12 @@ Datum oai_fdw_validator(PG_FUNCTION_ARGS)
 				{
 					int return_code = CheckURL(defGetString(def));
 
+					/* requests are restricted to http and https (CURLOPT_PROTOCOLS_STR) */
+					if (return_code == OAI_SUCCESS && strcmp(opt->optname, OAI_NODE_URL) == 0 &&
+						pg_strncasecmp(defGetString(def), "http://", 7) != 0 &&
+						pg_strncasecmp(defGetString(def), "https://", 8) != 0)
+						return_code = OAI_FAIL;
+
 					if (return_code != OAI_SUCCESS)
 						ereport(ERROR,
 								(errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
@@ -908,6 +914,30 @@ Datum oai_fdw_validator(PG_FUNCTION_ARGS)
 								(errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
 								 errmsg("invalid %s: %s", def->defname, retry_str),
 								 errhint("expected values are positive integers (retry attempts in case of failure)")));
+				}
+
+				if (strcmp(opt->optname, OAI_SERVER_OPTION_REQUEST_REDIRECT) == 0)
+				{
+					bool redirect;
+
+					if (!parse_bool(defGetString(def), &redirect))
+						ereport(ERROR,
+								(errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
+								 errmsg("invalid %s: %s", def->defname, defGetString(def)),
+								 errhint("expected values are 'true' or 'false'")));
+				}
+
+				if (strcmp(opt->optname, OAI_SERVER_OPTION_REQUEST_MAX_REDIRECT) == 0)
+				{
+					char *endptr;
+					char *redirect_str = defGetString(def);
+					long redirect_val = strtol(redirect_str, &endptr, 10);
+
+					if (*endptr != '\0' || redirect_val < 0)
+						ereport(ERROR,
+								(errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
+								 errmsg("invalid %s: %s", def->defname, redirect_str),
+								 errhint("expected values are positive integers (maximum number of redirects)")));
 				}
 
 				if (strcmp(opt->optname, OAI_NODE_COLUMN_OPTION) == 0)
@@ -3811,7 +3841,7 @@ static void LoadOAIServerInfo(OAIFdwState *state)
 			{
 				char *tailpt;
 				char *maxredirect_str = defGetString(def);
-				state->requestMaxRedirect = strtol(maxredirect_str, &tailpt, 0);
+				state->requestMaxRedirect = strtol(maxredirect_str, &tailpt, 10);
 			}
 			else
 				elog(WARNING, "Invalid SERVER OPTION > '%s'", def->defname);

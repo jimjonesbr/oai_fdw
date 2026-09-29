@@ -66,15 +66,14 @@ ERROR:  invalid url: 'services.dnb.de/oai/repository'
 CREATE SERVER oai_server_err13 FOREIGN DATA WRAPPER oai_fdw 
 OPTIONS (url 'ftp://services.dnb.de/oai/repository',
          metadataprefix 'oai_dc');  
+ERROR:  invalid url: 'ftp://services.dnb.de/oai/repository'
 CREATE FOREIGN TABLE oai_table_err13 (
   status boolean         OPTIONS (oai_node 'status')
 ) 
 SERVER oai_server_err13 OPTIONS (metadataPrefix 'oai_dc');
+ERROR:  server "oai_server_err13" does not exist
 SELECT * FROM oai_table_err13 LIMIT 1;
-WARNING:  request to 'oai_server_err13' failed (1/3)
-WARNING:  request to 'oai_server_err13' failed (2/3)
-WARNING:  request to 'oai_server_err13' failed (3/3)
-ERROR:  OAI request failed: HTTP 0
+ERROR:  relation "oai_table_err13" does not exist at character 15
 -- URL with an invalid protocol
 CREATE SERVER oai_server_err14 FOREIGN DATA WRAPPER oai_fdw 
 OPTIONS (url 'foo://services.dnb.de/oai/repository',
@@ -118,23 +117,19 @@ CREATE SERVER oai_server_err18 FOREIGN DATA WRAPPER oai_fdw
 OPTIONS (url 'https://services.dnb.de/oai/repository',
          request_redirect 'foo',
          request_max_redirect '1');
-SELECT * FROM OAI_Identify('oai_server_err18');
-ERROR:  request_redirect requires a Boolean value
+ERROR:  invalid request_redirect: foo
 -- Invalid 'request_redirect' value (empty)
 CREATE SERVER oai_server_err19 FOREIGN DATA WRAPPER oai_fdw 
 OPTIONS (url 'https://services.dnb.de/oai/repository',
          request_redirect '',
          request_max_redirect '1');
 ERROR:  empty value in option 'request_redirect'
-SELECT * FROM OAI_Identify('oai_server_err18');
-ERROR:  request_redirect requires a Boolean value
 -- Invalid 'request_max_redirect' value
 CREATE SERVER oai_server_err20 FOREIGN DATA WRAPPER oai_fdw 
 OPTIONS (url 'https://services.dnb.de/oai/repository',
          request_redirect 'true',
          request_max_redirect 'foo');
-SELECT * FROM OAI_Identify('oai_server_err19');
-ERROR:  FOREIGN SERVER does not exist: 'oai_server_err19'
+ERROR:  invalid request_max_redirect: foo
 -- Invalid 'request_max_redirect' value (empty)
 CREATE SERVER oai_server_err21 FOREIGN DATA WRAPPER oai_fdw 
 OPTIONS (url 'https://services.dnb.de/oai/repository',
@@ -160,8 +155,6 @@ OPTIONS (url 'https://services.dnb.de/oai/repository',
          metadataprefix 'oai_dc',
          request_timeout 'foo');         
 ERROR:  invalid request_timeout: foo
-SELECT * FROM OAI_Identify('oai_server_err21');
-ERROR:  FOREIGN SERVER does not exist: 'oai_server_err21'
 -- Unknown COLUMN OPTION value
 CREATE FOREIGN TABLE oai_table_err1 (
   id text                OPTIONS (oai_node 'foo'),
