@@ -3125,11 +3125,21 @@ static void LoadOAIRecords(struct OAIFdwState **state)
 
 								if (xmlStrcmp(record->name, (xmlChar *)OAI_RESPONSE_ELEMENT_METADATA) == 0)
 								{
+									xmlNodePtr root = record->children;
+									xmlNodePtr copy;
+									xmlBufferPtr buffer;
+
+									/* <metadata> holds a single element: skip comments, PIs and text */
+									while (root && root->type != XML_ELEMENT_NODE)
+										root = root->next;
+
+									if (!root)
+										continue;
 
 									/* Copy necessary to include the namespaces in the buffer output */
-									xmlNodePtr copy = xmlCopyNode(record->children, 1);
+									copy = xmlCopyNode(root, 1);
 
-									xmlBufferPtr buffer = xmlBufferCreate();
+									buffer = xmlBufferCreate();
 									xmlNodeDump(buffer, (*state)->xmldoc, copy, 0, 1);
 
 									elog(DEBUG2, "  %s (%s): XML Buffer size: %d", __func__, (*state)->requestVerb, buffer->size);
