@@ -953,13 +953,13 @@ Datum oai_fdw_validator(PG_FUNCTION_ARGS)
 						ereport(ERROR,
 								(errcode(ERRCODE_FDW_INVALID_OPTION_NAME),
 								 errmsg("invalid %s option '%s'", OAI_NODE_COLUMN_OPTION, defGetString(def)),
-								 errhint("Valid column options for oai_fdw are:\nCREATE SERVER: '%s', '%s'\nCREATE TABLE: '%s','%s', '%s', '%s' and '%s'",
-										 OAI_NODE_URL,
-										 OAI_NODE_METADATAPREFIX,
-										 OAI_NODE_METADATAPREFIX,
+								 errhint("Valid values for %s are '%s', '%s', '%s', '%s', '%s' and '%s'.",
+										 OAI_NODE_COLUMN_OPTION,
+										 OAI_NODE_IDENTIFIER,
+										 OAI_NODE_CONTENT,
+										 OAI_NODE_DATESTAMP,
 										 OAI_NODE_SETSPEC,
-										 OAI_NODE_FROM,
-										 OAI_NODE_UNTIL,
+										 OAI_NODE_METADATAPREFIX,
 										 OAI_NODE_STATUS)));
 					}
 				}
