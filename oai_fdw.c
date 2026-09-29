@@ -1009,73 +1009,91 @@ static List *GetSets(OAIFdwState *state)
 	elog(DEBUG2, "%s called", __func__);
 
 	state->requestVerb = OAI_REQUEST_LISTSETS;
+	state->resumptionToken = NULL;
 
-	oaiExecuteResponse = ExecuteOAIRequest(state);
-
-	if (!state->xmldoc)
-		elog(ERROR, "invalid %s response from '%s'", state->requestVerb, state->url);
-
-	if (oaiExecuteResponse == OAI_SUCCESS)
+	/* the list may be split over several responses (spec 3.5) */
+	do
 	{
-		xmlNodePtr oai_root;
-		xmlNodePtr ListSets;
-		xmlNodePtr SetElement;
-		xmlNodePtr xmlroot = xmlDocGetRootElement(state->xmldoc);
+		oaiExecuteResponse = ExecuteOAIRequest(state);
+		state->resumptionToken = NULL;
 
-		if (xmlroot == NULL)
-			elog(ERROR, "invalid root element for %s response", state->requestVerb);
+		if (!state->xmldoc)
+			elog(ERROR, "invalid %s response from '%s'", state->requestVerb, state->url);
 
-		for (oai_root = xmlroot->children; oai_root != NULL; oai_root = oai_root->next)
+		if (oaiExecuteResponse == OAI_SUCCESS)
 		{
-			if (oai_root->type != XML_ELEMENT_NODE)
-				continue;
+			xmlNodePtr oai_root;
+			xmlNodePtr ListSets;
+			xmlNodePtr SetElement;
+			xmlNodePtr xmlroot = xmlDocGetRootElement(state->xmldoc);
 
-			if (xmlStrcmp(oai_root->name, (xmlChar *)OAI_REQUEST_LISTSETS) != 0)
-				continue;
+			if (xmlroot == NULL)
+				elog(ERROR, "invalid root element for %s response", state->requestVerb);
 
-			for (ListSets = oai_root->children; ListSets != NULL; ListSets = ListSets->next)
+			for (oai_root = xmlroot->children; oai_root != NULL; oai_root = oai_root->next)
 			{
-				OAISet *set;
-
-				if (ListSets->type != XML_ELEMENT_NODE)
-					continue;
-				if (xmlStrcmp(ListSets->name, (xmlChar *)"set") != 0)
+				if (oai_root->type != XML_ELEMENT_NODE)
 					continue;
 
-				set = (OAISet *)palloc0(sizeof(OAISet));
+				if (xmlStrcmp(oai_root->name, (xmlChar *)OAI_REQUEST_LISTSETS) != 0)
+					continue;
 
-				for (SetElement = ListSets->children; SetElement != NULL; SetElement = SetElement->next)
+				for (ListSets = oai_root->children; ListSets != NULL; ListSets = ListSets->next)
 				{
-					if (SetElement->type != XML_ELEMENT_NODE)
+					OAISet *set;
+
+					if (ListSets->type != XML_ELEMENT_NODE)
 						continue;
 
-					if (xmlStrcmp(SetElement->name, (xmlChar *)OAI_RESPONSE_ELEMENT_SETSPEC) == 0)
+					if (xmlStrcmp(ListSets->name, (xmlChar *)OAI_RESPONSE_ELEMENT_RESUMPTIONTOKEN) == 0)
 					{
-						xmlChar *el = xmlNodeGetContent(SetElement);
-						set->setSpec = pstrdup((char *)el);
-						xmlFree(el);
+						xmlChar *token = xmlNodeGetContent(ListSets);
+
+						if (token && *token != '\0')
+							state->resumptionToken = pstrdup((char *)token);
+						if (token)
+							xmlFree(token);
+						continue;
 					}
-					else if (xmlStrcmp(SetElement->name, (xmlChar *)OAI_RESPONSE_ELEMENT_SETNAME) == 0)
+
+					if (xmlStrcmp(ListSets->name, (xmlChar *)"set") != 0)
+						continue;
+
+					set = (OAISet *)palloc0(sizeof(OAISet));
+
+					for (SetElement = ListSets->children; SetElement != NULL; SetElement = SetElement->next)
 					{
-						xmlChar *el = xmlNodeGetContent(SetElement);
-						set->setName = pstrdup((char *)el);
-						xmlFree(el);
+						if (SetElement->type != XML_ELEMENT_NODE)
+							continue;
+
+						if (xmlStrcmp(SetElement->name, (xmlChar *)OAI_RESPONSE_ELEMENT_SETSPEC) == 0)
+						{
+							xmlChar *el = xmlNodeGetContent(SetElement);
+							set->setSpec = pstrdup((char *)el);
+							xmlFree(el);
+						}
+						else if (xmlStrcmp(SetElement->name, (xmlChar *)OAI_RESPONSE_ELEMENT_SETNAME) == 0)
+						{
+							xmlChar *el = xmlNodeGetContent(SetElement);
+							set->setName = pstrdup((char *)el);
+							xmlFree(el);
+						}
 					}
-				}
 
-				/* setSpec is mandatory; a set without it cannot be harvested */
-				if (!set->setSpec)
-				{
-					elog(WARNING, "ignoring <set> without <setSpec> in %s response", state->requestVerb);
-					continue;
-				}
+					/* setSpec is mandatory; a set without it cannot be harvested */
+					if (!set->setSpec)
+					{
+						elog(WARNING, "ignoring <set> without <setSpec> in %s response", state->requestVerb);
+						continue;
+					}
 
-				result = lappend(result, set);
+					result = lappend(result, set);
+				}
 			}
 		}
-	}
 
-	OAIFreeXmlDoc(state);
+		OAIFreeXmlDoc(state);
+	} while (state->resumptionToken);
 
 	elog(DEBUG2, "%s => finished", __func__);
 
@@ -1769,6 +1787,15 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 				elog(DEBUG2, "  %s (%s): encoding failed, using raw token", __func__, state->requestVerb);
 				appendStringInfo(&url_buffer, "verb=%s&resumptionToken=%s", state->requestVerb, state->resumptionToken);
 			}
+		}
+	}
+	else if (strcmp(state->requestVerb, OAI_REQUEST_LISTSETS) == 0)
+	{
+		if (state->resumptionToken)
+		{
+			char *encoded_token = curl_easy_escape(curl, state->resumptionToken, 0);
+			appendStringInfo(&url_buffer, "&resumptionToken=%s", encoded_token);
+			curl_free(encoded_token);
 		}
 	}
 	else

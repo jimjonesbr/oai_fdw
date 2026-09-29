@@ -56,9 +56,15 @@ ORDER BY setname  COLLATE "C"
 FETCH FIRST ROW ONLY;
 DEBUG:  GET "https://sammlungen.ulb.uni-muenster.de/oai?verb=ListSets"
 DEBUG:  HTTP 200, 1386 bytes
- setspec |                         setname                          
----------+----------------------------------------------------------
- ulbmsh  | Handschriften, Nachlässe, Autographen, Sammlungen (HANS)
+DEBUG:  GET "https://sammlungen.ulb.uni-muenster.de/oai?verb=ListSets&resumptionToken=cursor_p_3D10_p_26batch_size_p_3D11"
+DEBUG:  HTTP 200, 1303 bytes
+DEBUG:  GET "https://sammlungen.ulb.uni-muenster.de/oai?verb=ListSets&resumptionToken=cursor_p_3D20_p_26batch_size_p_3D11"
+DEBUG:  HTTP 200, 1420 bytes
+DEBUG:  GET "https://sammlungen.ulb.uni-muenster.de/oai?verb=ListSets&resumptionToken=cursor_p_3D30_p_26batch_size_p_3D11"
+DEBUG:  HTTP 200, 1017 bytes
+ setspec | setname 
+---------+---------
+ benelux | Benelux
 (1 row)
 
 SELECT * FROM OAI_ListSets('oai_server_dnb') 
@@ -189,6 +195,12 @@ FROM SERVER "oai-server ulb" INTO quoting_schema
   OPTIONS (metadataprefix 'oai_dc');
 DEBUG:  GET "https://sammlungen.ulb.uni-muenster.de/oai?verb=ListSets"
 DEBUG:  HTTP 200, 1386 bytes
+DEBUG:  GET "https://sammlungen.ulb.uni-muenster.de/oai?verb=ListSets&resumptionToken=cursor_p_3D10_p_26batch_size_p_3D11"
+DEBUG:  HTTP 200, 1303 bytes
+DEBUG:  GET "https://sammlungen.ulb.uni-muenster.de/oai?verb=ListSets&resumptionToken=cursor_p_3D20_p_26batch_size_p_3D11"
+DEBUG:  HTTP 200, 1420 bytes
+DEBUG:  GET "https://sammlungen.ulb.uni-muenster.de/oai?verb=ListSets&resumptionToken=cursor_p_3D30_p_26batch_size_p_3D11"
+DEBUG:  HTTP 200, 1017 bytes
 DEBUG:  GET "https://sammlungen.ulb.uni-muenster.de/oai?verb=ListMetadataFormats"
 DEBUG:  HTTP 200, 1853 bytes
 SELECT foreign_table_name FROM information_schema.foreign_tables

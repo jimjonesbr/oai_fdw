@@ -8,23 +8,50 @@ IMPORT FOREIGN SCHEMA oai_sets
 FROM SERVER oai_server_ulb 
 INTO ulb_schema 
   OPTIONS (metadataprefix 'oai_dc');
-NOTICE:  Foreign tables to be created in schema 'ulb_schema': 10
+NOTICE:  Foreign tables to be created in schema 'ulb_schema': 37
   
 SELECT * FROM information_schema.foreign_tables
 WHERE foreign_table_schema = 'ulb_schema';
- foreign_table_catalog | foreign_table_schema | foreign_table_name | foreign_server_catalog | foreign_server_name 
------------------------+----------------------+--------------------+------------------------+---------------------
- contrib_regression    | ulb_schema           | ulbmshbw           | contrib_regression     | oai_server_ulb
- contrib_regression    | ulb_schema           | ulbmshs            | contrib_regression     | oai_server_ulb
- contrib_regression    | ulb_schema           | ulbmssp            | contrib_regression     | oai_server_ulb
- contrib_regression    | ulb_schema           | ulbmsuo            | contrib_regression     | oai_server_ulb
- contrib_regression    | ulb_schema           | ulbmsz             | contrib_regression     | oai_server_ulb
- contrib_regression    | ulb_schema           | ulbmsum            | contrib_regression     | oai_server_ulb
- contrib_regression    | ulb_schema           | ulbmsob            | contrib_regression     | oai_server_ulb
- contrib_regression    | ulb_schema           | nachlass_scholz    | contrib_regression     | oai_server_ulb
- contrib_regression    | ulb_schema           | ulbmshd            | contrib_regression     | oai_server_ulb
- contrib_regression    | ulb_schema           | ulbmsh             | contrib_regression     | oai_server_ulb
-(10 rows)
+ foreign_table_catalog | foreign_table_schema |  foreign_table_name   | foreign_server_catalog | foreign_server_name 
+-----------------------+----------------------+-----------------------+------------------------+---------------------
+ contrib_regression    | ulb_schema           | ulbmshbw              | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | ulbmshs               | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | ulbmssp               | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | ulbmsuo               | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | ulbmsz                | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | ulbmsum               | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | ulbmsob               | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | nachlass_scholz       | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | ulbmshd               | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | ulbmsh                | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | fremdbestand_hbz      | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | ulbmsretro            | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | sDroste               | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | nuenning              | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | sbibelmuseum          | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | busch                 | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | sromberg              | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | schoepper             | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | lstierlin             | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | collectioerhard       | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | stoecker              | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | benelux               | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | fuerstenau            | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | fuerstenbergstammheim | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | stramm                | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | haindorf              | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | haxthausen            | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | kartenhaxthausen      | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | jesuiten              | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | nlflugschrift         | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | collection9536440     | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | mnordkirchen          | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | sscholz               | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | schreiber             | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | mromberg              | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | wappenkalender        | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | hbz                   | contrib_regression     | oai_server_ulb
+(37 rows)
 
 -- Importing schema 'oai_repository'
 IMPORT FOREIGN SCHEMA oai_repository 
@@ -46,8 +73,35 @@ WHERE foreign_table_schema = 'ulb_schema';
  contrib_regression    | ulb_schema           | nachlass_scholz           | contrib_regression     | oai_server_ulb
  contrib_regression    | ulb_schema           | ulbmshd                   | contrib_regression     | oai_server_ulb
  contrib_regression    | ulb_schema           | ulbmsh                    | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | fremdbestand_hbz          | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | ulbmsretro                | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | sDroste                   | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | nuenning                  | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | sbibelmuseum              | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | busch                     | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | sromberg                  | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | schoepper                 | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | lstierlin                 | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | collectioerhard           | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | stoecker                  | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | benelux                   | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | fuerstenau                | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | fuerstenbergstammheim     | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | stramm                    | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | haindorf                  | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | haxthausen                | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | kartenhaxthausen          | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | jesuiten                  | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | nlflugschrift             | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | collection9536440         | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | mnordkirchen              | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | sscholz                   | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | schreiber                 | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | mromberg                  | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | wappenkalender            | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema           | hbz                       | contrib_regression     | oai_server_ulb
  contrib_regression    | ulb_schema           | oai_server_ulb_repository | contrib_regression     | oai_server_ulb
-(11 rows)
+(38 rows)
 
 -- Import schema 'oai_sets' LIMIT TO 
 CREATE SCHEMA ulb_schema2;
@@ -70,22 +124,49 @@ IMPORT FOREIGN SCHEMA oai_sets EXCEPT (ulbmshbw,ulbmshs)
 FROM SERVER oai_server_ulb 
 INTO ulb_schema2 
   OPTIONS (metadataprefix 'oai_dc');
-NOTICE:  Foreign tables to be created in schema 'ulb_schema2': 8
+NOTICE:  Foreign tables to be created in schema 'ulb_schema2': 35
 SELECT * FROM information_schema.foreign_tables
 WHERE foreign_table_schema = 'ulb_schema2';
- foreign_table_catalog | foreign_table_schema | foreign_table_name | foreign_server_catalog | foreign_server_name 
------------------------+----------------------+--------------------+------------------------+---------------------
- contrib_regression    | ulb_schema2          | ulbmshbw           | contrib_regression     | oai_server_ulb
- contrib_regression    | ulb_schema2          | ulbmshs            | contrib_regression     | oai_server_ulb
- contrib_regression    | ulb_schema2          | ulbmssp            | contrib_regression     | oai_server_ulb
- contrib_regression    | ulb_schema2          | ulbmsuo            | contrib_regression     | oai_server_ulb
- contrib_regression    | ulb_schema2          | ulbmsz             | contrib_regression     | oai_server_ulb
- contrib_regression    | ulb_schema2          | ulbmsum            | contrib_regression     | oai_server_ulb
- contrib_regression    | ulb_schema2          | ulbmsob            | contrib_regression     | oai_server_ulb
- contrib_regression    | ulb_schema2          | nachlass_scholz    | contrib_regression     | oai_server_ulb
- contrib_regression    | ulb_schema2          | ulbmshd            | contrib_regression     | oai_server_ulb
- contrib_regression    | ulb_schema2          | ulbmsh             | contrib_regression     | oai_server_ulb
-(10 rows)
+ foreign_table_catalog | foreign_table_schema |  foreign_table_name   | foreign_server_catalog | foreign_server_name 
+-----------------------+----------------------+-----------------------+------------------------+---------------------
+ contrib_regression    | ulb_schema2          | ulbmshbw              | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema2          | ulbmshs               | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema2          | ulbmssp               | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema2          | ulbmsuo               | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema2          | ulbmsz                | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema2          | ulbmsum               | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema2          | ulbmsob               | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema2          | nachlass_scholz       | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema2          | ulbmshd               | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema2          | ulbmsh                | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema2          | fremdbestand_hbz      | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema2          | ulbmsretro            | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema2          | sDroste               | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema2          | nuenning              | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema2          | sbibelmuseum          | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema2          | busch                 | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema2          | sromberg              | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema2          | schoepper             | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema2          | lstierlin             | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema2          | collectioerhard       | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema2          | stoecker              | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema2          | benelux               | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema2          | fuerstenau            | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema2          | fuerstenbergstammheim | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema2          | stramm                | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema2          | haindorf              | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema2          | haxthausen            | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema2          | kartenhaxthausen      | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema2          | jesuiten              | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema2          | nlflugschrift         | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema2          | collection9536440     | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema2          | mnordkirchen          | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema2          | sscholz               | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema2          | schreiber             | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema2          | mromberg              | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema2          | wappenkalender        | contrib_regression     | oai_server_ulb
+ contrib_regression    | ulb_schema2          | hbz                   | contrib_regression     | oai_server_ulb
+(37 rows)
 
 -- Importing schema 'oai_sets' (DNB)
 CREATE SERVER oai_server_dnb FOREIGN DATA WRAPPER oai_fdw
