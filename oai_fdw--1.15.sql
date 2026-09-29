@@ -91,18 +91,18 @@ BEGIN
     RAISE EXCEPTION 'invalid time window. The end date [%] lies before the start date [%]',start_date,end_date;
   END IF;
   
-  target_table_exists := (SELECT EXISTS (SELECT 1 FROM pg_tables WHERE schemaname||'.'||tablename = target_table));
+  target_table_exists := to_regclass(target_table) IS NOT NULL;
   
   SELECT   
     srv.foreign_data_wrapper_name AS fdw, 
     tb.foreign_table_name fdw_table_name,
-    node_datestamp.attname AS fdw_datestamp,
-    node_identifier.attname AS fdw_identifier,
-    array_to_string(array_agg(col.attname),', ') AS fdw_table_cols,
-    array_to_string(array_agg('EXCLUDED.'||col.attname),', ') AS fdw_table_cols_excluded
+    quote_ident(node_datestamp.attname) AS fdw_datestamp,
+    quote_ident(node_identifier.attname) AS fdw_identifier,
+    array_to_string(array_agg(quote_ident(col.attname)),', ') AS fdw_table_cols,
+    array_to_string(array_agg('EXCLUDED.'||quote_ident(col.attname)),', ') AS fdw_table_cols_excluded
   INTO fdw, foreign_table_name, datestamp_column, identifier_column, columns_list, columns_list_excluded
   FROM information_schema._pg_foreign_tables tb
-  JOIN information_schema._pg_foreign_table_columns col ON col.relname = tb.foreign_table_name
+  JOIN information_schema._pg_foreign_table_columns col ON col.relname = tb.foreign_table_name AND col.nspname = tb.foreign_table_schema
   JOIN information_schema._pg_foreign_servers srv ON srv.foreign_server_name = tb.foreign_server_name
   LEFT JOIN (
       SELECT nspname, relname, attname 
@@ -146,10 +146,11 @@ BEGIN
     
   END IF;
   
+  -- the last window is cut at end_date, so that it is not lost
   FOR rec IN
-    SELECT LEAD(page) OVER w AS date_until, page AS date_from
-    FROM generate_series(start_date, end_date, page_size) page   
-    WINDOW w AS (ROWS BETWEEN CURRENT ROW AND 1 FOLLOWING)
+    SELECT LEAST(page + page_size, end_date) AS date_until, page AS date_from
+    FROM generate_series(start_date, end_date, page_size) page
+    WHERE page < end_date
   LOOP
     IF rec.date_until IS NOT NULL THEN             
     
