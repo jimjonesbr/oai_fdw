@@ -78,6 +78,7 @@
 #include "access/reloptions.h"
 #include "catalog/pg_namespace.h"
 #include "utils/acl.h"
+#include "utils/memutils.h"
 
 #define OAI_FDW_VERSION "1.15-dev"
 #define OAI_REQUEST_LISTRECORDS "ListRecords"
@@ -248,6 +249,19 @@ typedef struct OAIFdwIdentityNode
 	char *description;
 } OAIFdwIdentityNode;
 
+/*
+ * Datestamp granularity of a repository, as announced by Identify. Cached for
+ * the lifetime of the backend, keyed by server and URL.
+ */
+typedef struct OAIGranularity
+{
+	Oid serverid;
+	char *url;
+	bool day; /* YYYY-MM-DD only */
+} OAIGranularity;
+
+static List *granularity_cache = NIL;
+
 struct OAIFdwOption
 {
 	const char *optname;
@@ -368,6 +382,8 @@ static int CheckURL(char *url);
 static long ParseRetryAfter(const char *headers);
 static void OAIWaitRetryAfter(long seconds, const char *servername);
 static void OAIFreeXmlDoc(OAIFdwState *state);
+static bool HasDayGranularity(OAIFdwState *state);
+static void NormalizeDatestampArguments(OAIFdwState *state);
 static OAIFdwState *GetServerInfo(const char *srvname);
 static List *GetMetadataFormats(OAIFdwState *state);
 static List *GetIdentity(OAIFdwState *state);
@@ -2861,6 +2877,87 @@ static void RaiseOAIException(xmlNodePtr error)
 				 errmsg("OAI %s: %s", ccode, ccont)));
 }
 
+/*
+ * HasDayGranularity
+ * -----------------
+ * Returns true if the repository only supports YYYY-MM-DD datestamps. The
+ * Identify request is only sent the first time a server is asked about.
+ */
+static bool HasDayGranularity(OAIFdwState *state)
+{
+	ListCell *lc;
+	List *identity;
+	char *verb = state->requestVerb;
+	OAIGranularity *entry;
+	MemoryContext oldcxt;
+	bool day = false;
+
+	foreach (lc, granularity_cache)
+	{
+		entry = (OAIGranularity *)lfirst(lc);
+
+		if (entry->serverid == state->foreign_server->serverid && strcmp(entry->url, state->url) == 0)
+			return entry->day;
+	}
+
+	identity = GetIdentity(state);
+	state->requestVerb = verb;
+
+	foreach (lc, identity)
+	{
+		OAIFdwIdentityNode *node = (OAIFdwIdentityNode *)lfirst(lc);
+
+		if (strcmp(node->name, "granularity") == 0 && node->description)
+			day = strstr(node->description, "hh") == NULL;
+	}
+
+	oldcxt = MemoryContextSwitchTo(TopMemoryContext);
+	entry = (OAIGranularity *)palloc(sizeof(OAIGranularity));
+	entry->serverid = state->foreign_server->serverid;
+	entry->url = pstrdup(state->url);
+	entry->day = day;
+	granularity_cache = lappend(granularity_cache, entry);
+	MemoryContextSwitchTo(oldcxt);
+
+	return day;
+}
+
+/*
+ * NormalizeDatestampArguments
+ * ---------------------------
+ * Brings 'from' and 'until' to a granularity the repository accepts (spec
+ * 3.3.2): a day-granular repository rejects time components, and both
+ * arguments must have the same granularity. Widening a bound is safe, as
+ * the conditions are evaluated locally anyway.
+ */
+static void NormalizeDatestampArguments(OAIFdwState *state)
+{
+	MemoryContext cxt = GetMemoryChunkContext(state);
+	bool from_day;
+	bool until_day;
+
+	if (!state->from && !state->until)
+		return;
+
+	from_day = state->from && strlen(state->from) == 10;
+	until_day = state->until && strlen(state->until) == 10;
+
+	if (HasDayGranularity(state))
+	{
+		if (state->from && !from_day)
+			state->from = MemoryContextStrdup(cxt, pnstrdup(state->from, 10));
+		if (state->until && !until_day)
+			state->until = MemoryContextStrdup(cxt, pnstrdup(state->until, 10));
+	}
+	else if (state->from && state->until && from_day != until_day)
+	{
+		if (from_day)
+			state->from = MemoryContextStrdup(cxt, psprintf("%sT00:00:00Z", state->from));
+		else
+			state->until = MemoryContextStrdup(cxt, psprintf("%sT23:59:59Z", state->until));
+	}
+}
+
 static void LoadOAIRecords(struct OAIFdwState **state)
 {
 	xmlNodePtr xmlroot;
@@ -2898,6 +2995,9 @@ static void LoadOAIRecords(struct OAIFdwState **state)
 	/* Sets the page size and index to zero.*/
 	(*state)->pagesize = 0;
 	(*state)->pageindex = 0;
+
+	if (!(*state)->resumptionToken)
+		NormalizeDatestampArguments(*state);
 
 	if (ExecuteOAIRequest(*state) == OAI_SUCCESS)
 	{

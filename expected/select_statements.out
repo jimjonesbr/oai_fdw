@@ -17,6 +17,8 @@ SELECT ROW_NUMBER() OVER (), id, content::xml IS DOCUMENT AS content, setspec, d
 FROM dnb_zdb_oai_dc
 WHERE
   datestamp BETWEEN '2021-01-03' AND '2021-01-04';
+DEBUG:  GET "https://services.dnb.de/oai/repository?verb=Identify"
+DEBUG:  HTTP 200, 779 bytes
 DEBUG:  GET "https://services.dnb.de/oai/repository?verb=ListRecords&set=zdb&from=2021-01-03T00%3A00%3A00Z&until=2021-01-04T00%3A00%3A00Z&metadataPrefix=oai_dc"
 DEBUG:  HTTP 200, 2539 bytes
  row_number |            id             | content | setspec |        datestamp         |  meta  
