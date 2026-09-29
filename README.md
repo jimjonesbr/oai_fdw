@@ -104,9 +104,9 @@ OPTIONS (url 'https://sammlungen.ulb.uni-muenster.de/oai');
 | `url`         | **required**            | URL address of the OAI-PMH repository. |
 | `http_proxy` | optional            | Proxy for HTTP requests.
 | `connect_timeout`         | optional            | Connection timeout for establishing a HTTP request in seconds (default `300`).
-| `connect_retry`         | optional            | Number of attempts to retry a request in case of failure (default `3`).
+| `connect_retry`         | optional            | Number of attempts to retry a request in case of failure (default `3`). `0` disables retries.
 | `request_redirect`         | optional            | Enables URL redirect issued by the server (default `false`).
-| `request_max_redirect`         | optional            | Limit of how many times the URL redirection may occur. If that many redirections have been followed, the next redirect will cause an error. Not setting this parameter or setting it to `0` will allow an infinite number of redirects.
+| `request_max_redirect`         | optional            | Limit of how many times the URL redirection may occur. If that many redirections have been followed, the next redirect will cause an error. Not setting this parameter or setting it to `0` leaves the limit to libcurl (30 redirects since libcurl 8.3.0, unlimited in older versions).
 | `request_timeout` | optional | Maximum time in seconds allowed for a complete HTTP request (connect + transfer). `0` disables the limit (default). Unlike `connect_timeout`, this applies to the entire duration of the request, including data transfer. |
 
 ### [CREATE USER MAPPING](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#create-user-mapping)
@@ -287,7 +287,7 @@ FROM information_schema.foreign_tables;
 
 ### [CREATE FOREIGN TABLE](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#create_foreign_table)
 
-Foreign Tables from the OAI Foreign Data Wrapper work as a proxy between PostgreSQL clients and OAI-PMH Repositories. Each `FOREIGN TABLE` column must be mapped to an `oai_node`, so that PostgreSQL knows where to display the OAI documents and header data. It is mandatory to set a `metadataprefix` to the `SERVER` clause of the `CREATE FOREIGN TABLE` statement, so that the OAI-PMH repository knows which XML format is supposed to be returned (see [OAI_ListMetadataFormats](#oai_listmetadataformats)). Optionally, it is possible to constrain a `FOREIGN TABLE` to specific OAI sets using the `setspec` option from the `SERVER` clause - omitting this option means that every SQL query will harvest *all sets* in the OAI repository.
+Foreign Tables from the OAI Foreign Data Wrapper work as a proxy between PostgreSQL clients and OAI-PMH Repositories. Each `FOREIGN TABLE` column must be mapped to an `oai_node`, so that PostgreSQL knows where to display the OAI documents and header data. It is mandatory to set a `metadataprefix` in the `OPTIONS` clause of the `CREATE FOREIGN TABLE` statement, so that the OAI-PMH repository knows which XML format is supposed to be returned (see [OAI_ListMetadataFormats](#oai_listmetadataformats)). Optionally, it is possible to constrain a `FOREIGN TABLE` to specific OAI sets using the `setspec` option - omitting this option means that every SQL query will harvest *all sets* in the OAI repository.
 
 The following example creates a `FOREIGN TABLE` connected to the server `oai_server_dnb`. Queries executed against this table will harvest the set `dnb:reiheC` and will return the documents encoded as `oai_dc`. Each column is set with an `oai_node` in the `OPTION` clause:
 
@@ -319,13 +319,15 @@ CREATE FOREIGN TABLE dnb_maps (
 | `status` | `boolean` | Deleted-record flag from the OAI header (true if the record is marked deleted). |
 
 
-**Server Options**
+**Foreign Table Options**
 
-| Server Option | Type          | Description                                                                                                        |
+| Option | Type          | Description                                                                                                        |
 |---------------|--------------------------|--------------------------------------------------------------------------------------------------------------------|
 | `metadataprefix`  | **required**        | an argument that specifies the metadataPrefix of the format that should be included in the metadata part of the returned records. Records should be included only for items from which the metadata format matching the metadataPrefix can be disseminated. The metadata formats supported by a repository and for a particular item can be retrieved using the [ListMetadataFormats](http://www.openarchives.org/OAI/openarchivesprotocol.html#ListMetadataFormats) request.  
 | `from`  | optional        | an argument with a UTCdatetime value, which specifies a lower bound for datestamp-based selective harvesting.  
 | `until`  | optional        | an argument with a UTCdatetime value, which specifies an upper bound for datestamp-based selective harvesting.  
+
+`from` and `until` accept `YYYY-MM-DD` and `YYYY-MM-DDThh:mm:ssZ`. Before a request is sent, both are brought to a granularity the repository supports (see `granularity` in [OAI_Identify](#oai_identify)).
 | `setspec`  | optional        | an argument with a setSpec value , which specifies set criteria for selective harvesting. 
 
 #### [Examples](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#examples)
@@ -451,7 +453,7 @@ SELECT * FROM dnb_zdb_oai_dc;
 
 ```
 
-4. It is possible to set (or even overwrite) the pre-configured `SERVER OPTION` values by filtering the records in the SQL `WHERE` clause. The following example shows how to set the harvesting `metadataprefix`, `setspec`, and time interval (`from` and `until`) values in query time, overwriting the values defined in the `CREATE FOREIGN TABLE` statement:
+4. It is possible to set (or even overwrite) the pre-configured `FOREIGN TABLE` options by filtering the records in the SQL `WHERE` clause. The following example shows how to set the harvesting `metadataprefix`, `setspec`, and time interval (`from` and `until`) values in query time, overwriting the values defined in the `CREATE FOREIGN TABLE` statement:
 
 ```sql
 CREATE SERVER oai_server_dnb FOREIGN DATA WRAPPER oai_fdw 
@@ -626,7 +628,7 @@ SELECT * FROM OAI_Identify('oai_server_ulb');
 
 **Description**
 
-This function is used to retrieve the metadata formats available from a repository. An optional argument restricts the request to the formats available for a specific item.
+This function is used to retrieve the metadata formats available from a repository.
 
 OAI Request: [ListMetadataFormats](http://www.openarchives.org/OAI/openarchivesprotocol.html#ListMetadataFormats)
 
@@ -746,7 +748,7 @@ SELECT * FROM oai_fdw_settings;
 
 `target_table`: Local table where the data from the OAI foreign table will be imported to. If the `target_table` does not exist, a new table with the given name will be automatically created - unless explicitly configured otherwise in the parameter `create_table`. The `target_table` will be appended if it already exists. If the `oai_table`, and consequently the `target_table`, have an `identifier` column, the system will ensure that records are not duplicated in the `target_table` by updating the records in case of a conflict (upsert). 
 
-`page_size`: Page size (time interval) in which the OAI Foreign Data Wrapper will request data from the OAI repository. For instance, setting this parameter to `1 day` within a time window from `2022-01-01` until `2022-01-10` will be translated into 10 distinct requests to the OAI repository.
+`page_size`: Page size (time interval) in which the OAI Foreign Data Wrapper will request data from the OAI repository. For instance, setting this parameter to `1 day` within a time window from `2022-01-01` until `2022-01-10` will be translated into 9 distinct requests to the OAI repository (`[2022-01-01, 2022-01-02)` to `[2022-01-09, 2022-01-10)`). If the time window is not a multiple of `page_size`, the last request ends at `end_date`.
 
 `start_date`:  Start date from the time window.
 
