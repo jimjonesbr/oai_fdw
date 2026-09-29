@@ -2341,9 +2341,14 @@ static void deparseExpr(Expr *expr, OAIFdwState *state)
 			if (strcmp(oaiNode, OAI_NODE_SETSPEC) == 0 && (var->vartype == TEXTARRAYOID || var->vartype == VARCHARARRAYOID))
 			{
 				Const *constant = (Const *)lsecond(oper->args);
-				ArrayType *array = (ArrayType *)constant->constvalue;
+				ArrayType *array;
+				int numitems;
 
-				int numitems = ArrayGetNItems(ARR_NDIM(array), ARR_DIMS(array));
+				if (constant->constisnull)
+					break;
+
+				array = DatumGetArrayTypeP(constant->constvalue);
+				numitems = ArrayGetNItems(ARR_NDIM(array), ARR_DIMS(array));
 
 				if (numitems > 1)
 				{
@@ -2360,8 +2365,12 @@ static void deparseExpr(Expr *expr, OAIFdwState *state)
 
 					while (array_iterate(iterator, &value, &isnull))
 					{
-						elog(DEBUG2, "  %s: setSpec set to '%s'", __func__, datumToString(value, TEXTOID));
+						/* a NULL element matches nothing, so there is no set to request */
+						if (isnull)
+							continue;
+
 						state->set = datumToString(value, TEXTOID);
+						elog(DEBUG2, "  %s: setSpec set to '%s'", __func__, state->set);
 					}
 
 					array_free_iterator(iterator);
