@@ -68,6 +68,7 @@
 #endif
 #include "utils/datetime.h"
 #include "utils/timestamp.h"
+#include "utils/date.h"
 #include "utils/formatting.h"
 #include "catalog/pg_operator.h"
 #include "utils/syscache.h"
@@ -378,6 +379,8 @@ static void deparseWhereClause(OAIFdwState *state, List *conditions);
 static void deparseSelectColumns(OAIFdwState *state, List *exprs);
 static void OAIRequestPlanner(OAIFdwState *state, RelOptInfo *baserel);
 static char *deparseTimestamp(Datum datum);
+static char *deparseDatestampConst(Const *constant);
+static char *deparseTextConst(Const *constant);
 static int CheckURL(char *url);
 static long ParseRetryAfter(const char *headers);
 static void OAIWaitRetryAfter(long seconds, const char *servername);
@@ -2416,26 +2419,37 @@ static void deparseExpr(Expr *expr, OAIFdwState *state)
 		{
 			if (strcmp(oaiNode, OAI_NODE_IDENTIFIER) == 0 && (var->vartype == TEXTOID || var->vartype == VARCHAROID))
 			{
-				Const *constant = (Const *)lsecond(oper->args);
-				state->requestVerb = OAI_REQUEST_GETRECORD;
-				state->identifier = datumToString(constant->constvalue, constant->consttype);
+				char *identifier = deparseTextConst((Const *)right);
 
-				elog(DEBUG2, "  %s: request type set to '%s' with identifier '%s'", __func__, OAI_REQUEST_GETRECORD, state->identifier);
+				if (identifier)
+				{
+					state->requestVerb = OAI_REQUEST_GETRECORD;
+					state->identifier = identifier;
+
+					elog(DEBUG2, "  %s: request type set to '%s' with identifier '%s'", __func__, OAI_REQUEST_GETRECORD, state->identifier);
+				}
 			}
 
 			if (strcmp(oaiNode, OAI_NODE_DATESTAMP) == 0 && (var->vartype == TIMESTAMPOID))
 			{
-				Const *constant = (Const *)lsecond(oper->args);
-				state->from = deparseTimestamp(constant->constvalue);
-				state->until = deparseTimestamp(constant->constvalue);
+				char *datestamp = deparseDatestampConst((Const *)right);
+
+				if (datestamp)
+				{
+					state->from = datestamp;
+					state->until = datestamp;
+				}
 			}
 
 			if (strcmp(oaiNode, OAI_NODE_METADATAPREFIX) == 0 && (var->vartype == TEXTOID || var->vartype == VARCHAROID))
 			{
-				Const *constant = (Const *)lsecond(oper->args);
-				state->metadataPrefix = datumToString(constant->constvalue, constant->consttype);
+				char *prefix = deparseTextConst((Const *)right);
 
-				elog(DEBUG2, "  %s: metadataPrefix set to '%s'", __func__, state->metadataPrefix);
+				if (prefix)
+				{
+					state->metadataPrefix = prefix;
+					elog(DEBUG2, "  %s: metadataPrefix set to '%s'", __func__, state->metadataPrefix);
+				}
 			}
 		}
 
@@ -2443,8 +2457,10 @@ static void deparseExpr(Expr *expr, OAIFdwState *state)
 		{
 			if (strcmp(oaiNode, OAI_NODE_DATESTAMP) == 0 && (var->vartype == TIMESTAMPOID))
 			{
-				Const *constant = (Const *)lsecond(oper->args);
-				state->from = deparseTimestamp(constant->constvalue);
+				char *datestamp = deparseDatestampConst((Const *)right);
+
+				if (datestamp)
+					state->from = datestamp;
 			}
 		}
 
@@ -2452,8 +2468,10 @@ static void deparseExpr(Expr *expr, OAIFdwState *state)
 		{
 			if (strcmp(oaiNode, OAI_NODE_DATESTAMP) == 0 && (var->vartype == TIMESTAMPOID))
 			{
-				Const *constant = (Const *)lsecond(oper->args);
-				state->until = deparseTimestamp(constant->constvalue);
+				char *datestamp = deparseDatestampConst((Const *)right);
+
+				if (datestamp)
+					state->until = datestamp;
 			}
 		}
 
@@ -2523,27 +2541,66 @@ static void deparseSelectColumns(OAIFdwState *state, List *exprs)
 	}
 }
 
+/*
+ * Returns NULL for values an OAI UTCdatetime cannot express (infinity,
+ * years outside 1..9999), so that they are not pushed down.
+ */
 static char *deparseTimestamp(Datum datum)
 {
 
 	struct pg_tm datetime_tm;
 	fsec_t datetime_fsec;
 	StringInfoData s;
+	Timestamp ts = DatumGetTimestamp(datum);
 
-	(void)timestamp2tm(DatumGetTimestampTz(datum),
-					   NULL,
-					   &datetime_tm,
-					   &datetime_fsec,
-					   NULL,
-					   NULL);
+	if (TIMESTAMP_NOT_FINITE(ts) ||
+		timestamp2tm(ts, NULL, &datetime_tm, &datetime_fsec, NULL, NULL) != 0 ||
+		datetime_tm.tm_year < 1 || datetime_tm.tm_year > 9999)
+		return NULL;
 
 	initStringInfo(&s);
 	appendStringInfo(&s, "%04d-%02d-%02dT%02d:%02d:%02dZ",
-					 datetime_tm.tm_year > 0 ? datetime_tm.tm_year : -datetime_tm.tm_year + 1,
+					 datetime_tm.tm_year,
 					 datetime_tm.tm_mon, datetime_tm.tm_mday, datetime_tm.tm_hour,
 					 datetime_tm.tm_min, datetime_tm.tm_sec);
 
 	return s.data;
+}
+
+/*
+ * deparseDatestampConst
+ * ---------------------
+ * Converts a constant compared with a datestamp column into an OAI
+ * UTCdatetime, or returns NULL if it cannot be pushed down. timestamptz is
+ * not pushed down: it is compared in the session time zone, not in UTC.
+ */
+static char *deparseDatestampConst(Const *constant)
+{
+	if (constant->constisnull)
+		return NULL;
+
+	if (constant->consttype == TIMESTAMPOID)
+		return deparseTimestamp(constant->constvalue);
+
+	if (constant->consttype == DATEOID)
+		return deparseTimestamp(DirectFunctionCall1(date_timestamp, constant->constvalue));
+
+	return NULL;
+}
+
+/*
+ * deparseTextConst
+ * ----------------
+ * Returns the value of a text or varchar constant, or NULL for any other
+ * constant.
+ */
+static char *deparseTextConst(Const *constant)
+{
+	if (constant->constisnull ||
+		(constant->consttype != TEXTOID && constant->consttype != VARCHAROID))
+		return NULL;
+
+	return datumToString(constant->constvalue, constant->consttype);
 }
 
 static void deparseWhereClause(OAIFdwState *state, List *conditions)
