@@ -505,6 +505,7 @@ OAIFdwState *GetServerInfo(const char *srvname)
 
 	state->requestRedirect = false;
 	state->requestMaxRedirect = 0L;
+	state->maxretries = OAI_DEFAULT_MAX_RETRY;
 
 	elog(DEBUG2, "%s called: '%s'", __func__, srvname);
 
@@ -1650,14 +1651,11 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 	char errbuf[CURL_ERROR_SIZE];
 	struct MemoryStruct chunk;
 	struct MemoryStruct chunk_header;
-	long maxretries = OAI_DEFAULT_MAX_RETRY;
+	long maxretries = state->maxretries;
 	long connectTimeout = OAI_DEFAULT_CONNECT_TIMEOUT;
 	long request_timeout = OAI_DEFAULT_REQUEST_TIMEOUT;
 
 	struct curl_slist *headers = NULL;
-
-	if (state->maxretries)
-		maxretries = state->maxretries;
 
 	if (state->connectTimeout)
 		connectTimeout = state->connectTimeout;
@@ -3853,6 +3851,7 @@ static void InitSession(OAIFdwState *state, RelOptInfo *baserel)
 {
 	state->requestRedirect = false;
 	state->requestMaxRedirect = 0;
+	state->maxretries = OAI_DEFAULT_MAX_RETRY;
 
 	elog(DEBUG2, "%s called", __func__);
 
