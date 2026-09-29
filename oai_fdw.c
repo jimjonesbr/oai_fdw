@@ -491,6 +491,13 @@ OAIFdwState *GetServerInfo(const char *srvname)
 	if (server)
 	{
 		ListCell *cell;
+		ForeignDataWrapper *fdw = GetForeignDataWrapper(server->fdwid);
+
+		if (!OidIsValid(fdw->fdwhandler) ||
+			GetFdwRoutine(fdw->fdwhandler)->GetForeignRelSize != OAIFdwGetForeignRelSize)
+			ereport(ERROR,
+					(errcode(ERRCODE_FDW_INVALID_HANDLE),
+					 errmsg("FOREIGN SERVER '%s' does not belong to oai_fdw", srvname)));
 
 		foreach (cell, server->options)
 		{
