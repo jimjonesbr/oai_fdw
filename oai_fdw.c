@@ -633,7 +633,7 @@ Datum oai_fdw_identity(PG_FUNCTION_ARGS)
 
 			if (strcmp(NameStr(att->attname), "name") == 0)
 				values[i] = CreateDatum(att->atttypid, att->atttypmod, identity_node->name);
-			else if (strcmp(NameStr(att->attname), "description") == 0)
+			else if (strcmp(NameStr(att->attname), "description") == 0 && identity_node->description)
 				values[i] = CreateDatum(att->atttypid, att->atttypmod, identity_node->description);
 			else
 				nulls[i] = true;
@@ -710,7 +710,7 @@ Datum oai_fdw_listSets(PG_FUNCTION_ARGS)
 		{
 			Form_pg_attribute att = TupleDescAttr(funcctx->attinmeta->tupdesc, i);
 
-			if (strcmp(NameStr(att->attname), "setname") == 0)
+			if (strcmp(NameStr(att->attname), "setname") == 0 && set_node->setName)
 				values[i] = CreateDatum(att->atttypid, att->atttypmod, set_node->setName);
 			else if (strcmp(NameStr(att->attname), "setspec") == 0)
 				values[i] = CreateDatum(att->atttypid, att->atttypmod, set_node->setSpec);
@@ -795,9 +795,9 @@ Datum oai_fdw_listMetadataFormats(PG_FUNCTION_ARGS)
 
 			if (strcmp(NameStr(att->attname), "metadataprefix") == 0)
 				values[i] = CreateDatum(att->atttypid, att->atttypmod, format->metadataPrefix);
-			else if (strcmp(NameStr(att->attname), "schema") == 0)
+			else if (strcmp(NameStr(att->attname), "schema") == 0 && format->schema)
 				values[i] = CreateDatum(att->atttypid, att->atttypmod, format->schema);
-			else if (strcmp(NameStr(att->attname), "metadatanamespace") == 0)
+			else if (strcmp(NameStr(att->attname), "metadatanamespace") == 0 && format->metadataNamespace)
 				values[i] = CreateDatum(att->atttypid, att->atttypmod, format->metadataNamespace);
 			else
 				nulls[i] = true;
@@ -1035,12 +1035,14 @@ static List *GetSets(OAIFdwState *state)
 
 			for (ListSets = oai_root->children; ListSets != NULL; ListSets = ListSets->next)
 			{
-				OAISet *set = (OAISet *)palloc0(sizeof(OAISet));
+				OAISet *set;
 
 				if (ListSets->type != XML_ELEMENT_NODE)
 					continue;
 				if (xmlStrcmp(ListSets->name, (xmlChar *)"set") != 0)
 					continue;
+
+				set = (OAISet *)palloc0(sizeof(OAISet));
 
 				for (SetElement = ListSets->children; SetElement != NULL; SetElement = SetElement->next)
 				{
@@ -1059,6 +1061,13 @@ static List *GetSets(OAIFdwState *state)
 						set->setName = pstrdup((char *)el);
 						xmlFree(el);
 					}
+				}
+
+				/* setSpec is mandatory; a set without it cannot be harvested */
+				if (!set->setSpec)
+				{
+					elog(WARNING, "ignoring <set> without <setSpec> in %s response", state->requestVerb);
+					continue;
 				}
 
 				result = lappend(result, set);
@@ -1112,12 +1121,14 @@ static List *GetMetadataFormats(OAIFdwState *state)
 
 			for (ListMetadataFormats = oai_root->children; ListMetadataFormats != NULL; ListMetadataFormats = ListMetadataFormats->next)
 			{
-				OAIMetadataFormat *format = (OAIMetadataFormat *)palloc0(sizeof(OAIMetadataFormat));
+				OAIMetadataFormat *format;
 
 				if (ListMetadataFormats->type != XML_ELEMENT_NODE)
 					continue;
 				if (xmlStrcmp(ListMetadataFormats->name, (xmlChar *)OAI_RESPONSE_ELEMENT_METADATAFORMAT) != 0)
 					continue;
+
+				format = (OAIMetadataFormat *)palloc0(sizeof(OAIMetadataFormat));
 
 				for (MetadataElement = ListMetadataFormats->children; MetadataElement != NULL; MetadataElement = MetadataElement->next)
 				{
@@ -1142,6 +1153,12 @@ static List *GetMetadataFormats(OAIFdwState *state)
 						format->metadataNamespace = pstrdup((char *)el);
 						xmlFree(el);
 					}
+				}
+
+				if (!format->metadataPrefix)
+				{
+					elog(WARNING, "ignoring <metadataFormat> without <metadataPrefix> in %s response", state->requestVerb);
+					continue;
 				}
 
 				result = lappend(result, format);
