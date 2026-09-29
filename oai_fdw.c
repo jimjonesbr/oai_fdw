@@ -1408,6 +1408,10 @@ CURLDebugCallback(CURL *handle, curl_infotype type, char *data, size_t size, voi
  * Progress callback function for cURL requests. This allows us to
  * check for interruptions to immediatelly cancel the request.
  *
+ * Like the other callbacks it must not raise an error: a pending cancel or
+ * termination aborts the transfer instead, and the caller processes the
+ * interrupt once the curl handle has been released.
+ *
  * dltotal: Total bytes to download
  * dlnow: Bytes downloaded so far
  * ultotal: Total bytes to upload
@@ -1415,7 +1419,8 @@ CURLDebugCallback(CURL *handle, curl_infotype type, char *data, size_t size, voi
  */
 static int CURLProgressCallback(void *clientp, curl_off_t dltotal, curl_off_t dlnow, curl_off_t ultotal, curl_off_t ulnow)
 {
-	CHECK_FOR_INTERRUPTS();
+	if (InterruptPending && (QueryCancelPending || ProcDiePending))
+		return 1; /* abort the transfer */
 
 	return 0;
 }
@@ -1622,9 +1627,13 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 	curl = curl_easy_init();
 
 	if (!curl)
+	{
+		free(chunk.memory);
+		free(chunk_header.memory);
 		ereport(ERROR,
 				(errcode(ERRCODE_FDW_UNABLE_TO_ESTABLISH_CONNECTION),
 				 errmsg("%s: failed to initialize curl", __func__)));
+	}
 
 	appendStringInfo(&url_buffer, "verb=%s", state->requestVerb);
 
@@ -1895,50 +1904,81 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 
 		elog(DEBUG2, "  %s (%s): performing cURL request ... ", __func__, state->requestVerb);
 
-		res = curl_easy_perform(curl);
-
-		for (long i = 1; res != CURLE_OK && i <= maxretries; i++)
+		/*
+		 * The Retry-After wait and the warnings below may raise an error, so
+		 * the malloc'd buffers and the curl handle are released on the way out.
+		 */
+		PG_TRY();
 		{
-			long attempt_code = 0;
-
-			curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &attempt_code);
-
-			/*
-			 * OAI-PMH flow control (spec section 3.4): "503 Service Unavailable"
-			 * is the repository asking the harvester to slow down, not a failure.
-			 * Retrying it immediately - as every other error is retried - would
-			 * simply hammer a server that has just said it is overloaded, so the
-			 * requested delay is honoured before the next attempt.
-			 *
-			 * Note that the Retry-After header has to be read before the header
-			 * buffer is cleared for the next attempt.
-			 */
-			if (attempt_code == OAI_HTTP_SERVICE_UNAVAILABLE)
-			{
-				long retry_after = ParseRetryAfter(chunk_header.memory);
-
-				if (retry_after < 0)
-					retry_after = OAI_FDW_DEFAULT_RETRY_AFTER;
-
-				elog(WARNING, "'%s' is applying flow control (HTTP 503), retrying in %ld seconds (%ld/%ld)",
-					 state->foreign_server->servername, retry_after, i, maxretries);
-
-				OAIWaitRetryAfter(retry_after, state->foreign_server->servername);
-			}
-			else
-				elog(WARNING, "request to '%s' failed (%ld/%ld)",
-					 state->foreign_server->servername, i, maxretries);
-
-			/* discard any partial data from the failed attempt */
-			chunk.size = 0;
-			chunk.memory[0] = '\0';
-			chunk.alloc_failed = false;
-			chunk_header.size = 0;
-			chunk_header.memory[0] = '\0';
-			chunk_header.alloc_failed = false;
-			chunk_header.unsupported_ctype[0] = '\0';
-
 			res = curl_easy_perform(curl);
+
+			for (long i = 1; res != CURLE_OK && res != CURLE_ABORTED_BY_CALLBACK && i <= maxretries; i++)
+			{
+				long attempt_code = 0;
+
+				curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &attempt_code);
+
+				/*
+				 * OAI-PMH flow control (spec section 3.4): "503 Service Unavailable"
+				 * is the repository asking the harvester to slow down, not a failure.
+				 * Retrying it immediately - as every other error is retried - would
+				 * simply hammer a server that has just said it is overloaded, so the
+				 * requested delay is honoured before the next attempt.
+				 *
+				 * Note that the Retry-After header has to be read before the header
+				 * buffer is cleared for the next attempt.
+				 */
+				if (attempt_code == OAI_HTTP_SERVICE_UNAVAILABLE)
+				{
+					long retry_after = ParseRetryAfter(chunk_header.memory);
+
+					if (retry_after < 0)
+						retry_after = OAI_FDW_DEFAULT_RETRY_AFTER;
+
+					elog(WARNING, "'%s' is applying flow control (HTTP 503), retrying in %ld seconds (%ld/%ld)",
+						 state->foreign_server->servername, retry_after, i, maxretries);
+
+					OAIWaitRetryAfter(retry_after, state->foreign_server->servername);
+				}
+				else
+					elog(WARNING, "request to '%s' failed (%ld/%ld)",
+						 state->foreign_server->servername, i, maxretries);
+
+				/* discard any partial data from the failed attempt */
+				chunk.size = 0;
+				chunk.memory[0] = '\0';
+				chunk.alloc_failed = false;
+				chunk_header.size = 0;
+				chunk_header.memory[0] = '\0';
+				chunk_header.alloc_failed = false;
+				chunk_header.unsupported_ctype[0] = '\0';
+
+				res = curl_easy_perform(curl);
+			}
+		}
+		PG_CATCH();
+		{
+			free(chunk.memory);
+			free(chunk_header.memory);
+			curl_slist_free_all(headers);
+			curl_easy_cleanup(curl);
+			PG_RE_THROW();
+		}
+		PG_END_TRY();
+
+		/* aborted by CURLProgressCallback: process the pending interrupt */
+		if (res == CURLE_ABORTED_BY_CALLBACK)
+		{
+			free(chunk.memory);
+			free(chunk_header.memory);
+			curl_slist_free_all(headers);
+			curl_easy_cleanup(curl);
+
+			CHECK_FOR_INTERRUPTS();
+
+			ereport(ERROR,
+					(errcode(ERRCODE_QUERY_CANCELED),
+					 errmsg("OAI request to '%s' was cancelled", state->url)));
 		}
 
 		/*
