@@ -3324,8 +3324,7 @@ static List *OAIFdwImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid server
 
 	elog(DEBUG2, "%s called: '%s'", __func__, server->servername);
 	state = GetServerInfo(server->servername);
-
-	all_sets = GetSets(state);
+	LoadOAIUserMapping(state);
 
 	elog(DEBUG2, "  %s: parsing statements", __func__);
 
@@ -3372,6 +3371,8 @@ static List *OAIFdwImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid server
 	if (strcmp(stmt->remote_schema, "oai_sets") == 0)
 	{
 		List *tables = NIL;
+
+		all_sets = GetSets(state);
 
 		if (stmt->list_type == FDW_IMPORT_SCHEMA_LIMIT_TO)
 		{
