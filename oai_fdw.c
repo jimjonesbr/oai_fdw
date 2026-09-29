@@ -2724,6 +2724,23 @@ static OAIRecord *FetchNextOAIRecord(OAIFdwState **state)
 	}
 }
 
+/*
+ * OAITextDatum
+ * ------------
+ * Converts a string for a text, varchar or xml column. varchar goes through
+ * its input function, so that the column's length limit is applied.
+ */
+static Datum OAITextDatum(char *value, Oid pgtype, int pgtypmod)
+{
+	if (pgtype == VARCHAROID)
+		return DirectFunctionCall3(varcharin,
+								   CStringGetDatum(value),
+								   ObjectIdGetDatum(InvalidOid),
+								   Int32GetDatum(pgtypmod));
+
+	return CStringGetTextDatum(value);
+}
+
 static void CreateOAITuple(TupleTableSlot *slot, OAIFdwState *state, OAIRecord *oai)
 {
 	elog(DEBUG2, "%s called", __func__);
@@ -2744,27 +2761,37 @@ static void CreateOAITuple(TupleTableSlot *slot, OAIFdwState *state, OAIRecord *
 			else if (strcmp(oai_node, OAI_NODE_IDENTIFIER) == 0)
 			{
 				if (oai->identifier)
-					slot->tts_values[i] = CStringGetTextDatum(oai->identifier);
+					slot->tts_values[i] = OAITextDatum(oai->identifier, pgtype, pgtypmod);
 				else
 					slot->tts_isnull[i] = true;
 			}
 			else if (strcmp(oai_node, OAI_NODE_METADATAPREFIX) == 0)
 			{
 				if (oai->metadataPrefix)
-					slot->tts_values[i] = CStringGetTextDatum(oai->metadataPrefix);
+					slot->tts_values[i] = OAITextDatum(oai->metadataPrefix, pgtype, pgtypmod);
 				else
 					slot->tts_isnull[i] = true;
 			}
 			else if (strcmp(oai_node, OAI_NODE_CONTENT) == 0)
 			{
 				if (oai->content)
-					slot->tts_values[i] = CStringGetTextDatum((char *)oai->content);
+					slot->tts_values[i] = OAITextDatum(oai->content, pgtype, pgtypmod);
 				else
 					slot->tts_isnull[i] = true;
 			}
 			else if (strcmp(oai_node, OAI_NODE_SETSPEC) == 0)
 			{
-				if (oai->setsArray)
+				if (oai->setsArray && pgtype == VARCHARARRAYOID)
+				{
+					/* the elements are built as text; varchar[] needs its own element type */
+					Datum *elems;
+					bool *nulls;
+					int nelems;
+
+					deconstruct_array(oai->setsArray, TEXTOID, -1, false, 'i', &elems, &nulls, &nelems);
+					slot->tts_values[i] = PointerGetDatum(construct_array(elems, nelems, VARCHAROID, -1, false, 'i'));
+				}
+				else if (oai->setsArray)
 					slot->tts_values[i] = PointerGetDatum(oai->setsArray);
 				else
 					slot->tts_isnull[i] = true;
