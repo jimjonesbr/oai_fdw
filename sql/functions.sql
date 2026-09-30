@@ -69,6 +69,8 @@ FROM oai_fdw_settings;
 
 -- Server name requiring quotes: exercises quote_identifier() on both the
 -- SERVER reference and the generated <servername>_repository table name.
+-- No debug output here: PostgreSQL's own DEBUG messages differ between versions.
+SET client_min_messages TO NOTICE;
 CREATE SERVER "oai-server ulb" FOREIGN DATA WRAPPER oai_fdw
 OPTIONS (url 'https://sammlungen.ulb.uni-muenster.de/oai', request_redirect 'true');
 

@@ -13,7 +13,8 @@ INTO ulb_schema
   OPTIONS (metadataprefix 'oai_dc');
   
 SELECT * FROM information_schema.foreign_tables
-WHERE foreign_table_schema = 'ulb_schema';
+WHERE foreign_table_schema = 'ulb_schema'
+ORDER BY foreign_table_name COLLATE "C";
 
 
 -- Importing schema 'oai_repository'
@@ -24,7 +25,8 @@ INTO ulb_schema
   OPTIONS (metadataprefix 'oai_dc');
   
 SELECT * FROM information_schema.foreign_tables
-WHERE foreign_table_schema = 'ulb_schema';
+WHERE foreign_table_schema = 'ulb_schema'
+ORDER BY foreign_table_name COLLATE "C";
 
 
 -- Import schema 'oai_sets' LIMIT TO 
@@ -37,7 +39,8 @@ INTO ulb_schema2
   OPTIONS (metadataprefix 'oai_dc');
   
 SELECT * FROM information_schema.foreign_tables
-WHERE foreign_table_schema = 'ulb_schema2';
+WHERE foreign_table_schema = 'ulb_schema2'
+ORDER BY foreign_table_name COLLATE "C";
 
 
 -- Import schema 'oai_sets' EXCEPT 
@@ -48,7 +51,8 @@ INTO ulb_schema2
   OPTIONS (metadataprefix 'oai_dc');
 
 SELECT * FROM information_schema.foreign_tables
-WHERE foreign_table_schema = 'ulb_schema2';
+WHERE foreign_table_schema = 'ulb_schema2'
+ORDER BY foreign_table_name COLLATE "C";
 
 
 -- Importing schema 'oai_sets' (DNB)
@@ -62,9 +66,9 @@ SERVER oai_server_dnb OPTIONS (user 'foo', password 'bar', proxy_user 'foo', pro
 
 CREATE SCHEMA dnb_schema;
 
-IMPORT FOREIGN SCHEMA oai_sets 
-FROM SERVER oai_server_dnb 
-INTO dnb_schema 
+IMPORT FOREIGN SCHEMA oai_sets LIMIT TO ("dnb:reiheC")
+FROM SERVER oai_server_dnb
+INTO dnb_schema
   OPTIONS (metadataprefix 'MARC21-xml');
  
 SELECT * FROM dnb_schema."dnb:reiheC" 

@@ -187,15 +187,14 @@ FROM oai_fdw_settings;
 
 -- Server name requiring quotes: exercises quote_identifier() on both the
 -- SERVER reference and the generated <servername>_repository table name.
+-- No debug output here: PostgreSQL's own DEBUG messages differ between versions.
+SET client_min_messages TO NOTICE;
 CREATE SERVER "oai-server ulb" FOREIGN DATA WRAPPER oai_fdw
 OPTIONS (url 'https://sammlungen.ulb.uni-muenster.de/oai', request_redirect 'true');
 CREATE SCHEMA quoting_schema;
 IMPORT FOREIGN SCHEMA oai_repository
 FROM SERVER "oai-server ulb" INTO quoting_schema
   OPTIONS (metadataprefix 'oai_dc');
-DEBUG:  rehashing catalog cache id 84 for pg_user_mapping; 5 tups, 2 buckets
-DEBUG:  GET "https://sammlungen.ulb.uni-muenster.de/oai?verb=ListMetadataFormats"
-DEBUG:  HTTP 200, 1853 bytes
 SELECT foreign_table_name FROM information_schema.foreign_tables
 WHERE foreign_table_schema = 'quoting_schema';
     foreign_table_name     
