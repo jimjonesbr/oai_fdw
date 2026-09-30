@@ -24,15 +24,36 @@ REGRESS = create-extension \
 		  upgrade \
 		  create_server \
 		  explain \
-		  import_foreign_schema \
-		  create_foreign_table \
-		  select_statements \
-		  exceptions \
-		  functions \
-		  harvest
+		  regressions
 
-ifndef SKIP_PROXY_TESTS
-	REGRESS += proxy	
+#
+# The tests above need nothing but a PostgreSQL server, and are the ones that
+# run by default - package builds, for instance, have no network access. The
+# groups below need an OAI-PMH repository to talk to, so they are opt-in:
+#
+#   make installcheck INCLUDE_EXTERNAL_TESTS=1  live OAI-PMH repositories
+#                                               (DNB and ULB Münster)
+#   make installcheck INCLUDE_LOCAL_TESTS=1     the Squid proxies deployed by
+#                                               scripts/squid, which forward to
+#                                               the DNB repository
+#   make installcheck INCLUDE_ALL_TESTS=1       all of the above
+#
+ifdef INCLUDE_ALL_TESTS
+  INCLUDE_EXTERNAL_TESTS = 1
+  INCLUDE_LOCAL_TESTS = 1
+endif
+
+ifdef INCLUDE_EXTERNAL_TESTS
+  REGRESS += import_foreign_schema \
+             create_foreign_table \
+             select_statements \
+             exceptions \
+             functions \
+             harvest
+endif
+
+ifdef INCLUDE_LOCAL_TESTS
+  REGRESS += proxy
 endif
 
 CURL_CONFIG = curl-config

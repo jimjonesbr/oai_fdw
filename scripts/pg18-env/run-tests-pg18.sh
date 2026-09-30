@@ -17,5 +17,10 @@ podman restart $CONTAINER_NAME
 podman exec -itw /oai_fdw/ -u postgres $CONTAINER_NAME psql -d postgres \
   -c "DROP EXTENSION IF EXISTS oai_fdw CASCADE; CREATE EXTENSION oai_fdw"
 
-podman exec -itw /oai_fdw/ $CONTAINER_NAME make PGUSER=postgres installcheck 
+# Tests that need an OAI-PMH repository are opt-in (see the Makefile):
+# INCLUDE_EXTERNAL_TESTS=1 - tests against live OAI-PMH repositories
+# INCLUDE_LOCAL_TESTS=1    - tests through the Squid proxies deployed above
+# INCLUDE_ALL_TESTS=1      - all of the above
+
+podman exec -itw /oai_fdw/ $CONTAINER_NAME make PGUSER=postgres INCLUDE_ALL_TESTS=1 installcheck
 echo -e "\n== Tests completed ==\n"

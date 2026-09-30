@@ -1,0 +1,116 @@
+-- Regression tests for fixed bugs that need no OAI-PMH repository.
+-- Port 1 on localhost refuses connections, so requests fail right away.
+\set VERBOSITY terse
+CREATE SERVER regress_offline FOREIGN DATA WRAPPER oai_fdw
+OPTIONS (url 'http://127.0.0.1:1/oai', connect_retry '0');
+CREATE FOREIGN TABLE regress_t (
+  id text           OPTIONS (oai_node 'identifier'),
+  sets text[]       OPTIONS (oai_node 'setspec'),
+  updated timestamp OPTIONS (oai_node 'datestamp'),
+  deleted boolean   OPTIONS (oai_node 'status')
+) SERVER regress_offline OPTIONS (metadataprefix 'oai_dc');
+-- NULL element in a setspec array: used to crash the backend
+EXPLAIN (COSTS OFF) SELECT id FROM regress_t WHERE sets && ARRAY[NULL::text];
+                  QUERY PLAN                  
+----------------------------------------------
+ Foreign Scan on regress_t
+   Filter: (sets && '{NULL}'::text[])
+   Foreign Server URL: http://127.0.0.1:1/oai
+   requestVerb: ListIdentifiers
+   metadataPrefix: oai_dc
+(5 rows)
+
+-- prefix operator: used to read past the argument list and crash
+CREATE FUNCTION regress_not(boolean) RETURNS boolean
+  LANGUAGE plpgsql IMMUTABLE AS 'BEGIN RETURN NOT $1; END';
+CREATE OPERATOR !!! (RIGHTARG = boolean, FUNCTION = regress_not);
+EXPLAIN (COSTS OFF) SELECT id FROM regress_t WHERE !!! deleted;
+                  QUERY PLAN                  
+----------------------------------------------
+ Foreign Scan on regress_t
+   Filter: (!!! deleted)
+   Foreign Server URL: http://127.0.0.1:1/oai
+   requestVerb: ListIdentifiers
+   metadataPrefix: oai_dc
+(5 rows)
+
+DROP OPERATOR !!! (NONE, boolean);
+DROP FUNCTION regress_not(boolean);
+-- constants that cannot be pushed down as they are
+EXPLAIN (COSTS OFF) SELECT id FROM regress_t WHERE updated < '2020-01-06'::date;
+                  QUERY PLAN                  
+----------------------------------------------
+ Foreign Scan on regress_t
+   Filter: (updated < '01-06-2020'::date)
+   Foreign Server URL: http://127.0.0.1:1/oai
+   requestVerb: ListIdentifiers
+   metadataPrefix: oai_dc
+   until: 2020-01-06T00:00:00Z
+(6 rows)
+
+EXPLAIN (COSTS OFF) SELECT id FROM regress_t WHERE updated > '-infinity';
+                           QUERY PLAN                           
+----------------------------------------------------------------
+ Foreign Scan on regress_t
+   Filter: (updated > '-infinity'::timestamp without time zone)
+   Foreign Server URL: http://127.0.0.1:1/oai
+   requestVerb: ListIdentifiers
+   metadataPrefix: oai_dc
+(5 rows)
+
+EXPLAIN (COSTS OFF) SELECT id FROM regress_t WHERE updated > '4714-11-24 BC';
+                                    QUERY PLAN                                    
+----------------------------------------------------------------------------------
+ Foreign Scan on regress_t
+   Filter: (updated > 'Mon Nov 24 00:00:00 4714 BC'::timestamp without time zone)
+   Foreign Server URL: http://127.0.0.1:1/oai
+   requestVerb: ListIdentifiers
+   metadataPrefix: oai_dc
+(5 rows)
+
+EXPLAIN (COSTS OFF) SELECT id FROM regress_t WHERE id = 'oai:x:1';
+                  QUERY PLAN                  
+----------------------------------------------
+ Foreign Scan on regress_t
+   Filter: (id = 'oai:x:1'::text)
+   Foreign Server URL: http://127.0.0.1:1/oai
+   requestVerb: GetRecord
+   metadataPrefix: oai_dc
+(5 rows)
+
+-- support functions on a server of another FDW: used to crash
+CREATE FOREIGN DATA WRAPPER regress_dummy_fdw;
+CREATE SERVER regress_other FOREIGN DATA WRAPPER regress_dummy_fdw;
+SELECT * FROM OAI_Identify('regress_other');
+ERROR:  FOREIGN SERVER 'regress_other' does not belong to oai_fdw
+DROP FOREIGN DATA WRAPPER regress_dummy_fdw CASCADE;
+NOTICE:  drop cascades to server regress_other
+-- support functions require USAGE on the server
+CREATE ROLE regress_oai_nopriv;
+SET ROLE regress_oai_nopriv;
+SELECT * FROM OAI_ListSets('regress_offline');
+ERROR:  permission denied for foreign server regress_offline
+RESET ROLE;
+DROP ROLE regress_oai_nopriv;
+-- connect_retry 0 disables retries: no "request ... failed (n/m)" warnings
+SELECT * FROM OAI_Identify('regress_offline');
+ERROR:  OAI request failed: HTTP 0
+-- server option validation
+CREATE SERVER regress_bad FOREIGN DATA WRAPPER oai_fdw
+OPTIONS (url 'http://127.0.0.1:1/oai', request_redirect 'maybe');
+ERROR:  invalid request_redirect: maybe
+CREATE SERVER regress_bad FOREIGN DATA WRAPPER oai_fdw
+OPTIONS (url 'http://127.0.0.1:1/oai', request_max_redirect 'foo');
+ERROR:  invalid request_max_redirect: foo
+CREATE SERVER regress_bad FOREIGN DATA WRAPPER oai_fdw
+OPTIONS (url 'ftp://127.0.0.1/oai');
+ERROR:  invalid url: 'ftp://127.0.0.1/oai'
+-- hint for an invalid oai_node
+\set VERBOSITY default
+CREATE FOREIGN TABLE regress_bad_t (x text OPTIONS (oai_node 'foo'))
+  SERVER regress_offline OPTIONS (metadataprefix 'oai_dc');
+ERROR:  invalid oai_node option 'foo'
+HINT:  Valid values for oai_node are 'identifier', 'content', 'datestamp', 'setspec', 'metadataprefix' and 'status'.
+\set VERBOSITY terse
+DROP SERVER regress_offline CASCADE;
+NOTICE:  drop cascades to foreign table regress_t
