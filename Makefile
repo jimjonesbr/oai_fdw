@@ -60,10 +60,18 @@ CURL_CONFIG = curl-config
 XML2_CONFIG = xml2-config
 PG_CONFIG = pg_config
 
+# SOURCE_DATE_EPOCH keeps the build date reproducible (reproducible-builds.org)
+DATE_FMT = +%Y-%m-%d %H:%M:%S UTC
+ifdef SOURCE_DATE_EPOCH
+	BUILD_DATE = $(shell date -u -d "@$(SOURCE_DATE_EPOCH)" "$(DATE_FMT)" 2>/dev/null || date -u -r "$(SOURCE_DATE_EPOCH)" "$(DATE_FMT)")
+else
+	BUILD_DATE = $(shell date -u "$(DATE_FMT)")
+endif
+
 PG_CPPFLAGS += $(shell $(CURL_CONFIG) --cflags) \
 			   $(shell $(XML2_CONFIG) --cflags) \
 			   -DOAI_FDW_CC="\"$(CC)\"" \
-			   -DOAI_FDW_BUILD_DATE="\"$(shell date -u +'%Y-%m-%d %H:%M:%S UTC')\""
+			   -DOAI_FDW_BUILD_DATE="\"$(BUILD_DATE)\""
 LIBS += $(shell $(CURL_CONFIG) --libs)
 
 SHLIB_LINK := $(LIBS)
