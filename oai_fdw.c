@@ -80,6 +80,7 @@
 #include "catalog/pg_namespace.h"
 #include "utils/acl.h"
 #include "utils/memutils.h"
+#include "mb/pg_wchar.h"
 
 #define OAI_FDW_VERSION "1.15-dev"
 #define OAI_REQUEST_LISTRECORDS "ListRecords"
@@ -385,6 +386,8 @@ static int CheckURL(char *url);
 static long ParseRetryAfter(const char *headers);
 static void OAIWaitRetryAfter(long seconds, const char *servername);
 static void OAIFreeXmlDoc(OAIFdwState *state);
+static char *OAIToServer(const xmlChar *str);
+static void AppendOAIArgument(StringInfo buf, CURL *curl, const char *name, const char *value);
 static bool HasDayGranularity(OAIFdwState *state);
 static void NormalizeDatestampArguments(OAIFdwState *state);
 static OAIFdwState *GetServerInfo(const char *srvname);
@@ -1032,7 +1035,7 @@ static List *GetIdentity(OAIFdwState *state)
 				node = (OAIFdwIdentityNode *)palloc0(sizeof(OAIFdwIdentityNode));
 				node->name = pstrdup((char *)Identity->name);
 				el = xmlNodeGetContent(Identity);
-				node->description = el ? pstrdup((char *)el) : NULL;
+				node->description = el ? OAIToServer(el) : NULL;
 				if (el)
 					xmlFree(el);
 				result = lappend(result, node);
@@ -1119,13 +1122,13 @@ static List *GetSets(OAIFdwState *state)
 						if (xmlStrcmp(SetElement->name, (xmlChar *)OAI_RESPONSE_ELEMENT_SETSPEC) == 0)
 						{
 							xmlChar *el = xmlNodeGetContent(SetElement);
-							set->setSpec = pstrdup((char *)el);
+							set->setSpec = OAIToServer(el);
 							xmlFree(el);
 						}
 						else if (xmlStrcmp(SetElement->name, (xmlChar *)OAI_RESPONSE_ELEMENT_SETNAME) == 0)
 						{
 							xmlChar *el = xmlNodeGetContent(SetElement);
-							set->setName = pstrdup((char *)el);
+							set->setName = OAIToServer(el);
 							xmlFree(el);
 						}
 					}
@@ -1206,19 +1209,19 @@ static List *GetMetadataFormats(OAIFdwState *state)
 					if (xmlStrcmp(MetadataElement->name, (xmlChar *)OAI_RESPONSE_ELEMENT_METADATAPREFIX) == 0)
 					{
 						xmlChar *el = xmlNodeGetContent(MetadataElement);
-						format->metadataPrefix = pstrdup((char *)el);
+						format->metadataPrefix = OAIToServer(el);
 						xmlFree(el);
 					}
 					else if (xmlStrcmp(MetadataElement->name, (xmlChar *)OAI_RESPONSE_ELEMENT_SCHEMA) == 0)
 					{
 						xmlChar *el = xmlNodeGetContent(MetadataElement);
-						format->schema = pstrdup((char *)el);
+						format->schema = OAIToServer(el);
 						xmlFree(el);
 					}
 					else if (xmlStrcmp(MetadataElement->name, (xmlChar *)OAI_RESPONSE_ELEMENT_METADATANAMESPACE) == 0)
 					{
 						xmlChar *el = xmlNodeGetContent(MetadataElement);
-						format->metadataNamespace = pstrdup((char *)el);
+						format->metadataNamespace = OAIToServer(el);
 						xmlFree(el);
 					}
 				}
@@ -1518,6 +1521,37 @@ OAIFreeXmlDoc(OAIFdwState *state)
 }
 
 /*
+ * OAIToServer
+ * -----------
+ * OAI-PMH responses are UTF-8, and so is everything libxml2 returns.
+ * Returns a palloc'd copy of str in the server encoding.
+ */
+static char *
+OAIToServer(const xmlChar *str)
+{
+	const char *s = (const char *)str;
+	char *converted = pg_any_to_server(s, strlen(s), PG_UTF8);
+
+	return converted == s ? pstrdup(s) : converted;
+}
+
+/*
+ * AppendOAIArgument
+ * -----------------
+ * Appends "&name=value" to a request, with value converted from the server
+ * encoding to UTF-8 (as OAI-PMH requires) and URL-encoded.
+ */
+static void
+AppendOAIArgument(StringInfo buf, CURL *curl, const char *name, const char *value)
+{
+	char *utf8 = pg_server_to_any(value, strlen(value), PG_UTF8);
+	char *encoded = curl_easy_escape(curl, utf8, 0);
+
+	appendStringInfo(buf, "&%s=%s", name, encoded);
+	curl_free(encoded);
+}
+
+/*
  * ParseRetryAfter
  * ---------------
  * Looks for a "Retry-After" header in the raw header block collected during a
@@ -1705,36 +1739,16 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 	if (strcmp(state->requestVerb, OAI_REQUEST_LISTRECORDS) == 0)
 	{
 		if (state->set)
-		{
-			char *encoded_set = curl_easy_escape(curl, state->set, 0);
-			elog(DEBUG2, "  %s (%s): appending 'set' > %s", __func__, state->requestVerb, state->set);
-			appendStringInfo(&url_buffer, "&set=%s", encoded_set);
-			curl_free(encoded_set);
-		}
+			AppendOAIArgument(&url_buffer, curl, "set", state->set);
 
 		if (state->from)
-		{
-			char *encoded_from = curl_easy_escape(curl, state->from, 0);
-			elog(DEBUG2, "  %s (%s): appending 'from' > %s", __func__, state->requestVerb, state->from);
-			appendStringInfo(&url_buffer, "&from=%s", encoded_from);
-			curl_free(encoded_from);
-		}
+			AppendOAIArgument(&url_buffer, curl, "from", state->from);
 
 		if (state->until)
-		{
-			char *encoded_until = curl_easy_escape(curl, state->until, 0);
-			elog(DEBUG2, "  %s (%s): appending 'until' > %s", __func__, state->requestVerb, state->until);
-			appendStringInfo(&url_buffer, "&until=%s", encoded_until);
-			curl_free(encoded_until);
-		}
+			AppendOAIArgument(&url_buffer, curl, "until", state->until);
 
 		if (state->metadataPrefix)
-		{
-			char *encoded_metadataPrefix = curl_easy_escape(curl, state->metadataPrefix, 0);
-			elog(DEBUG2, "  %s (%s): appending 'metadataPrefix' > %s", __func__, state->requestVerb, state->metadataPrefix);
-			appendStringInfo(&url_buffer, "&metadataPrefix=%s", encoded_metadataPrefix);
-			curl_free(encoded_metadataPrefix);
-		}
+			AppendOAIArgument(&url_buffer, curl, "metadataPrefix", state->metadataPrefix);
 
 		if (state->resumptionToken)
 		{
@@ -1763,55 +1777,25 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 	{
 
 		if (state->identifier)
-		{
-			char *encoded_identifier = curl_easy_escape(curl, state->identifier, 0);
-			elog(DEBUG2, "  %s (%s): appending 'identifier' > %s", __func__, state->requestVerb, state->identifier);
-			appendStringInfo(&url_buffer, "&identifier=%s", encoded_identifier);
-			curl_free(encoded_identifier);
-		}
+			AppendOAIArgument(&url_buffer, curl, "identifier", state->identifier);
 
 		if (state->metadataPrefix)
-		{
-			char *encoded_metadataPrefix = curl_easy_escape(curl, state->metadataPrefix, 0);
-			elog(DEBUG2, "  %s (%s): appending 'metadataPrefix' > %s", __func__, state->requestVerb, state->metadataPrefix);
-			appendStringInfo(&url_buffer, "&metadataPrefix=%s", encoded_metadataPrefix);
-			curl_free(encoded_metadataPrefix);
-		}
+			AppendOAIArgument(&url_buffer, curl, "metadataPrefix", state->metadataPrefix);
 	}
 	else if (strcmp(state->requestVerb, OAI_REQUEST_LISTIDENTIFIERS) == 0)
 	{
 
 		if (state->set)
-		{
-			char *encoded_set = curl_easy_escape(curl, state->set, 0);
-			elog(DEBUG2, "  %s (%s): appending 'set' > %s", __func__, state->requestVerb, state->set);
-			appendStringInfo(&url_buffer, "&set=%s", encoded_set);
-			curl_free(encoded_set);
-		}
+			AppendOAIArgument(&url_buffer, curl, "set", state->set);
 
 		if (state->from)
-		{
-			char *encoded_from = curl_easy_escape(curl, state->from, 0);
-			elog(DEBUG2, "  %s (%s): appending 'from' > %s", __func__, state->requestVerb, state->from);
-			appendStringInfo(&url_buffer, "&from=%s", encoded_from);
-			curl_free(encoded_from);
-		}
+			AppendOAIArgument(&url_buffer, curl, "from", state->from);
 
 		if (state->until)
-		{
-			char *encoded_until = curl_easy_escape(curl, state->until, 0);
-			elog(DEBUG2, "  %s (%s): appending 'until' > %s", __func__, state->requestVerb, state->until);
-			appendStringInfo(&url_buffer, "&until=%s", encoded_until);
-			curl_free(encoded_until);
-		}
+			AppendOAIArgument(&url_buffer, curl, "until", state->until);
 
 		if (state->metadataPrefix)
-		{
-			char *encoded_metadataPrefix = curl_easy_escape(curl, state->metadataPrefix, 0);
-			elog(DEBUG2, "  %s (%s): appending 'metadataPrefix' > %s", __func__, state->requestVerb, state->metadataPrefix);
-			appendStringInfo(&url_buffer, "&metadataPrefix=%s", encoded_metadataPrefix);
-			curl_free(encoded_metadataPrefix);
-		}
+			AppendOAIArgument(&url_buffer, curl, "metadataPrefix", state->metadataPrefix);
 
 		if (state->resumptionToken)
 		{
@@ -2972,7 +2956,7 @@ static void RaiseOAIException(xmlNodePtr error)
 	}
 
 	ccode = pstrdup((char *)code);
-	ccont = cont ? pstrdup((char *)cont) : pstrdup("");
+	ccont = cont ? OAIToServer(cont) : pstrdup("");
 
 	xmlFree(code);
 	if (cont)
@@ -3185,11 +3169,11 @@ static void LoadOAIRecords(struct OAIFdwState **state)
 									continue;
 
 								if (xmlStrcmp(headerElements->name, (xmlChar *)OAI_RESPONSE_ELEMENT_IDENTIFIER) == 0)
-									oai->identifier = pstrdup((char *)content);
+									oai->identifier = OAIToServer(content);
 								else if (xmlStrcmp(headerElements->name, (xmlChar *)OAI_RESPONSE_ELEMENT_SETSPEC) == 0)
-									appendTextArray(&oai->setsArray, pstrdup((char *)content));
+									appendTextArray(&oai->setsArray, OAIToServer(content));
 								else if (xmlStrcmp(headerElements->name, (xmlChar *)OAI_RESPONSE_ELEMENT_DATESTAMP) == 0)
-									oai->datestamp = pstrdup((char *)content);
+									oai->datestamp = OAIToServer(content);
 
 								xmlFree(content);
 							}
@@ -3256,7 +3240,7 @@ static void LoadOAIRecords(struct OAIFdwState **state)
 
 									elog(DEBUG2, "  %s (%s): XML Buffer size: %d", __func__, (*state)->requestVerb, buffer->size);
 
-									oai->content = pstrdup((char *)buffer->content);
+									oai->content = OAIToServer(buffer->content);
 
 									elog(DEBUG2, "  %s (%s): freeing node copy.", __func__, (*state)->requestVerb);
 									xmlFreeNode(copy);
@@ -3289,19 +3273,19 @@ static void LoadOAIRecords(struct OAIFdwState **state)
 
 										if (xmlStrcmp(headerElements->name, (xmlChar *)OAI_RESPONSE_ELEMENT_IDENTIFIER) == 0)
 										{
-											oai->identifier = pstrdup((char *)content);
+											oai->identifier = OAIToServer(content);
 											elog(DEBUG2, "  %s (%s): setting identifier to OAI object > '%s'", __func__, (*state)->requestVerb, oai->identifier);
 										}
 										else if (xmlStrcmp(headerElements->name, (xmlChar *)OAI_RESPONSE_ELEMENT_SETSPEC) == 0)
 										{
-											char *array_element = pstrdup((char *)content);
+											char *array_element = OAIToServer(content);
 											elog(DEBUG2, "  %s (%s): setting setspec to OAI object > '%s'", __func__, (*state)->requestVerb, array_element);
 
 											appendTextArray(&oai->setsArray, array_element);
 										}
 										else if (xmlStrcmp(headerElements->name, (xmlChar *)OAI_RESPONSE_ELEMENT_DATESTAMP) == 0)
 										{
-											oai->datestamp = pstrdup((char *)content);
+											oai->datestamp = OAIToServer(content);
 											elog(DEBUG2, "  %s (%s): setting datestamp to OAI object > '%s'", __func__, (*state)->requestVerb, oai->datestamp);
 										}
 
