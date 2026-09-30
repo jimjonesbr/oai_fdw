@@ -72,7 +72,8 @@ PG_CPPFLAGS += $(shell $(CURL_CONFIG) --cflags) \
 			   $(shell $(XML2_CONFIG) --cflags) \
 			   -DOAI_FDW_CC="\"$(CC)\"" \
 			   -DOAI_FDW_BUILD_DATE="\"$(BUILD_DATE)\""
-LIBS += $(shell $(CURL_CONFIG) --libs)
+LIBS += $(shell $(CURL_CONFIG) --libs) \
+		$(shell $(XML2_CONFIG) --libs)
 
 SHLIB_LINK := $(LIBS)
 
