@@ -480,7 +480,7 @@ SELECT * FROM dnb_zdb_oai_dc
 WHERE 
   meta = 'MARC21-xml' AND
   datestamp BETWEEN '2022-03-01' AND '2022-03-02' AND
-  setspec <@ ARRAY['dnb:reiheC'];
+  setspec @> ARRAY['dnb:reiheC'];
   
                 id                |                                                                        content                                                                         |   setspec    |      datestamp      |    meta    
 ----------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------+--------------+---------------------+------------
@@ -811,11 +811,11 @@ SELECT * FROM dnb_zdb_oai_dc
 WHERE 
   meta = 'MARC21-xml' AND
   datestamp BETWEEN '2022-03-01' AND '2022-03-02' AND
-  setspec <@ ARRAY['dnb:reiheC'];
+  setspec @> ARRAY['dnb:reiheC'];
                                                                                                          QUERY PLAN                                                                                                          
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  Foreign Scan on dnb_zdb_oai_dc (actual time=3755.595..3755.596 rows=1.00 loops=1)
-   Filter: ((datestamp >= '2022-03-01 00:00:00'::timestamp without time zone) AND (datestamp <= '2022-03-02 00:00:00'::timestamp without time zone) AND (setspec <@ '{dnb:reiheC}'::text[]) AND (meta = 'MARC21-xml'::text))
+   Filter: ((datestamp >= '2022-03-01 00:00:00'::timestamp without time zone) AND (datestamp <= '2022-03-02 00:00:00'::timestamp without time zone) AND (setspec @> '{dnb:reiheC}'::text[]) AND (meta = 'MARC21-xml'::text))
    Foreign Server: oai_server_dnb
    Foreign Server URL: https://services.dnb.de/oai/repository
    requestVerb: ListRecords
@@ -886,5 +886,7 @@ If a harvester receives some other error, there is an unrecoverable problem with
 * **Response Compression**: Response compression from OAI-PMH servers is currently not supported. 
 
 Note that all operators supported in PostgreSQL can be used to filter result sets, but only the supported operators listed above will be used in the OAI-PMH requests. In other words, non supported filters will be performed **locally** in the client.
+
+To select the records of a set, use `@>` (contains): `setspec @> ARRAY['x']` keeps every record in set `x`. `setspec <@ ARRAY['x']` (is contained by) also requests set `x`, but then drops the records that belong to other sets as well. The `setspec` column lists the sets a record is in as the repository reports them, often only the most specific ones of a hierarchy, e.g. `math:math:CO` but not `math`. To harvest a whole parent set, use the `setspec` table option, which is only sent to the repository and does not filter the rows.
 
 The compared value can be a constant, a parameter (e.g. `$1` in a prepared statement or a PL/pgSQL variable) or an expression evaluated when the query runs, such as `now() - interval '1 day'`.
