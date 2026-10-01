@@ -705,9 +705,9 @@ Shows the version of the installed OAI FDW and its main libraries.
 
 ```sql
 SELECT oai_fdw_version();
-                                               oai_fdw_version                                               
--------------------------------------------------------------------------------------------------------------
- oai_fdw 1.15-dev (PostgreSQL 18.4 (Debian 18.4-1.pgdg13+1), compiled by gcc, libxml 2.9.14, libcurl 8.14.1)
+                                             oai_fdw_version                                             
+---------------------------------------------------------------------------------------------------------
+ oai_fdw 1.15 (PostgreSQL 18.4 (Debian 18.4-1.pgdg13+1), compiled by gcc, libxml 2.9.14, libcurl 8.14.1)
 (1 row)
 ```
 ### [oai_fdw_settings](#oai_fdw_settings)
@@ -722,7 +722,7 @@ A system view that provides detailed version information for `oai_fdw` and all i
 SELECT * FROM oai_fdw_settings;
  component  |            version            
 ------------+-------------------------------
- oai_fdw    | 1.15-dev
+ oai_fdw    | 1.15
  PostgreSQL | 18.4 (Debian 18.4-1.pgdg13+1)
  libxml     | 2.9.14
  libcurl    | 8.14.1
@@ -731,7 +731,7 @@ SELECT * FROM oai_fdw_settings;
  libSSH     | libssh2/1.11.1
  nghttp2    | 1.64.0
  compiler   | gcc
- built      | 2026-09-29 07:20:31 UTC
+ built      | 2026-10-01 05:38:55 UTC
 (10 rows)
 ```
 
