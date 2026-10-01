@@ -3523,41 +3523,30 @@ static List *OAIFdwImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid server
 
 		all_sets = GetSets(state);
 
-		if (stmt->list_type == FDW_IMPORT_SCHEMA_LIMIT_TO)
+		if (stmt->list_type == FDW_IMPORT_SCHEMA_LIMIT_TO || stmt->list_type == FDW_IMPORT_SCHEMA_EXCEPT)
 		{
-			ListCell *cell_limit_to;
-
-			foreach (cell_limit_to, stmt->table_list)
-			{
-				RangeVar *rv = (RangeVar *)lfirst(cell_limit_to);
-				OAISet *set = (OAISet *)palloc0(sizeof(OAISet));
-				set->setSpec = rv->relname;
-
-				tables = lappend(tables, set);
-			}
-		}
-		else if (stmt->list_type == FDW_IMPORT_SCHEMA_EXCEPT)
-		{
+			/* only sets that exist in the repository are imported */
+			bool limit_to = stmt->list_type == FDW_IMPORT_SCHEMA_LIMIT_TO;
 			ListCell *cell_sets;
 
 			foreach (cell_sets, all_sets)
 			{
-				ListCell *cell_except;
-				bool found = false;
-				OAISet *set = (OAISet *)palloc0(sizeof(OAISet));
-				set = (OAISet *)lfirst(cell_sets);
+				OAISet *set = (OAISet *)lfirst(cell_sets);
+				ListCell *cell_list;
+				bool listed = false;
 
-				foreach (cell_except, stmt->table_list)
+				foreach (cell_list, stmt->table_list)
 				{
-					RangeVar *rv = (RangeVar *)lfirst(cell_except);
+					RangeVar *rv = (RangeVar *)lfirst(cell_list);
+
 					if (strcmp(rv->relname, set->setSpec) == 0)
 					{
-						found = true;
+						listed = true;
 						break;
 					}
 				}
 
-				if (!found)
+				if (listed == limit_to)
 					tables = lappend(tables, set);
 			}
 		}
