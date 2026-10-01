@@ -139,6 +139,8 @@
 #define OAI_NODE_COLUMN_OPTION "oai_node"
 #define OAI_ERROR_ID_DOES_NOT_EXIST "idDoesNotExist"
 #define OAI_ERROR_NO_RECORD_MATCH "noRecordsMatch"
+#define OAI_ERROR_NO_SET_HIERARCHY "noSetHierarchy"
+#define OAI_ERROR_NO_METADATA_FORMATS "noMetadataFormats"
 
 #define OAI_SUCCESS 0
 #define OAI_FAIL 1
@@ -395,6 +397,7 @@ static List *GetMetadataFormats(OAIFdwState *state);
 static List *GetIdentity(OAIFdwState *state);
 static List *GetSets(OAIFdwState *state);
 static void RaiseOAIException(xmlNodePtr error);
+static void CheckOAIResponse(OAIFdwState *state);
 static Datum CreateDatum(int pgtype, int pgtypmod, char *value);
 static void LoadOAIServerInfo(OAIFdwState *state);
 static void LoadOAITableInfo(OAIFdwState *state);
@@ -1004,17 +1007,14 @@ static List *GetIdentity(OAIFdwState *state)
 
 	oaiExecuteResponse = ExecuteOAIRequest(state);
 
-	if (!state->xmldoc)
-		elog(ERROR, "invalid %s response from '%s'", state->requestVerb, state->url);
-
 	if (oaiExecuteResponse == OAI_SUCCESS)
 	{
 		xmlNodePtr oai_root;
 		xmlNodePtr Identity;
-		xmlNodePtr xmlroot = xmlDocGetRootElement(state->xmldoc);
+		xmlNodePtr xmlroot;
 
-		if (xmlroot == NULL)
-			elog(ERROR, "invalid root element for %s response", state->requestVerb);
+		CheckOAIResponse(state);
+		xmlroot = xmlDocGetRootElement(state->xmldoc);
 
 		for (oai_root = xmlroot->children; oai_root != NULL; oai_root = oai_root->next)
 		{
@@ -1070,18 +1070,15 @@ static List *GetSets(OAIFdwState *state)
 		oaiExecuteResponse = ExecuteOAIRequest(state);
 		state->resumptionToken = NULL;
 
-		if (!state->xmldoc)
-			elog(ERROR, "invalid %s response from '%s'", state->requestVerb, state->url);
-
 		if (oaiExecuteResponse == OAI_SUCCESS)
 		{
 			xmlNodePtr oai_root;
 			xmlNodePtr ListSets;
 			xmlNodePtr SetElement;
-			xmlNodePtr xmlroot = xmlDocGetRootElement(state->xmldoc);
+			xmlNodePtr xmlroot;
 
-			if (xmlroot == NULL)
-				elog(ERROR, "invalid root element for %s response", state->requestVerb);
+			CheckOAIResponse(state);
+			xmlroot = xmlDocGetRootElement(state->xmldoc);
 
 			for (oai_root = xmlroot->children; oai_root != NULL; oai_root = oai_root->next)
 			{
@@ -1169,18 +1166,15 @@ static List *GetMetadataFormats(OAIFdwState *state)
 
 	oaiExecuteResponse = ExecuteOAIRequest(state);
 
-	if (!state->xmldoc)
-		elog(ERROR, "invalid %s response from '%s'", state->requestVerb, state->url);
-
 	if (oaiExecuteResponse == OAI_SUCCESS)
 	{
 		xmlNodePtr oai_root;
 		xmlNodePtr ListMetadataFormats;
 		xmlNodePtr MetadataElement;
-		xmlNodePtr xmlroot = xmlDocGetRootElement(state->xmldoc);
+		xmlNodePtr xmlroot;
 
-		if (xmlroot == NULL)
-			elog(ERROR, "invalid root element for %s response", state->requestVerb);
+		CheckOAIResponse(state);
+		xmlroot = xmlDocGetRootElement(state->xmldoc);
 
 		for (oai_root = xmlroot->children; oai_root != NULL; oai_root = oai_root->next)
 		{
@@ -2938,6 +2932,62 @@ static TupleTableSlot *OAIFdwIterateForeignScan(ForeignScanState *node)
 	return slot;
 }
 
+/*
+ * CheckOAIResponse
+ * ----------------
+ * Checks that a response is an OAI-PMH document answering the request, so
+ * that e.g. an HTML maintenance page does not pass for an empty result, and
+ * raises the OAI errors it reports. The document is released on error.
+ */
+static void CheckOAIResponse(OAIFdwState *state)
+{
+	PG_TRY();
+	{
+		xmlNodePtr root;
+		xmlNodePtr node;
+		bool answered = false;
+
+		if (!state->xmldoc)
+			ereport(ERROR,
+					(errcode(ERRCODE_FDW_ERROR),
+					 errmsg("invalid XML response from '%s'", state->url)));
+
+		root = xmlDocGetRootElement(state->xmldoc);
+
+		if (!root || xmlStrcmp(root->name, (xmlChar *)OAI_XML_ROOT_ELEMENT) != 0)
+			ereport(ERROR,
+					(errcode(ERRCODE_FDW_ERROR),
+					 errmsg("invalid %s response from '%s'", state->requestVerb, state->url),
+					 errdetail("The response is not an OAI-PMH document.")));
+
+		for (node = root->children; node != NULL; node = node->next)
+		{
+			if (node->type != XML_ELEMENT_NODE)
+				continue;
+
+			if (xmlStrcmp(node->name, (xmlChar *)"error") == 0)
+			{
+				RaiseOAIException(node);
+				answered = true;
+			}
+			else if (xmlStrcmp(node->name, (xmlChar *)state->requestVerb) == 0)
+				answered = true;
+		}
+
+		if (!answered)
+			ereport(ERROR,
+					(errcode(ERRCODE_FDW_ERROR),
+					 errmsg("invalid %s response from '%s'", state->requestVerb, state->url),
+					 errdetail("The response contains neither <%s> nor <error>.", state->requestVerb)));
+	}
+	PG_CATCH();
+	{
+		OAIFreeXmlDoc(state);
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
+}
+
 static void RaiseOAIException(xmlNodePtr error)
 {
 	xmlChar *code = xmlGetProp(error, (xmlChar *)"code");
@@ -2963,7 +3013,9 @@ static void RaiseOAIException(xmlNodePtr error)
 		xmlFree(cont);
 
 	if (strcmp(ccode, OAI_ERROR_ID_DOES_NOT_EXIST) == 0 ||
-		strcmp(ccode, OAI_ERROR_NO_RECORD_MATCH) == 0)
+		strcmp(ccode, OAI_ERROR_NO_RECORD_MATCH) == 0 ||
+		strcmp(ccode, OAI_ERROR_NO_SET_HIERARCHY) == 0 ||
+		strcmp(ccode, OAI_ERROR_NO_METADATA_FORMATS) == 0)
 		ereport(WARNING,
 				(errcode(ERRCODE_NO_DATA_FOUND),
 				 errmsg("OAI %s: %s", ccode, ccont)));
@@ -3106,21 +3158,14 @@ static void LoadOAIRecords(struct OAIFdwState **state)
 			 */
 			(*state)->resumptionToken = NULL;
 
-			if (!(*state)->xmldoc)
-				ereport(ERROR, (errmsg("invalid XML response from '%s'", (*state)->url)));
-
+			CheckOAIResponse(*state);
 			xmlroot = xmlDocGetRootElement((*state)->xmldoc);
-
-			if (!xmlroot)
-				ereport(ERROR, (errmsg("empty XML document from '%s'", (*state)->url)));
 
 			if (strcmp((*state)->requestVerb, OAI_REQUEST_LISTIDENTIFIERS) == 0)
 			{
 				for (oaipmh = xmlroot->children; oaipmh != NULL; oaipmh = oaipmh->next)
 				{
-					if (xmlStrcmp(oaipmh->name, (xmlChar *)"error") == 0)
-						RaiseOAIException(oaipmh);
-					else if (xmlStrcmp(oaipmh->name, (xmlChar *)(*state)->requestVerb) != 0)
+					if (xmlStrcmp(oaipmh->name, (xmlChar *)(*state)->requestVerb) != 0)
 						continue;
 
 					for (ListRecordsRequest = oaipmh->children; ListRecordsRequest != NULL; ListRecordsRequest = ListRecordsRequest->next)
@@ -3192,9 +3237,7 @@ static void LoadOAIRecords(struct OAIFdwState **state)
 				for (oaipmh = xmlroot->children; oaipmh != NULL; oaipmh = oaipmh->next)
 				{
 
-					if (xmlStrcmp(oaipmh->name, (xmlChar *)"error") == 0)
-						RaiseOAIException(oaipmh);
-					else if (xmlStrcmp(oaipmh->name, (xmlChar *)(*state)->requestVerb) != 0)
+					if (xmlStrcmp(oaipmh->name, (xmlChar *)(*state)->requestVerb) != 0)
 						continue;
 
 					for (ListRecordsRequest = oaipmh->children; ListRecordsRequest != NULL; ListRecordsRequest = ListRecordsRequest->next)
