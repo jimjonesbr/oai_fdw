@@ -114,7 +114,7 @@ BEGIN
      FROM information_schema._pg_foreign_table_columns
      WHERE attfdwoptions <@ ARRAY['oai_node=identifier']) node_identifier ON 
            node_identifier.relname = tb.foreign_table_name AND node_identifier.nspname = tb.foreign_table_schema            
-  WHERE tb.foreign_table_schema || '.' || tb.foreign_table_name = oai_table AND
+  WHERE to_regclass(quote_ident(tb.foreign_table_schema) || '.' || quote_ident(tb.foreign_table_name)) = to_regclass(oai_table) AND
         srv.foreign_data_wrapper_name = 'oai_fdw'
   GROUP BY srv.foreign_data_wrapper_name, tb.foreign_table_name, node_datestamp.attname, node_identifier.attname ;
 

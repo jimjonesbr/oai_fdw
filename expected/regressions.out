@@ -112,5 +112,13 @@ CREATE FOREIGN TABLE regress_bad_t (x text OPTIONS (oai_node 'foo'))
 ERROR:  invalid oai_node option 'foo'
 HINT:  Valid values for oai_node are 'identifier', 'content', 'datestamp', 'setspec', 'metadataprefix' and 'status'.
 \set VERBOSITY terse
+-- OAI_HarvestTable finds foreign tables whose name needs quoting
+CREATE FOREIGN TABLE "Regress T" (
+  id text           OPTIONS (oai_node 'identifier'),
+  updated timestamp OPTIONS (oai_node 'datestamp')
+) SERVER regress_offline OPTIONS (metadataprefix 'oai_dc');
+CALL OAI_HarvestTable('"Regress T"', 'regress_h', interval '1 day', '2020-01-01', '2020-01-02');
+INFO:  target table "public.regress_h" created
+ERROR:  OAI request failed: HTTP 0
 DROP SERVER regress_offline CASCADE;
-NOTICE:  drop cascades to foreign table regress_t
+NOTICE:  drop cascades to 2 other objects

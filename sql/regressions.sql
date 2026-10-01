@@ -59,4 +59,11 @@ CREATE FOREIGN TABLE regress_bad_t (x text OPTIONS (oai_node 'foo'))
   SERVER regress_offline OPTIONS (metadataprefix 'oai_dc');
 \set VERBOSITY terse
 
+-- OAI_HarvestTable finds foreign tables whose name needs quoting
+CREATE FOREIGN TABLE "Regress T" (
+  id text           OPTIONS (oai_node 'identifier'),
+  updated timestamp OPTIONS (oai_node 'datestamp')
+) SERVER regress_offline OPTIONS (metadataprefix 'oai_dc');
+CALL OAI_HarvestTable('"Regress T"', 'regress_h', interval '1 day', '2020-01-01', '2020-01-02');
+
 DROP SERVER regress_offline CASCADE;
