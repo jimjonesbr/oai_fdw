@@ -168,6 +168,8 @@
 #endif
 
 #define OAI_HTTP_SERVICE_UNAVAILABLE 503
+#define OAI_HTTP_REQUEST_TIMEOUT 408
+#define OAI_HTTP_TOO_MANY_REQUESTS 429
 #define OAI_FDW_MAX_RETRY_AFTER 300
 #define OAI_FDW_DEFAULT_RETRY_AFTER 5
 #define IntToConst(x) makeConst(INT4OID, -1, InvalidOid, 4, Int32GetDatum((int32)(x)), false, true)
@@ -1970,6 +1972,12 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 
 				curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &attempt_code);
 
+				/* other client errors, e.g. 401 or 404, will not go away by retrying */
+				if (attempt_code >= 400 && attempt_code < 500 &&
+					attempt_code != OAI_HTTP_REQUEST_TIMEOUT &&
+					attempt_code != OAI_HTTP_TOO_MANY_REQUESTS)
+					break;
+
 				/*
 				 * OAI-PMH flow control (spec section 3.4): "503 Service Unavailable"
 				 * is the repository asking the harvester to slow down, not a failure.
@@ -1977,18 +1985,21 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 				 * simply hammer a server that has just said it is overloaded, so the
 				 * requested delay is honoured before the next attempt.
 				 *
+				 * "429 Too Many Requests" (RFC 6585) is handled the same way.
+				 *
 				 * Note that the Retry-After header has to be read before the header
 				 * buffer is cleared for the next attempt.
 				 */
-				if (attempt_code == OAI_HTTP_SERVICE_UNAVAILABLE)
+				if (attempt_code == OAI_HTTP_SERVICE_UNAVAILABLE ||
+					attempt_code == OAI_HTTP_TOO_MANY_REQUESTS)
 				{
 					long retry_after = ParseRetryAfter(chunk_header.memory);
 
 					if (retry_after < 0)
 						retry_after = OAI_FDW_DEFAULT_RETRY_AFTER;
 
-					elog(WARNING, "'%s' is applying flow control (HTTP 503), retrying in %ld seconds (%ld/%ld)",
-						 state->foreign_server->servername, retry_after, i, maxretries);
+					elog(WARNING, "'%s' is applying flow control (HTTP %ld), retrying in %ld seconds (%ld/%ld)",
+						 state->foreign_server->servername, attempt_code, retry_after, i, maxretries);
 
 					OAIWaitRetryAfter(retry_after, state->foreign_server->servername);
 				}
@@ -2101,7 +2112,7 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 			ereport(ERROR,
 					(errcode(ERRCODE_FDW_UNABLE_TO_CREATE_EXECUTION),
 					 errmsg("OAI request failed: HTTP %ld", response_code),
-					 response_code == OAI_HTTP_SERVICE_UNAVAILABLE
+					 response_code == OAI_HTTP_SERVICE_UNAVAILABLE || response_code == OAI_HTTP_TOO_MANY_REQUESTS
 						 ? errhint("The repository is still applying flow control after %ld retries. Raise '%s' on the FOREIGN SERVER or harvest again later.",
 								   maxretries, OAI_SERVER_OPTION_CONNECTRETRY)
 						 : errhint("Check your request parameters and try again."),
