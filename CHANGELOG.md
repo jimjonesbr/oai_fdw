@@ -1,6 +1,46 @@
 ### oai_fdw 1.15
 **unreleased**
 
+* Enhancements
+
+  **Regression tests without network access**: `make installcheck` now only runs the tests that need nothing but a PostgreSQL server. Tests against live repositories and through the Squid proxies are opt-in, with `INCLUDE_EXTERNAL_TESTS=1`, `INCLUDE_LOCAL_TESTS=1` or `INCLUDE_ALL_TESTS=1`.
+
+  **Reproducible builds**: the build date shown by `oai_fdw_settings()` is taken from `SOURCE_DATE_EPOCH`, if set.
+
+  **HTTP 429 flow control**: `429 Too Many Requests` is handled like `503`, honouring `Retry-After`. Other client errors (4xx) are no longer retried.
+
+  **Validation of `from` and `until`**: the table options must be a valid `YYYY-MM-DD` or `YYYY-MM-DDThh:mm:ssZ` value.
+
+* Bug fixes
+
+  **Fixed backend crashes**: a NULL element in a `setspec` array filter, a prefix operator in `WHERE`, support functions called on a server of another FDW, and `ListSets`/`ListMetadataFormats` responses with missing elements crashed the backend.
+
+  **Fixed leaks on query cancel**: cancelling a query during a request no longer leaks the curl handle, its socket and the response buffer.
+
+  **Support functions require `USAGE`**: `OAI_Identify()`, `OAI_ListSets()` and `OAI_ListMetadataFormats()` now check the `USAGE` privilege on the foreign server.
+
+  **`ListSets` follows `resumptionToken`**: `OAI_ListSets()` and `IMPORT FOREIGN SCHEMA oai_sets` no longer stop after the first page of sets.
+
+  **`from`/`until` granularity**: both are sent in a granularity the repository supports, as announced by `Identify`, so repositories with day granularity no longer answer `badArgument`.
+
+  **Character encoding**: values are converted between UTF-8 and the database encoding, in both directions.
+
+  **Responses are checked**: a response that is not an OAI-PMH document (e.g. an HTML maintenance page) raises an error instead of returning no rows, and OAI errors are raised for all requests. libxml2 parser errors are no longer written to the server's stderr.
+
+  **Pushdown**: `date` constants, infinite and BC timestamps, and constants of other types (e.g. `name`) are no longer pushed down with a wrong value.
+
+  **`varchar` columns**: `varchar(n)` limits are applied, and array operators work on `varchar[]` `setspec` columns.
+
+  **`<metadata>` content**: the root element is returned, even if a comment precedes it.
+
+  **`IMPORT FOREIGN SCHEMA`**: the user mapping is used, and `LIMIT TO` only imports sets that exist.
+
+  **`OAI_HarvestTable`**: the last time window is no longer skipped, quoted table names work, and same-named tables in other schemas are no longer mixed up.
+
+  **Server options**: `request_redirect`, `request_max_redirect` and the URL scheme are validated, and `connect_retry '0'` disables retries.
+
+  **Linking**: the library now links against libxml2.
+
 ### oai_fdw 1.14
 2026-09-09
 
