@@ -389,6 +389,7 @@ static char *deparseTimestamp(Datum datum);
 static char *deparseDatestampConst(Const *constant);
 static char *deparseTextConst(Const *constant);
 static int CheckURL(char *url);
+static bool IsUTCdatetime(const char *value);
 static long ParseRetryAfter(const char *headers);
 static void OAIWaitRetryAfter(long seconds, const char *servername);
 static void OAIFreeXmlDoc(OAIFdwState *state);
@@ -927,6 +928,21 @@ Datum oai_fdw_validator(PG_FUNCTION_ARGS)
 								 errhint("expected values are positive integers (retry attempts in case of failure)")));
 				}
 
+				if (strcmp(opt->optname, OAI_NODE_FROM) == 0 || strcmp(opt->optname, OAI_NODE_UNTIL) == 0)
+				{
+					if (!IsUTCdatetime(defGetString(def)))
+						ereport(ERROR,
+								(errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
+								 errmsg("invalid %s: %s", def->defname, defGetString(def)),
+								 errhint("expected values are 'YYYY-MM-DD' or 'YYYY-MM-DDThh:mm:ssZ' (UTC)")));
+
+					/* rejects dates that do not exist, e.g. 2020-02-30 */
+					(void)DirectFunctionCall3(timestamp_in,
+											  CStringGetDatum(defGetString(def)),
+											  ObjectIdGetDatum(InvalidOid),
+											  Int32GetDatum(-1));
+				}
+
 				if (strcmp(opt->optname, OAI_SERVER_OPTION_REQUEST_REDIRECT) == 0)
 				{
 					bool redirect;
@@ -1240,6 +1256,31 @@ static List *GetMetadataFormats(OAIFdwState *state)
 	elog(DEBUG2, "  %s => finished.", __func__);
 
 	return result;
+}
+
+/*
+ * IsUTCdatetime
+ * -------------
+ * Checks the formats OAI-PMH allows for 'from' and 'until' (spec 3.3.1):
+ * YYYY-MM-DD and YYYY-MM-DDThh:mm:ssZ.
+ */
+static bool IsUTCdatetime(const char *value)
+{
+	const char *day = "dddd-dd-dd";
+	const char *seconds = "dddd-dd-ddTdd:dd:ddZ";
+	size_t len = strlen(value);
+	const char *pattern = len == strlen(day) ? day : len == strlen(seconds) ? seconds : NULL;
+
+	if (!pattern)
+		return false;
+
+	for (size_t i = 0; i < len; i++)
+	{
+		if (pattern[i] == 'd' ? !isdigit((unsigned char)value[i]) : value[i] != pattern[i])
+			return false;
+	}
+
+	return true;
 }
 
 /**

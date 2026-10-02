@@ -53,6 +53,18 @@ OPTIONS (url 'http://127.0.0.1:1/oai', request_max_redirect 'foo');
 CREATE SERVER regress_bad FOREIGN DATA WRAPPER oai_fdw
 OPTIONS (url 'ftp://127.0.0.1/oai');
 
+-- from/until table options
+CREATE FOREIGN TABLE regress_bad_t (id text OPTIONS (oai_node 'identifier'))
+  SERVER regress_offline OPTIONS (metadataprefix 'oai_dc', from 'yesterday');
+CREATE FOREIGN TABLE regress_bad_t (id text OPTIONS (oai_node 'identifier'))
+  SERVER regress_offline OPTIONS (metadataprefix 'oai_dc', until '2020-02-30');
+CREATE FOREIGN TABLE regress_bad_t (id text OPTIONS (oai_node 'identifier'))
+  SERVER regress_offline OPTIONS (metadataprefix 'oai_dc', until '2020-01-02 10:00:00');
+CREATE FOREIGN TABLE regress_ok_t (id text OPTIONS (oai_node 'identifier'))
+  SERVER regress_offline OPTIONS (metadataprefix 'oai_dc', from '2020-01-02T10:00:00Z');
+ALTER FOREIGN TABLE regress_ok_t OPTIONS (ADD until 'tomorrow');
+DROP FOREIGN TABLE regress_ok_t;
+
 -- hint for an invalid oai_node
 \set VERBOSITY default
 CREATE FOREIGN TABLE regress_bad_t (x text OPTIONS (oai_node 'foo'))
