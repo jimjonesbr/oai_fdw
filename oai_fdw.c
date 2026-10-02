@@ -47,6 +47,8 @@
 #include <utils/array.h>
 #include <commands/explain.h>
 #include <libxml/tree.h>
+#include <libxml/parser.h>
+#include <libxml/xmlerror.h>
 #include <catalog/pg_collation.h>
 #include <funcapi.h>
 #include "lib/stringinfo.h"
@@ -1686,6 +1688,7 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 	long request_timeout = OAI_DEFAULT_REQUEST_TIMEOUT;
 
 	struct curl_slist *headers = NULL;
+	char *parse_error = NULL;
 
 	if (state->connectTimeout)
 		connectTimeout = state->connectTimeout;
@@ -2122,7 +2125,21 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 		{
 			long response_code;
 			curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
-			state->xmldoc = xmlReadMemory(chunk.memory, chunk.size, NULL, NULL, XML_PARSE_NOBLANKS);
+			/*
+			 * NOERROR/NOWARNING keep libxml2 from writing its messages, with
+			 * fragments of the response, straight to the server's stderr.
+			 */
+			state->xmldoc = xmlReadMemory(chunk.memory, chunk.size, NULL, NULL,
+										  XML_PARSE_NOBLANKS | XML_PARSE_NONET |
+											  XML_PARSE_NOERROR | XML_PARSE_NOWARNING);
+
+			if (!state->xmldoc)
+			{
+				const xmlError *error = xmlGetLastError();
+
+				if (error && error->message)
+					parse_error = pchomp(error->message);
+			}
 
 			elog(DEBUG1, "HTTP %ld, %ld bytes", response_code, chunk.size);
 
@@ -2138,6 +2155,12 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 		free(chunk_header.memory);
 	curl_slist_free_all(headers);
 	curl_easy_cleanup(curl);
+
+	if (!state->xmldoc && parse_error)
+		ereport(ERROR,
+				(errcode(ERRCODE_FDW_ERROR),
+				 errmsg("invalid XML response from '%s'", state->url),
+				 errdetail("%s", parse_error)));
 
 	return OAI_SUCCESS;
 }
