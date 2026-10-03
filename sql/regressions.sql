@@ -78,4 +78,15 @@ CREATE FOREIGN TABLE "Regress T" (
 ) SERVER regress_offline OPTIONS (metadataprefix 'oai_dc');
 CALL OAI_HarvestTable('"Regress T"', 'regress_h', interval '1 day', '2020-01-01', '2020-01-02');
 
+-- values only known at execution time are pushed down (see the DETAIL)
+\set VERBOSITY default
+SET regress.oai_id = 'oai:x:2';
+SELECT id FROM regress_t WHERE id = current_setting('regress.oai_id');
+SET regress.oai_set = 'a';
+SELECT id FROM regress_t WHERE sets && ARRAY[current_setting('regress.oai_set')];
+-- a parameter is evaluated again on each rescan, a NULL one needs no request
+SELECT v.x, (SELECT count(*) FROM regress_t WHERE id = v.x)
+FROM (VALUES (NULL), ('oai:x:1')) v(x);
+\set VERBOSITY terse
+
 DROP SERVER regress_offline CASCADE;

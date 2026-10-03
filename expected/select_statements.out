@@ -159,6 +159,19 @@ DEBUG:  HTTP 200, 1024 bytes
 RESET enable_hashjoin;
 RESET enable_mergejoin;
 RESET enable_material;
+-- Values only known at execution time (parameters, now(), ...) are
+-- pushed down as well.
+SELECT (SELECT count(*)
+        FROM dnb_zdb_oai_dc_nocontent o
+        WHERE o.datestamp BETWEEN v.f AND v.u)
+FROM (VALUES ('2021-01-03'::timestamp, '2021-01-04'::timestamp)) AS v(f, u);
+DEBUG:  GET "https://services.dnb.de/oai/repository?verb=ListIdentifiers&set=zdb&from=2021-01-03T00%3A00%3A00Z&until=2021-01-04T00%3A00%3A00Z&metadataPrefix=oai_dc"
+DEBUG:  HTTP 200, 1024 bytes
+ count 
+-------
+     3
+(1 row)
+
 DROP SERVER oai_server_dnb CASCADE;
 NOTICE:  drop cascades to 2 other objects
 DETAIL:  drop cascades to foreign table dnb_zdb_oai_dc

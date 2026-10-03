@@ -80,4 +80,11 @@ RESET enable_hashjoin;
 RESET enable_mergejoin;
 RESET enable_material;
 
+-- Values only known at execution time (parameters, now(), ...) are
+-- pushed down as well.
+SELECT (SELECT count(*)
+        FROM dnb_zdb_oai_dc_nocontent o
+        WHERE o.datestamp BETWEEN v.f AND v.u)
+FROM (VALUES ('2021-01-03'::timestamp, '2021-01-04'::timestamp)) AS v(f, u);
+
 DROP SERVER oai_server_dnb CASCADE;

@@ -881,3 +881,5 @@ If a harvester receives some other error, there is an unrecoverable problem with
 * **Response Compression**: Response compression from OAI-PMH servers is currently not supported. 
 
 Note that all operators supported in PostgreSQL can be used to filter result sets, but only the supported operators listed above will be used in the OAI-PMH requests. In other words, non supported filters will be performed **locally** in the client.
+
+The compared value can be a constant, a parameter (e.g. `$1` in a prepared statement or a PL/pgSQL variable) or an expression evaluated when the query runs, such as `now() - interval '1 day'`.

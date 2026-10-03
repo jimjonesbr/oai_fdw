@@ -13,6 +13,8 @@
 #include "fmgr.h"
 #include "foreign/fdwapi.h"
 #include "optimizer/pathnode.h"
+#include "optimizer/clauses.h"
+#include "executor/executor.h"
 #include "optimizer/restrictinfo.h"
 #include "optimizer/planmain.h"
 #include "utils/rel.h"
@@ -226,7 +228,43 @@ typedef struct OAIFdwState
 	Cost total_cost;
 
 	struct OAIfdwTable *oaiTable; /* All necessary information of the FOREIGN TABLE used in a SQL statement */
+
+	/*
+	 * Conditions whose value is only known at execution time, e.g. $1 or
+	 * now(): what they set in the request (the expressions are in
+	 * ForeignScan.fdw_exprs).
+	 */
+	List *pushdown_exprs;
+	List *pushdown_kinds;
+	List *pushdown_states;			 /* ExprStates of fdw_exprs */
+	bool pushdown_evaluated;		 /* evaluated for the current scan */
+	bool pushdown_norows;			 /* a value is NULL: nothing can match */
+	MemoryContext pushdowncxt;		 /* values derived from them */
+	struct OAIRequestArgs *planArgs; /* request arguments set at planning */
 } OAIFdwState;
+
+/* The request arguments that conditions can set. */
+typedef struct OAIRequestArgs
+{
+	char *requestVerb;
+	char *identifier;
+	char *metadataPrefix;
+	char *set;
+	char *from;
+	char *until;
+} OAIRequestArgs;
+
+/* What a pushed down condition sets in the request. */
+typedef enum OAIPushdownKind
+{
+	OAI_PUSHDOWN_NONE,
+	OAI_PUSHDOWN_IDENTIFIER,
+	OAI_PUSHDOWN_METADATAPREFIX,
+	OAI_PUSHDOWN_DATESTAMP, /* '=': from and until */
+	OAI_PUSHDOWN_FROM,
+	OAI_PUSHDOWN_UNTIL,
+	OAI_PUSHDOWN_SET
+} OAIPushdownKind;
 
 typedef struct OAIRecord
 {
@@ -388,6 +426,9 @@ static void OAIRequestPlanner(OAIFdwState *state, RelOptInfo *baserel);
 static char *deparseTimestamp(Datum datum);
 static char *deparseDatestampConst(Const *constant);
 static char *deparseTextConst(Const *constant);
+static OAIPushdownKind GetPushdownKind(const char *operName, const char *oaiNode, Oid vartype);
+static void ApplyPushdown(OAIFdwState *state, OAIPushdownKind kind, Const *constant);
+static bool EvaluatePushdownExpressions(ForeignScanState *node, OAIFdwState *state);
 static int CheckURL(char *url);
 static bool IsUTCdatetime(const char *value);
 static long ParseRetryAfter(const char *headers);
@@ -2458,6 +2499,7 @@ static void deparseExpr(Expr *expr, OAIFdwState *state)
 	char *oaiNode;
 	Node *left;
 	Node *right;
+	OAIPushdownKind kind;
 
 	elog(DEBUG2, "%s called for expr->type %u", __func__, expr->type);
 
@@ -2487,7 +2529,7 @@ static void deparseExpr(Expr *expr, OAIFdwState *state)
 		left = linitial(oper->args);
 		right = lsecond(oper->args);
 
-		if (!IsA(left, Var) || !IsA(right, Const))
+		if (!IsA(left, Var))
 			break; /* let PG evaluate locally */
 
 		var = (Var *)left;
@@ -2496,106 +2538,24 @@ static void deparseExpr(Expr *expr, OAIFdwState *state)
 		if (!oaiNode)
 			break;
 
-		if (strcmp(operName, "=") == 0)
+		kind = GetPushdownKind(operName, oaiNode, var->vartype);
+
+		/* strictness lets a NULL value end the scan, see EvaluatePushdownExpressions() */
+		if (kind == OAI_PUSHDOWN_NONE || !op_strict(oper->opno))
+			break;
+
+		if (IsA(right, Const))
+			ApplyPushdown(state, kind, (Const *)right);
+		else if (!contain_var_clause(right) &&
+				 !contain_volatile_functions(right) &&
+				 !contain_subplans(right))
 		{
-			if (strcmp(oaiNode, OAI_NODE_IDENTIFIER) == 0 && (var->vartype == TEXTOID || var->vartype == VARCHAROID))
-			{
-				char *identifier = deparseTextConst((Const *)right);
-
-				if (identifier)
-				{
-					state->requestVerb = OAI_REQUEST_GETRECORD;
-					state->identifier = identifier;
-
-					elog(DEBUG2, "  %s: request type set to '%s' with identifier '%s'", __func__, OAI_REQUEST_GETRECORD, state->identifier);
-				}
-			}
-
-			if (strcmp(oaiNode, OAI_NODE_DATESTAMP) == 0 && (var->vartype == TIMESTAMPOID))
-			{
-				char *datestamp = deparseDatestampConst((Const *)right);
-
-				if (datestamp)
-				{
-					state->from = datestamp;
-					state->until = datestamp;
-				}
-			}
-
-			if (strcmp(oaiNode, OAI_NODE_METADATAPREFIX) == 0 && (var->vartype == TEXTOID || var->vartype == VARCHAROID))
-			{
-				char *prefix = deparseTextConst((Const *)right);
-
-				if (prefix)
-				{
-					state->metadataPrefix = prefix;
-					elog(DEBUG2, "  %s: metadataPrefix set to '%s'", __func__, state->metadataPrefix);
-				}
-			}
-		}
-
-		if (strcmp(operName, ">=") == 0 || strcmp(operName, ">") == 0)
-		{
-			if (strcmp(oaiNode, OAI_NODE_DATESTAMP) == 0 && (var->vartype == TIMESTAMPOID))
-			{
-				char *datestamp = deparseDatestampConst((Const *)right);
-
-				if (datestamp)
-					state->from = datestamp;
-			}
-		}
-
-		if (strcmp(operName, "<=") == 0 || strcmp(operName, "<") == 0)
-		{
-			if (strcmp(oaiNode, OAI_NODE_DATESTAMP) == 0 && (var->vartype == TIMESTAMPOID))
-			{
-				char *datestamp = deparseDatestampConst((Const *)right);
-
-				if (datestamp)
-					state->until = datestamp;
-			}
-		}
-
-		if (strcmp(operName, "<@") == 0 || strcmp(operName, "@>") == 0 || strcmp(operName, "&&") == 0)
-		{
-			if (strcmp(oaiNode, OAI_NODE_SETSPEC) == 0 && (var->vartype == TEXTARRAYOID || var->vartype == VARCHARARRAYOID))
-			{
-				Const *constant = (Const *)lsecond(oper->args);
-				ArrayType *array;
-				int numitems;
-
-				if (constant->constisnull)
-					break;
-
-				array = DatumGetArrayTypeP(constant->constvalue);
-				numitems = ArrayGetNItems(ARR_NDIM(array), ARR_DIMS(array));
-
-				if (numitems > 1)
-				{
-					elog(WARNING, "The OAI standard requests do not support multiple '%s' attributes. This filter will be applied AFTER the OAI request.", OAI_NODE_SETSPEC);
-					elog(DEBUG2, "  %s: clearing '%s' attribute.", __func__, OAI_NODE_SETSPEC);
-					state->set = NULL;
-				}
-				else if (numitems == 1)
-				{
-					bool isnull;
-					Datum value;
-
-					ArrayIterator iterator = array_create_iterator(array, 0, NULL);
-
-					while (array_iterate(iterator, &value, &isnull))
-					{
-						/* a NULL element matches nothing, so there is no set to request */
-						if (isnull)
-							continue;
-
-						state->set = datumToString(value, TEXTOID);
-						elog(DEBUG2, "  %s: setSpec set to '%s'", __func__, state->set);
-					}
-
-					array_free_iterator(iterator);
-				}
-			}
+			/*
+			 * The value is only known at execution time, e.g. $1 in a generic
+			 * plan or now(): see EvaluatePushdownExpressions().
+			 */
+			state->pushdown_exprs = lappend(state->pushdown_exprs, right);
+			state->pushdown_kinds = lappend_int(state->pushdown_kinds, kind);
 		}
 
 		break;
@@ -2652,8 +2612,9 @@ static char *deparseTimestamp(Datum datum)
  * deparseDatestampConst
  * ---------------------
  * Converts a constant compared with a datestamp column into an OAI
- * UTCdatetime, or returns NULL if it cannot be pushed down. timestamptz is
- * not pushed down: it is compared in the session time zone, not in UTC.
+ * UTCdatetime, or returns NULL if it cannot be pushed down. A timestamptz
+ * is converted in the session time zone, as PostgreSQL does when comparing
+ * it with the (timestamp) column.
  */
 static char *deparseDatestampConst(Const *constant)
 {
@@ -2665,6 +2626,9 @@ static char *deparseDatestampConst(Const *constant)
 
 	if (constant->consttype == DATEOID)
 		return deparseTimestamp(DirectFunctionCall1(date_timestamp, constant->constvalue));
+
+	if (constant->consttype == TIMESTAMPTZOID)
+		return deparseTimestamp(DirectFunctionCall1(timestamptz_timestamp, constant->constvalue));
 
 	return NULL;
 }
@@ -2682,6 +2646,187 @@ static char *deparseTextConst(Const *constant)
 		return NULL;
 
 	return datumToString(constant->constvalue, constant->consttype);
+}
+
+/*
+ * GetPushdownKind
+ * ---------------
+ * Returns what a condition "column operator value" sets in the request, or
+ * OAI_PUSHDOWN_NONE if it cannot be pushed down.
+ */
+static OAIPushdownKind GetPushdownKind(const char *operName, const char *oaiNode, Oid vartype)
+{
+	bool is_text = vartype == TEXTOID || vartype == VARCHAROID;
+	bool is_datestamp = strcmp(oaiNode, OAI_NODE_DATESTAMP) == 0 && vartype == TIMESTAMPOID;
+
+	if (strcmp(operName, "=") == 0)
+	{
+		if (strcmp(oaiNode, OAI_NODE_IDENTIFIER) == 0 && is_text)
+			return OAI_PUSHDOWN_IDENTIFIER;
+		if (strcmp(oaiNode, OAI_NODE_METADATAPREFIX) == 0 && is_text)
+			return OAI_PUSHDOWN_METADATAPREFIX;
+		if (is_datestamp)
+			return OAI_PUSHDOWN_DATESTAMP;
+	}
+
+	if ((strcmp(operName, ">=") == 0 || strcmp(operName, ">") == 0) && is_datestamp)
+		return OAI_PUSHDOWN_FROM;
+
+	if ((strcmp(operName, "<=") == 0 || strcmp(operName, "<") == 0) && is_datestamp)
+		return OAI_PUSHDOWN_UNTIL;
+
+	if ((strcmp(operName, "<@") == 0 || strcmp(operName, "@>") == 0 || strcmp(operName, "&&") == 0) &&
+		strcmp(oaiNode, OAI_NODE_SETSPEC) == 0 &&
+		(vartype == TEXTARRAYOID || vartype == VARCHARARRAYOID))
+		return OAI_PUSHDOWN_SET;
+
+	return OAI_PUSHDOWN_NONE;
+}
+
+/*
+ * ApplyPushdown
+ * -------------
+ * Sets the request argument a condition's value stands for. Values that
+ * cannot be pushed down are ignored: the condition is evaluated locally.
+ */
+static void ApplyPushdown(OAIFdwState *state, OAIPushdownKind kind, Const *constant)
+{
+	char *value;
+
+	switch (kind)
+	{
+	case OAI_PUSHDOWN_IDENTIFIER:
+		if ((value = deparseTextConst(constant)) != NULL)
+		{
+			state->requestVerb = OAI_REQUEST_GETRECORD;
+			state->identifier = value;
+			elog(DEBUG2, "  %s: request type set to '%s' with identifier '%s'", __func__, OAI_REQUEST_GETRECORD, state->identifier);
+		}
+		break;
+
+	case OAI_PUSHDOWN_METADATAPREFIX:
+		if ((value = deparseTextConst(constant)) != NULL)
+		{
+			state->metadataPrefix = value;
+			elog(DEBUG2, "  %s: metadataPrefix set to '%s'", __func__, state->metadataPrefix);
+		}
+		break;
+
+	case OAI_PUSHDOWN_DATESTAMP:
+		if ((value = deparseDatestampConst(constant)) != NULL)
+		{
+			state->from = value;
+			state->until = value;
+		}
+		break;
+
+	case OAI_PUSHDOWN_FROM:
+		if ((value = deparseDatestampConst(constant)) != NULL)
+			state->from = value;
+		break;
+
+	case OAI_PUSHDOWN_UNTIL:
+		if ((value = deparseDatestampConst(constant)) != NULL)
+			state->until = value;
+		break;
+
+	case OAI_PUSHDOWN_SET:
+	{
+		ArrayType *array;
+		int numitems;
+
+		if (constant->constisnull)
+			break;
+
+		array = DatumGetArrayTypeP(constant->constvalue);
+		numitems = ArrayGetNItems(ARR_NDIM(array), ARR_DIMS(array));
+
+		if (numitems > 1)
+		{
+			elog(WARNING, "The OAI standard requests do not support multiple '%s' attributes. This filter will be applied AFTER the OAI request.", OAI_NODE_SETSPEC);
+			elog(DEBUG2, "  %s: clearing '%s' attribute.", __func__, OAI_NODE_SETSPEC);
+			state->set = NULL;
+		}
+		else if (numitems == 1)
+		{
+			bool isnull;
+			Datum item;
+
+			ArrayIterator iterator = array_create_iterator(array, 0, NULL);
+
+			while (array_iterate(iterator, &item, &isnull))
+			{
+				/* a NULL element matches nothing, so there is no set to request */
+				if (isnull)
+					continue;
+
+				state->set = datumToString(item, TEXTOID);
+				elog(DEBUG2, "  %s: setSpec set to '%s'", __func__, state->set);
+			}
+
+			array_free_iterator(iterator);
+		}
+		break;
+	}
+
+	case OAI_PUSHDOWN_NONE:
+		break;
+	}
+}
+
+/*
+ * EvaluatePushdownExpressions
+ * ---------------------------
+ * Evaluates the conditions whose value is only known at execution time and
+ * sets the request arguments accordingly, on top of those set at planning.
+ * Runs when a scan starts, so that a rescan picks up new parameter values.
+ *
+ * Returns false if a value is NULL: the operators are strict, so no row can
+ * match and no request is needed.
+ */
+static bool EvaluatePushdownExpressions(ForeignScanState *node, OAIFdwState *state)
+{
+	ForeignScan *fs = (ForeignScan *)node->ss.ps.plan;
+	ExprContext *econtext = node->ss.ps.ps_ExprContext;
+	MemoryContext oldcxt;
+	ListCell *lc_expr;
+	ListCell *lc_state;
+	ListCell *lc_kind;
+
+	state->requestVerb = state->planArgs->requestVerb;
+	state->identifier = state->planArgs->identifier;
+	state->metadataPrefix = state->planArgs->metadataPrefix;
+	state->set = state->planArgs->set;
+	state->from = state->planArgs->from;
+	state->until = state->planArgs->until;
+
+	MemoryContextReset(state->pushdowncxt);
+	oldcxt = MemoryContextSwitchTo(state->pushdowncxt);
+
+	forthree(lc_expr, fs->fdw_exprs, lc_state, state->pushdown_states, lc_kind, state->pushdown_kinds)
+	{
+		Node *expr = (Node *)lfirst(lc_expr);
+		Oid type = exprType(expr);
+		int16 typlen;
+		bool typbyval;
+		bool isnull;
+		Datum value = ExecEvalExpr((ExprState *)lfirst(lc_state), econtext, &isnull);
+
+		if (isnull)
+		{
+			MemoryContextSwitchTo(oldcxt);
+			return false;
+		}
+
+		get_typlenbyval(type, &typlen, &typbyval);
+		ApplyPushdown(state, (OAIPushdownKind)lfirst_int(lc_kind),
+					  makeConst(type, exprTypmod(expr), exprCollation(expr),
+								typlen, value, isnull, typbyval));
+	}
+
+	MemoryContextSwitchTo(oldcxt);
+
+	return true;
 }
 
 static void deparseWhereClause(OAIFdwState *state, List *conditions)
@@ -2750,7 +2895,7 @@ static ForeignScan *OAIFdwGetForeignPlan(PlannerInfo *root, RelOptInfo *baserel,
 	return make_foreignscan(tlist,
 							scan_clauses,
 							baserel->relid,
-							NIL,		 /* no expressions we will evaluate */
+							state->pushdown_exprs, /* evaluated when the scan starts */
 							fdw_private, /* pass along our state */
 							NIL,		 /* no custom tlist; our scan tuple looks like tlist */
 							NIL,		 /* no quals we will recheck */
@@ -2781,6 +2926,19 @@ static void OAIFdwBeginForeignScan(ForeignScanState *node, int eflags)
 	state->tokencxt = AllocSetContextCreate(CurrentMemoryContext,
 											"oai_fdw_token_ctx",
 											ALLOCSET_SMALL_SIZES);
+
+	state->pushdowncxt = AllocSetContextCreate(CurrentMemoryContext,
+											   "oai_fdw_pushdown_ctx",
+											   ALLOCSET_SMALL_SIZES);
+	state->pushdown_states = ExecInitExprList(fs->fdw_exprs, (PlanState *)node);
+
+	state->planArgs = (OAIRequestArgs *)palloc(sizeof(OAIRequestArgs));
+	state->planArgs->requestVerb = state->requestVerb;
+	state->planArgs->identifier = state->identifier;
+	state->planArgs->metadataPrefix = state->metadataPrefix;
+	state->planArgs->set = state->set;
+	state->planArgs->from = state->from;
+	state->planArgs->until = state->until;
 }
 
 static OAIRecord *FetchNextOAIRecord(OAIFdwState **state)
@@ -2960,6 +3118,15 @@ static TupleTableSlot *OAIFdwIterateForeignScan(ForeignScanState *node)
 
 	/* Returns an empty tuple in case there is no mapping for OAI nodes and columns */
 	if (state->numfdwcols == 0)
+		return slot;
+
+	if (!state->pushdown_evaluated)
+	{
+		state->pushdown_norows = !EvaluatePushdownExpressions(node, state);
+		state->pushdown_evaluated = true;
+	}
+
+	if (state->pushdown_norows)
 		return slot;
 
 	old_cxt = MemoryContextSwitchTo(state->oaicxt);
@@ -3511,6 +3678,7 @@ static void OAIFdwReScanForeignScan(ForeignScanState *node)
 	state->pagesize = 0;
 	state->records = NIL;
 	state->resumptionToken = NULL;
+	state->pushdown_evaluated = false;
 }
 
 static void OAIFdwEndForeignScan(ForeignScanState *node)
@@ -3975,6 +4143,7 @@ static void InitSession(OAIFdwState *state, RelOptInfo *baserel)
 static List *SerializePlanData(OAIFdwState *state)
 {
 	List *result = NIL;
+	ListCell *cell;
 
 	elog(DEBUG2, "%s called", __func__);
 
@@ -4025,6 +4194,11 @@ static List *SerializePlanData(OAIFdwState *state)
 		result = lappend(result, OidToConst(state->oaiTable->cols[i]->pgtype));
 	}
 
+	/* what the expressions in fdw_exprs set, in the same order */
+	result = lappend(result, IntToConst(list_length(state->pushdown_kinds)));
+	foreach (cell, state->pushdown_kinds)
+		result = lappend(result, IntToConst(lfirst_int(cell)));
+
 	elog(DEBUG2, "%s exit", __func__);
 	return result;
 }
@@ -4044,6 +4218,7 @@ static struct OAIFdwState *DeserializePlanData(List *list)
 {
 	struct OAIFdwState *state = (struct OAIFdwState *)palloc0(sizeof(OAIFdwState));
 	ListCell *cell = list_head(list);
+	int numkinds;
 
 	elog(DEBUG2, "%s called", __func__);
 
@@ -4127,6 +4302,15 @@ static struct OAIFdwState *DeserializePlanData(List *list)
 		cell = list_next(list, cell);
 
 		state->oaiTable->cols[i]->pgtype = DatumGetObjectId(((Const *)lfirst(cell))->constvalue);
+		cell = list_next(list, cell);
+	}
+
+	numkinds = DatumGetInt32(((Const *)lfirst(cell))->constvalue);
+	cell = list_next(list, cell);
+
+	for (int i = 0; i < numkinds; ++i)
+	{
+		state->pushdown_kinds = lappend_int(state->pushdown_kinds, DatumGetInt32(((Const *)lfirst(cell))->constvalue));
 		cell = list_next(list, cell);
 	}
 
