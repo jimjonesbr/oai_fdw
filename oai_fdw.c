@@ -67,6 +67,7 @@
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "nodes/plannodes.h"
+#include "parser/parsetree.h"
 #if PG_VERSION_NUM < 180000
 #include "nodes/bitmapset.h" /* Needed for bms_is_empty in versions where it's inline */
 #endif
@@ -447,7 +448,7 @@ static void CheckOAIResponse(OAIFdwState *state);
 static Datum CreateDatum(int pgtype, int pgtypmod, char *value);
 static void LoadOAIServerInfo(OAIFdwState *state);
 static void LoadOAITableInfo(OAIFdwState *state);
-static void LoadOAIUserMapping(OAIFdwState *state);
+static void LoadOAIUserMapping(OAIFdwState *state, Oid userid);
 static void InitSession(OAIFdwState *state, RelOptInfo *baserel);
 static List *SerializePlanData(OAIFdwState *state);
 static struct OAIFdwState *DeserializePlanData(List *list);
@@ -666,7 +667,7 @@ Datum oai_fdw_identity(PG_FUNCTION_ARGS)
 		/*
 		 * Loading USER MAPPING (if any)
 		 */
-		LoadOAIUserMapping(state);
+		LoadOAIUserMapping(state, GetUserId());
 
 		identity = GetIdentity(state);
 		funcctx->user_fctx = identity;
@@ -745,7 +746,7 @@ Datum oai_fdw_listSets(PG_FUNCTION_ARGS)
 		/*
 		 * Loading USER MAPPING (if any)
 		 */
-		LoadOAIUserMapping(state);
+		LoadOAIUserMapping(state, GetUserId());
 
 		sets = GetSets(state);
 		funcctx->user_fctx = sets;
@@ -824,7 +825,7 @@ Datum oai_fdw_listMetadataFormats(PG_FUNCTION_ARGS)
 		/*
 		 * Loading USER MAPPING (if any)
 		 */
-		LoadOAIUserMapping(state);
+		LoadOAIUserMapping(state, GetUserId());
 
 		formats = GetMetadataFormats(state);
 		funcctx->user_fctx = formats;
@@ -2906,6 +2907,7 @@ static void OAIFdwBeginForeignScan(ForeignScanState *node, int eflags)
 {
 	ForeignScan *fs = (ForeignScan *)node->ss.ps.plan;
 	struct OAIFdwState *state = DeserializePlanData(fs->fdw_private);
+	Oid userid;
 
 	node->fdw_state = (void *)state;
 
@@ -2914,7 +2916,21 @@ static void OAIFdwBeginForeignScan(ForeignScanState *node, int eflags)
 
 	state->foreign_table = GetForeignTable(state->foreigntableid);
 	state->foreign_server = GetForeignServer(state->foreign_table->serverid);
-	LoadOAIUserMapping(state); /* restores user/password/proxy creds */
+
+	/*
+	 * Use the user mapping of the role the permissions are checked as, e.g.
+	 * the owner of a view, as ExecCheckPermissions() and postgres_fdw do.
+	 */
+#if PG_VERSION_NUM >= 160000
+	userid = OidIsValid(fs->checkAsUser) ? fs->checkAsUser : GetUserId();
+#else
+	{
+		RangeTblEntry *rte = rt_fetch(fs->scan.scanrelid, node->ss.ps.state->es_range_table);
+
+		userid = OidIsValid(rte->checkAsUser) ? rte->checkAsUser : GetUserId();
+	}
+#endif
+	LoadOAIUserMapping(state, userid); /* restores user/password/proxy creds */
 
 	state->oaicxt = AllocSetContextCreate(CurrentMemoryContext,
 										  "oai_fdw_ctx",
@@ -3716,7 +3732,7 @@ static List *OAIFdwImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid server
 
 	elog(DEBUG2, "%s called: '%s'", __func__, server->servername);
 	state = GetServerInfo(server->servername);
-	LoadOAIUserMapping(state);
+	LoadOAIUserMapping(state, GetUserId());
 
 	elog(DEBUG2, "  %s: parsing statements", __func__);
 
@@ -3887,7 +3903,7 @@ static Datum CreateDatum(int pgtype, int pgtypmod, char *value)
 		return OidFunctionCall1(typinput, CStringGetDatum(value));
 }
 
-static void LoadOAIUserMapping(OAIFdwState *state)
+static void LoadOAIUserMapping(OAIFdwState *state, Oid userid)
 {
 	Datum datum;
 	HeapTuple tp;
@@ -3900,7 +3916,7 @@ static void LoadOAIUserMapping(OAIFdwState *state)
 	elog(DEBUG2, "%s called", __func__);
 
 	tp = SearchSysCache2(USERMAPPINGUSERSERVER,
-						 ObjectIdGetDatum(GetUserId()),
+						 ObjectIdGetDatum(userid),
 						 ObjectIdGetDatum(state->foreign_server->serverid));
 
 	if (!HeapTupleIsValid(tp))
@@ -3914,7 +3930,7 @@ static void LoadOAIUserMapping(OAIFdwState *state)
 	if (!HeapTupleIsValid(tp))
 	{
 		elog(DEBUG2, "%s: user mapping not found for user \"%s\", server \"%s\"",
-			 __func__, MappingUserName(GetUserId()), state->foreign_server->servername);
+			 __func__, MappingUserName(userid), state->foreign_server->servername);
 
 		usermatch = false;
 	}
@@ -3928,7 +3944,7 @@ static void LoadOAIUserMapping(OAIFdwState *state)
 #else
 		um->umid = ((Form_pg_user_mapping)GETSTRUCT(tp))->oid;
 #endif
-		um->userid = GetUserId();
+		um->userid = userid;
 		um->serverid = state->foreign_server->serverid;
 
 		elog(DEBUG2, "%s: extract the umoptions", __func__);
@@ -4123,11 +4139,6 @@ static void InitSession(OAIFdwState *state, RelOptInfo *baserel)
 	 * Loading FOREIGN TABLE structure and OPTIONS
 	 */
 	LoadOAITableInfo(state);
-
-	/*
-	 * Loading USER MAPPING (if any)
-	 */
-	LoadOAIUserMapping(state);
 
 	OAIRequestPlanner(state, baserel);
 }

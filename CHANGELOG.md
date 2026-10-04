@@ -37,6 +37,8 @@
 
   **`IMPORT FOREIGN SCHEMA`**: the user mapping is used, and `LIMIT TO` only imports sets that exist.
 
+  **User mapping of views**: a foreign table queried through a view now uses the user mapping of the view owner, as permissions are checked as that role.
+
   **`OAI_HarvestTable`**: the last time window is no longer skipped, quoted table names work, and same-named tables in other schemas are no longer mixed up.
 
   **Server options**: `request_redirect`, `request_max_redirect` and the URL scheme are validated, and `connect_retry '0'` disables retries.
