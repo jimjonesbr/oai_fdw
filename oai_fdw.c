@@ -1403,8 +1403,12 @@ static size_t HeaderCallbackFunction(char *contents, size_t size, size_t nmemb, 
 	 * Record an unexpected content-type instead of warning from here: this
 	 * runs inside libcurl, where raising an error is unsafe and even a WARNING
 	 * would allocate. The caller emits the warning once the transfer is done.
+	 * Only the final response counts: with redirects, every hop starts with
+	 * a status line of its own.
 	 */
-	if (pg_strncasecmp(line, "content-type:", 13) == 0 &&
+	if (pg_strncasecmp(line, "HTTP/", 5) == 0)
+		mem->unsupported_ctype[0] = '\0';
+	else if (pg_strncasecmp(line, "content-type:", 13) == 0 &&
 		pg_strncasecmp(line, "content-type: text/xml", 22) != 0 &&
 		pg_strncasecmp(line, "content-type: application/xml", 29) != 0)
 	{
@@ -1772,6 +1776,7 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 
 	struct curl_slist *headers = NULL;
 	char *parse_error = NULL;
+	long final_code = 0;
 
 	if (state->connectTimeout)
 		connectTimeout = state->connectTimeout;
@@ -2146,6 +2151,33 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 					(errcode(ERRCODE_FDW_OUT_OF_MEMORY),
 					 errmsg("%s: out of memory while reading the response from '%s'",
 							__func__, state->url)));
+		}
+
+		/*
+		 * A redirect that was not followed: its body is not the answer, and
+		 * would only be reported as an invalid response.
+		 */
+		curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &final_code);
+
+		if (res == CURLE_OK && final_code >= 300 && final_code < 400)
+		{
+			char *location = NULL;
+			char *target;
+
+			curl_easy_getinfo(curl, CURLINFO_REDIRECT_URL, &location);
+			target = location ? pstrdup(location) : NULL;
+
+			free(chunk.memory);
+			free(chunk_header.memory);
+			curl_slist_free_all(headers);
+			curl_easy_cleanup(curl);
+
+			ereport(ERROR,
+					(errcode(ERRCODE_FDW_UNABLE_TO_CREATE_EXECUTION),
+					 errmsg("OAI request was redirected: HTTP %ld", final_code),
+					 target ? errdetail("Location: \"%s\"", target) : 0,
+					 errhint("Set '%s' on the FOREIGN SERVER to follow redirects, or use the new URL.",
+							 OAI_SERVER_OPTION_REQUEST_REDIRECT)));
 		}
 
 		if (chunk_header.unsupported_ctype[0] != '\0')

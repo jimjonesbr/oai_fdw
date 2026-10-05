@@ -314,4 +314,14 @@ CREATE USER MAPPING FOR postgres SERVER oai_server_ulb OPTIONS (user 'foo', pass
 -- invalid option
 CREATE USER MAPPING FOR postgres SERVER oai_server_ulb OPTIONS (user 'jim', foo 'bar');
 
+-- redirect (http -> https) that is not followed
+CREATE SERVER oai_server_redirect FOREIGN DATA WRAPPER oai_fdw
+OPTIONS (url 'http://services.dnb.de/oai/repository', connect_retry '0');
+SELECT name FROM OAI_Identify('oai_server_redirect') WHERE name = 'repositoryName';
+
+-- followed redirect: no warning about the content-type of the redirect
+ALTER SERVER oai_server_redirect OPTIONS (ADD request_redirect 'true');
+SELECT name FROM OAI_Identify('oai_server_redirect') WHERE name = 'repositoryName';
+DROP SERVER oai_server_redirect;
+
 DROP SERVER oai_server_dnb CASCADE;

@@ -332,5 +332,19 @@ ERROR:  empty value in option 'password'
 -- invalid option
 CREATE USER MAPPING FOR postgres SERVER oai_server_ulb OPTIONS (user 'jim', foo 'bar');
 ERROR:  invalid oai_fdw option "foo"
+-- redirect (http -> https) that is not followed
+CREATE SERVER oai_server_redirect FOREIGN DATA WRAPPER oai_fdw
+OPTIONS (url 'http://services.dnb.de/oai/repository', connect_retry '0');
+SELECT name FROM OAI_Identify('oai_server_redirect') WHERE name = 'repositoryName';
+ERROR:  OAI request was redirected: HTTP 301
+-- followed redirect: no warning about the content-type of the redirect
+ALTER SERVER oai_server_redirect OPTIONS (ADD request_redirect 'true');
+SELECT name FROM OAI_Identify('oai_server_redirect') WHERE name = 'repositoryName';
+      name      
+----------------
+ repositoryName
+(1 row)
+
+DROP SERVER oai_server_redirect;
 DROP SERVER oai_server_dnb CASCADE;
 NOTICE:  drop cascades to foreign table dnb_zdb_oai_dc
