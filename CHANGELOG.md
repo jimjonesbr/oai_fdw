@@ -17,6 +17,8 @@
 
   **Fixed leaks on query cancel**: cancelling a query during a request no longer leaks the curl handle, its socket and the response buffer.
 
+  **Fixed leaks on errors while parsing**: an error while reading a response, e.g. a value that cannot be converted to the database encoding, no longer leaks the response document in `OAI_Identify()`, `OAI_ListSets()` and `OAI_ListMetadataFormats()`, nor libxml2's copies of the values in queries.
+
   **Support functions require `USAGE`**: `OAI_Identify()`, `OAI_ListSets()` and `OAI_ListMetadataFormats()` now check the `USAGE` privilege on the foreign server.
 
   **`ListSets` follows `resumptionToken`**: `OAI_ListSets()` and `IMPORT FOREIGN SCHEMA oai_sets` no longer stop after the first page of sets.

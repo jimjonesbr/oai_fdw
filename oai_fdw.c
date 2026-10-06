@@ -436,6 +436,7 @@ static long ParseRetryAfter(const char *headers);
 static void OAIWaitRetryAfter(long seconds, const char *servername);
 static void OAIFreeXmlDoc(OAIFdwState *state);
 static char *OAIToServer(const xmlChar *str);
+static char *OAINodeText(xmlNodePtr node);
 static void AppendOAIArgument(StringInfo buf, CURL *curl, const char *name, const char *value);
 static bool HasDayGranularity(OAIFdwState *state);
 static void NormalizeDatestampArguments(OAIFdwState *state);
@@ -1071,38 +1072,44 @@ static List *GetIdentity(OAIFdwState *state)
 
 	if (oaiExecuteResponse == OAI_SUCCESS)
 	{
-		xmlNodePtr oai_root;
-		xmlNodePtr Identity;
-		xmlNodePtr xmlroot;
-
-		CheckOAIResponse(state);
-		xmlroot = xmlDocGetRootElement(state->xmldoc);
-
-		for (oai_root = xmlroot->children; oai_root != NULL; oai_root = oai_root->next)
+		/* the document is not reclaimed on error, so it is released here */
+		PG_TRY();
 		{
-			if (oai_root->type != XML_ELEMENT_NODE)
-				continue;
+			xmlNodePtr oai_root;
+			xmlNodePtr Identity;
+			xmlNodePtr xmlroot;
 
-			if (xmlStrcmp(oai_root->name, (xmlChar *)OAI_REQUEST_IDENTIFY) != 0)
-				continue;
+			CheckOAIResponse(state);
+			xmlroot = xmlDocGetRootElement(state->xmldoc);
 
-			for (Identity = oai_root->children; Identity != NULL; Identity = Identity->next)
+			for (oai_root = xmlroot->children; oai_root != NULL; oai_root = oai_root->next)
 			{
-				OAIFdwIdentityNode *node;
-				xmlChar *el;
-
-				if (Identity->type != XML_ELEMENT_NODE)
+				if (oai_root->type != XML_ELEMENT_NODE)
 					continue;
 
-				node = (OAIFdwIdentityNode *)palloc0(sizeof(OAIFdwIdentityNode));
-				node->name = pstrdup((char *)Identity->name);
-				el = xmlNodeGetContent(Identity);
-				node->description = el ? OAIToServer(el) : NULL;
-				if (el)
-					xmlFree(el);
-				result = lappend(result, node);
+				if (xmlStrcmp(oai_root->name, (xmlChar *)OAI_REQUEST_IDENTIFY) != 0)
+					continue;
+
+				for (Identity = oai_root->children; Identity != NULL; Identity = Identity->next)
+				{
+					OAIFdwIdentityNode *node;
+
+					if (Identity->type != XML_ELEMENT_NODE)
+						continue;
+
+					node = (OAIFdwIdentityNode *)palloc0(sizeof(OAIFdwIdentityNode));
+					node->name = pstrdup((char *)Identity->name);
+					node->description = OAINodeText(Identity);
+					result = lappend(result, node);
+				}
 			}
 		}
+		PG_CATCH();
+		{
+			OAIFreeXmlDoc(state);
+			PG_RE_THROW();
+		}
+		PG_END_TRY();
 	}
 
 	OAIFreeXmlDoc(state);
@@ -1134,74 +1141,80 @@ static List *GetSets(OAIFdwState *state)
 
 		if (oaiExecuteResponse == OAI_SUCCESS)
 		{
-			xmlNodePtr oai_root;
-			xmlNodePtr ListSets;
-			xmlNodePtr SetElement;
-			xmlNodePtr xmlroot;
-
-			CheckOAIResponse(state);
-			xmlroot = xmlDocGetRootElement(state->xmldoc);
-
-			for (oai_root = xmlroot->children; oai_root != NULL; oai_root = oai_root->next)
+			/* the document is not reclaimed on error, so it is released here */
+			PG_TRY();
 			{
-				if (oai_root->type != XML_ELEMENT_NODE)
-					continue;
+				xmlNodePtr oai_root;
+				xmlNodePtr ListSets;
+				xmlNodePtr SetElement;
+				xmlNodePtr xmlroot;
 
-				if (xmlStrcmp(oai_root->name, (xmlChar *)OAI_REQUEST_LISTSETS) != 0)
-					continue;
+				CheckOAIResponse(state);
+				xmlroot = xmlDocGetRootElement(state->xmldoc);
 
-				for (ListSets = oai_root->children; ListSets != NULL; ListSets = ListSets->next)
+				for (oai_root = xmlroot->children; oai_root != NULL; oai_root = oai_root->next)
 				{
-					OAISet *set;
-
-					if (ListSets->type != XML_ELEMENT_NODE)
+					if (oai_root->type != XML_ELEMENT_NODE)
 						continue;
 
-					if (xmlStrcmp(ListSets->name, (xmlChar *)OAI_RESPONSE_ELEMENT_RESUMPTIONTOKEN) == 0)
+					if (xmlStrcmp(oai_root->name, (xmlChar *)OAI_REQUEST_LISTSETS) != 0)
+						continue;
+
+					for (ListSets = oai_root->children; ListSets != NULL; ListSets = ListSets->next)
 					{
-						xmlChar *token = xmlNodeGetContent(ListSets);
+						OAISet *set;
 
-						if (token && *token != '\0')
-							state->resumptionToken = pstrdup((char *)token);
-						if (token)
-							xmlFree(token);
-						continue;
-					}
-
-					if (xmlStrcmp(ListSets->name, (xmlChar *)"set") != 0)
-						continue;
-
-					set = (OAISet *)palloc0(sizeof(OAISet));
-
-					for (SetElement = ListSets->children; SetElement != NULL; SetElement = SetElement->next)
-					{
-						if (SetElement->type != XML_ELEMENT_NODE)
+						if (ListSets->type != XML_ELEMENT_NODE)
 							continue;
 
-						if (xmlStrcmp(SetElement->name, (xmlChar *)OAI_RESPONSE_ELEMENT_SETSPEC) == 0)
+						if (xmlStrcmp(ListSets->name, (xmlChar *)OAI_RESPONSE_ELEMENT_RESUMPTIONTOKEN) == 0)
 						{
-							xmlChar *el = xmlNodeGetContent(SetElement);
-							set->setSpec = OAIToServer(el);
-							xmlFree(el);
+							xmlChar *token = xmlNodeGetContent(ListSets);
+
+							if (token && *token != '\0')
+								state->resumptionToken = pstrdup((char *)token);
+							if (token)
+								xmlFree(token);
+							continue;
 						}
-						else if (xmlStrcmp(SetElement->name, (xmlChar *)OAI_RESPONSE_ELEMENT_SETNAME) == 0)
+
+						if (xmlStrcmp(ListSets->name, (xmlChar *)"set") != 0)
+							continue;
+
+						set = (OAISet *)palloc0(sizeof(OAISet));
+
+						for (SetElement = ListSets->children; SetElement != NULL; SetElement = SetElement->next)
 						{
-							xmlChar *el = xmlNodeGetContent(SetElement);
-							set->setName = OAIToServer(el);
-							xmlFree(el);
+							if (SetElement->type != XML_ELEMENT_NODE)
+								continue;
+
+							if (xmlStrcmp(SetElement->name, (xmlChar *)OAI_RESPONSE_ELEMENT_SETSPEC) == 0)
+							{
+								set->setSpec = OAINodeText(SetElement);
+							}
+							else if (xmlStrcmp(SetElement->name, (xmlChar *)OAI_RESPONSE_ELEMENT_SETNAME) == 0)
+							{
+								set->setName = OAINodeText(SetElement);
+							}
 						}
-					}
 
-					/* setSpec is mandatory; a set without it cannot be harvested */
-					if (!set->setSpec)
-					{
-						elog(WARNING, "ignoring <set> without <setSpec> in %s response", state->requestVerb);
-						continue;
-					}
+						/* setSpec is mandatory; a set without it cannot be harvested */
+						if (!set->setSpec)
+						{
+							elog(WARNING, "ignoring <set> without <setSpec> in %s response", state->requestVerb);
+							continue;
+						}
 
-					result = lappend(result, set);
+						result = lappend(result, set);
+					}
 				}
 			}
+			PG_CATCH();
+			{
+				OAIFreeXmlDoc(state);
+				PG_RE_THROW();
+			}
+			PG_END_TRY();
 		}
 
 		OAIFreeXmlDoc(state);
@@ -1230,67 +1243,71 @@ static List *GetMetadataFormats(OAIFdwState *state)
 
 	if (oaiExecuteResponse == OAI_SUCCESS)
 	{
-		xmlNodePtr oai_root;
-		xmlNodePtr ListMetadataFormats;
-		xmlNodePtr MetadataElement;
-		xmlNodePtr xmlroot;
-
-		CheckOAIResponse(state);
-		xmlroot = xmlDocGetRootElement(state->xmldoc);
-
-		for (oai_root = xmlroot->children; oai_root != NULL; oai_root = oai_root->next)
+		/* the document is not reclaimed on error, so it is released here */
+		PG_TRY();
 		{
-			if (oai_root->type != XML_ELEMENT_NODE)
-				continue;
+			xmlNodePtr oai_root;
+			xmlNodePtr ListMetadataFormats;
+			xmlNodePtr MetadataElement;
+			xmlNodePtr xmlroot;
 
-			if (xmlStrcmp(oai_root->name, (xmlChar *)OAI_REQUEST_LISTMETADATAFORMATS) != 0)
-				continue;
+			CheckOAIResponse(state);
+			xmlroot = xmlDocGetRootElement(state->xmldoc);
 
-			for (ListMetadataFormats = oai_root->children; ListMetadataFormats != NULL; ListMetadataFormats = ListMetadataFormats->next)
+			for (oai_root = xmlroot->children; oai_root != NULL; oai_root = oai_root->next)
 			{
-				OAIMetadataFormat *format;
-
-				if (ListMetadataFormats->type != XML_ELEMENT_NODE)
-					continue;
-				if (xmlStrcmp(ListMetadataFormats->name, (xmlChar *)OAI_RESPONSE_ELEMENT_METADATAFORMAT) != 0)
+				if (oai_root->type != XML_ELEMENT_NODE)
 					continue;
 
-				format = (OAIMetadataFormat *)palloc0(sizeof(OAIMetadataFormat));
+				if (xmlStrcmp(oai_root->name, (xmlChar *)OAI_REQUEST_LISTMETADATAFORMATS) != 0)
+					continue;
 
-				for (MetadataElement = ListMetadataFormats->children; MetadataElement != NULL; MetadataElement = MetadataElement->next)
+				for (ListMetadataFormats = oai_root->children; ListMetadataFormats != NULL; ListMetadataFormats = ListMetadataFormats->next)
 				{
-					if (MetadataElement->type != XML_ELEMENT_NODE)
+					OAIMetadataFormat *format;
+
+					if (ListMetadataFormats->type != XML_ELEMENT_NODE)
+						continue;
+					if (xmlStrcmp(ListMetadataFormats->name, (xmlChar *)OAI_RESPONSE_ELEMENT_METADATAFORMAT) != 0)
 						continue;
 
-					if (xmlStrcmp(MetadataElement->name, (xmlChar *)OAI_RESPONSE_ELEMENT_METADATAPREFIX) == 0)
-					{
-						xmlChar *el = xmlNodeGetContent(MetadataElement);
-						format->metadataPrefix = OAIToServer(el);
-						xmlFree(el);
-					}
-					else if (xmlStrcmp(MetadataElement->name, (xmlChar *)OAI_RESPONSE_ELEMENT_SCHEMA) == 0)
-					{
-						xmlChar *el = xmlNodeGetContent(MetadataElement);
-						format->schema = OAIToServer(el);
-						xmlFree(el);
-					}
-					else if (xmlStrcmp(MetadataElement->name, (xmlChar *)OAI_RESPONSE_ELEMENT_METADATANAMESPACE) == 0)
-					{
-						xmlChar *el = xmlNodeGetContent(MetadataElement);
-						format->metadataNamespace = OAIToServer(el);
-						xmlFree(el);
-					}
-				}
+					format = (OAIMetadataFormat *)palloc0(sizeof(OAIMetadataFormat));
 
-				if (!format->metadataPrefix)
-				{
-					elog(WARNING, "ignoring <metadataFormat> without <metadataPrefix> in %s response", state->requestVerb);
-					continue;
-				}
+					for (MetadataElement = ListMetadataFormats->children; MetadataElement != NULL; MetadataElement = MetadataElement->next)
+					{
+						if (MetadataElement->type != XML_ELEMENT_NODE)
+							continue;
 
-				result = lappend(result, format);
+						if (xmlStrcmp(MetadataElement->name, (xmlChar *)OAI_RESPONSE_ELEMENT_METADATAPREFIX) == 0)
+						{
+							format->metadataPrefix = OAINodeText(MetadataElement);
+						}
+						else if (xmlStrcmp(MetadataElement->name, (xmlChar *)OAI_RESPONSE_ELEMENT_SCHEMA) == 0)
+						{
+							format->schema = OAINodeText(MetadataElement);
+						}
+						else if (xmlStrcmp(MetadataElement->name, (xmlChar *)OAI_RESPONSE_ELEMENT_METADATANAMESPACE) == 0)
+						{
+							format->metadataNamespace = OAINodeText(MetadataElement);
+						}
+					}
+
+					if (!format->metadataPrefix)
+					{
+						elog(WARNING, "ignoring <metadataFormat> without <metadataPrefix> in %s response", state->requestVerb);
+						continue;
+					}
+
+					result = lappend(result, format);
+				}
 			}
 		}
+		PG_CATCH();
+		{
+			OAIFreeXmlDoc(state);
+			PG_RE_THROW();
+		}
+		PG_END_TRY();
 	}
 
 	OAIFreeXmlDoc(state);
@@ -1618,6 +1635,27 @@ OAIToServer(const xmlChar *str)
 	char *converted = pg_any_to_server(s, strlen(s), PG_UTF8);
 
 	return converted == s ? pstrdup(s) : converted;
+}
+
+/*
+ * OAINodeText
+ * -----------
+ * Returns the text of a node in the server encoding, or NULL. libxml2's copy
+ * is released before converting, as the conversion may fail.
+ */
+static char *
+OAINodeText(xmlNodePtr node)
+{
+	xmlChar *content = xmlNodeGetContent(node);
+	char *copy;
+
+	if (!content)
+		return NULL;
+
+	copy = pstrdup((char *)content);
+	xmlFree(content);
+
+	return OAIToServer((xmlChar *)copy);
 }
 
 /*
@@ -3296,11 +3334,13 @@ static void RaiseOAIException(xmlNodePtr error)
 	}
 
 	ccode = pstrdup((char *)code);
-	ccont = cont ? OAIToServer(cont) : pstrdup("");
+	ccont = cont ? pstrdup((char *)cont) : pstrdup("");
 
 	xmlFree(code);
 	if (cont)
 		xmlFree(cont);
+
+	ccont = OAIToServer((xmlChar *)ccont);
 
 	if (strcmp(ccode, OAI_ERROR_ID_DOES_NOT_EXIST) == 0 ||
 		strcmp(ccode, OAI_ERROR_NO_RECORD_MATCH) == 0 ||
@@ -3498,19 +3538,17 @@ static void LoadOAIRecords(struct OAIFdwState **state)
 								 * would turn an identifier such as "oai:ex.org/a&b" into
 								 * "oai:ex.org/a&amp;b".
 								 */
-								xmlChar *content = xmlNodeGetContent(headerElements);
+								char *content = OAINodeText(headerElements);
 
 								if (!content)
 									continue;
 
 								if (xmlStrcmp(headerElements->name, (xmlChar *)OAI_RESPONSE_ELEMENT_IDENTIFIER) == 0)
-									oai->identifier = OAIToServer(content);
+									oai->identifier = content;
 								else if (xmlStrcmp(headerElements->name, (xmlChar *)OAI_RESPONSE_ELEMENT_SETSPEC) == 0)
-									appendTextArray(&oai->setsArray, OAIToServer(content));
+									appendTextArray(&oai->setsArray, content);
 								else if (xmlStrcmp(headerElements->name, (xmlChar *)OAI_RESPONSE_ELEMENT_DATESTAMP) == 0)
-									oai->datestamp = OAIToServer(content);
-
-								xmlFree(content);
+									oai->datestamp = content;
 							}
 
 							elog(DEBUG2, "  %s (%s): Appending record list -> %s", __func__, (*state)->requestVerb, oai->identifier);
@@ -3573,12 +3611,15 @@ static void LoadOAIRecords(struct OAIFdwState **state)
 
 									elog(DEBUG2, "  %s (%s): XML Buffer size: %d", __func__, (*state)->requestVerb, buffer->size);
 
-									oai->content = OAIToServer(buffer->content);
+									oai->content = pstrdup((char *)buffer->content);
 
 									elog(DEBUG2, "  %s (%s): freeing node copy.", __func__, (*state)->requestVerb);
 									xmlFreeNode(copy);
 									elog(DEBUG2, "  %s (%s): freeing xml content buffer.", __func__, (*state)->requestVerb);
 									xmlBufferFree(buffer);
+
+									/* after releasing libxml2's copies, as the conversion may fail */
+									oai->content = OAIToServer((xmlChar *)oai->content);
 								}
 
 								if (xmlStrcmp(record->name, (xmlChar *)OAI_RESPONSE_ELEMENT_HEADER) == 0)
@@ -3599,31 +3640,29 @@ static void LoadOAIRecords(struct OAIFdwState **state)
 										 * values must be read with xmlNodeGetContent() so that XML
 										 * escapes are resolved into the plain text they represent.
 										 */
-										xmlChar *content = xmlNodeGetContent(headerElements);
+										char *content = OAINodeText(headerElements);
 
 										if (!content)
 											continue;
 
 										if (xmlStrcmp(headerElements->name, (xmlChar *)OAI_RESPONSE_ELEMENT_IDENTIFIER) == 0)
 										{
-											oai->identifier = OAIToServer(content);
+											oai->identifier = content;
 											elog(DEBUG2, "  %s (%s): setting identifier to OAI object > '%s'", __func__, (*state)->requestVerb, oai->identifier);
 										}
 										else if (xmlStrcmp(headerElements->name, (xmlChar *)OAI_RESPONSE_ELEMENT_SETSPEC) == 0)
 										{
-											char *array_element = OAIToServer(content);
+											char *array_element = content;
 											elog(DEBUG2, "  %s (%s): setting setspec to OAI object > '%s'", __func__, (*state)->requestVerb, array_element);
 
 											appendTextArray(&oai->setsArray, array_element);
 										}
 										else if (xmlStrcmp(headerElements->name, (xmlChar *)OAI_RESPONSE_ELEMENT_DATESTAMP) == 0)
 										{
-											oai->datestamp = OAIToServer(content);
+											oai->datestamp = content;
 											elog(DEBUG2, "  %s (%s): setting datestamp to OAI object > '%s'", __func__, (*state)->requestVerb, oai->datestamp);
 										}
 
-										elog(DEBUG3, "  %s (%s): freeing header content.", __func__, (*state)->requestVerb);
-										xmlFree(content);
 									}
 								}
 							}
