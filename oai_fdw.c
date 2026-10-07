@@ -2002,6 +2002,12 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 
 		curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, errbuf);
 
+		/*
+		 * Without an asynchronous resolver, libcurl times out name lookups
+		 * with SIGALRM, which PostgreSQL uses for its own timeouts.
+		 */
+		curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
+
 		curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, connectTimeout);
 		curl_easy_setopt(curl, CURLOPT_TIMEOUT, request_timeout);
 

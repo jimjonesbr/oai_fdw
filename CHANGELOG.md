@@ -49,6 +49,8 @@
 
   **Linking**: the library now links against libxml2.
 
+  **No signals from libcurl**: libcurl builds without an asynchronous resolver used `SIGALRM` for DNS timeouts, which PostgreSQL uses itself (e.g. for `statement_timeout`). `CURLOPT_NOSIGNAL` is now set.
+
 ### oai_fdw 1.14
 2026-09-09
 
