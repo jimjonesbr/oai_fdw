@@ -23,7 +23,7 @@
 
   **`ListSets` follows `resumptionToken`**: `OAI_ListSets()` and `IMPORT FOREIGN SCHEMA oai_sets` no longer stop after the first page of sets.
 
-  **`from`/`until` granularity**: both are sent in a granularity the repository supports, as announced by `Identify`, so repositories with day granularity no longer answer `badArgument`.
+  **`from`/`until` granularity**: both are sent in a granularity the repository supports, as announced by `Identify`, so repositories with day granularity no longer answer `badArgument`. `GetRecord`, which takes neither, needs no `Identify` request.
 
   **Character encoding**: values are converted between UTF-8 and the database encoding, in both directions.
 

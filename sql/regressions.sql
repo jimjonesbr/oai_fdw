@@ -89,4 +89,11 @@ SELECT v.x, (SELECT count(*) FROM regress_t WHERE id = v.x)
 FROM (VALUES (NULL), ('oai:x:1')) v(x);
 \set VERBOSITY terse
 
+-- GetRecord takes no from/until: no Identify request for their granularity
+CREATE FOREIGN TABLE regress_from_t (id text OPTIONS (oai_node 'identifier'))
+  SERVER regress_offline OPTIONS (metadataprefix 'oai_dc', from '2020-01-01');
+\set VERBOSITY default
+SELECT id FROM regress_from_t WHERE id = 'oai:x:1';
+\set VERBOSITY terse
+
 DROP SERVER regress_offline CASCADE;

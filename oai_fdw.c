@@ -3480,7 +3480,9 @@ static void LoadOAIRecords(struct OAIFdwState **state)
 	(*state)->pagesize = 0;
 	(*state)->pageindex = 0;
 
-	if (!(*state)->resumptionToken)
+	/* GetRecord takes no from/until, so their granularity does not matter */
+	if (!(*state)->resumptionToken &&
+		strcmp((*state)->requestVerb, OAI_REQUEST_GETRECORD) != 0)
 		NormalizeDatestampArguments(*state);
 
 	if (ExecuteOAIRequest(*state) == OAI_SUCCESS)

@@ -154,5 +154,14 @@ ERROR:  OAI request failed: HTTP 0
 DETAIL:  URL: "http://127.0.0.1:1/oai?verb=GetRecord&identifier=oai%3Ax%3A1&metadataPrefix=oai_dc"
 HINT:  Check your request parameters and try again.
 \set VERBOSITY terse
+-- GetRecord takes no from/until: no Identify request for their granularity
+CREATE FOREIGN TABLE regress_from_t (id text OPTIONS (oai_node 'identifier'))
+  SERVER regress_offline OPTIONS (metadataprefix 'oai_dc', from '2020-01-01');
+\set VERBOSITY default
+SELECT id FROM regress_from_t WHERE id = 'oai:x:1';
+ERROR:  OAI request failed: HTTP 0
+DETAIL:  URL: "http://127.0.0.1:1/oai?verb=GetRecord&identifier=oai%3Ax%3A1&metadataPrefix=oai_dc"
+HINT:  Check your request parameters and try again.
+\set VERBOSITY terse
 DROP SERVER regress_offline CASCADE;
-NOTICE:  drop cascades to 2 other objects
+NOTICE:  drop cascades to 3 other objects
