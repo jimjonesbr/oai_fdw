@@ -87,6 +87,14 @@ BEGIN
     target_table := CURRENT_SCHEMA || '.' || target_table;
   END IF;
   
+  IF page_size IS NULL OR start_date IS NULL OR end_date IS NULL THEN
+    RAISE EXCEPTION 'page_size, start_date and end_date must not be NULL';
+  END IF;
+
+  IF page_size <= interval '0' THEN
+    RAISE EXCEPTION 'invalid page size [%]. It must be a positive interval',page_size;
+  END IF;
+
   IF start_date > end_date THEN
     RAISE EXCEPTION 'invalid time window. The end date [%] lies before the start date [%]',start_date,end_date;
   END IF;

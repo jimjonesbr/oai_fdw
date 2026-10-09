@@ -43,7 +43,7 @@
 
   **Redirects**: a redirect that is not followed now raises an error naming its target and suggesting `request_redirect`, instead of reporting an invalid response. A followed redirect no longer warns about the content-type of the redirect response.
 
-  **`OAI_HarvestTable`**: the last time window is no longer skipped, quoted table names work, and same-named tables in other schemas are no longer mixed up.
+  **`OAI_HarvestTable`**: the last time window is no longer skipped, quoted table names work, and same-named tables in other schemas are no longer mixed up. A `page_size` that is not positive, or a NULL argument, is rejected instead of reporting a completed harvest of nothing.
 
   **Server options**: `request_redirect`, `request_max_redirect` and the URL scheme are validated, and `connect_retry '0'` disables retries.
 

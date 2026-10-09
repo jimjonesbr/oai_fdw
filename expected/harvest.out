@@ -108,11 +108,11 @@ INFO:  OAI harvester complete ("public.table_without_identifier" -> "public.clon
  /* EXCEPTION: oai_table does not exist */
 CALL OAI_HarvestTable('foo','clone_dnb_oai_dc', interval '1 day', '2020-01-01 00:00:00', '2020-01-03 00:00:00',true,true);
 ERROR:  foreign table "public.foo" does not exist
-CONTEXT:  PL/pgSQL function oai_harvesttable(text,text,interval,timestamp without time zone,timestamp without time zone,boolean,boolean) line 60 at RAISE
+CONTEXT:  PL/pgSQL function oai_harvesttable(text,text,interval,timestamp without time zone,timestamp without time zone,boolean,boolean) line 68 at RAISE
 /* EXCEPTION: end date smaller than start date */
 CALL OAI_HarvestTable('dnb_oai_dc','clone_dnb_oai_dc', interval '1 day', '2020-01-01 00:00:00', '2019-12-31 00:00:00',true,true);
 ERROR:  invalid time window. The end date [Wed Jan 01 00:00:00 2020] lies before the start date [Tue Dec 31 00:00:00 2019]
-CONTEXT:  PL/pgSQL function oai_harvesttable(text,text,interval,timestamp without time zone,timestamp without time zone,boolean,boolean) line 29 at RAISE
+CONTEXT:  PL/pgSQL function oai_harvesttable(text,text,interval,timestamp without time zone,timestamp without time zone,boolean,boolean) line 37 at RAISE
 /* EXCEPTION: Foreign table without datestamp */
 CREATE FOREIGN TABLE IF NOT EXISTS table_without_datestamp (
   id text                OPTIONS (oai_node 'identifier'), 
@@ -122,7 +122,7 @@ CREATE FOREIGN TABLE IF NOT EXISTS table_without_datestamp (
  ) SERVER oai_server_dnb OPTIONS (metadataprefix 'oai_dc');
 CALL OAI_HarvestTable('table_without_datestamp', 'clone_table_without_datestamp', interval '1 day', '2020-01-01 00:00:00', '2020-01-03 00:00:00',true,true); 
 ERROR:  foreign table "public.table_without_datestamp" has no datestamp column
-CONTEXT:  PL/pgSQL function oai_harvesttable(text,text,interval,timestamp without time zone,timestamp without time zone,boolean,boolean) line 68 at RAISE
+CONTEXT:  PL/pgSQL function oai_harvesttable(text,text,interval,timestamp without time zone,timestamp without time zone,boolean,boolean) line 76 at RAISE
 /* EXCEPTION: Foreign table without datestamp and identifier*/
 CREATE FOREIGN TABLE IF NOT EXISTS table_without_datestamp_identifier (
   xmldoc xml             OPTIONS (oai_node 'content'), 
@@ -131,7 +131,7 @@ CREATE FOREIGN TABLE IF NOT EXISTS table_without_datestamp_identifier (
  ) SERVER oai_server_dnb OPTIONS (metadataprefix 'oai_dc');
 CALL OAI_HarvestTable('table_without_datestamp_identifier', 'clone_table_without_datestamp_identifier', interval '1 day', '2020-01-01 00:00:00', '2020-01-03 00:00:00',true,true); 
 ERROR:  foreign table "public.table_without_datestamp_identifier" has no datestamp column
-CONTEXT:  PL/pgSQL function oai_harvesttable(text,text,interval,timestamp without time zone,timestamp without time zone,boolean,boolean) line 68 at RAISE
+CONTEXT:  PL/pgSQL function oai_harvesttable(text,text,interval,timestamp without time zone,timestamp without time zone,boolean,boolean) line 76 at RAISE
 /* EXCEPTION: Foreign table without any oai_node */
 CREATE FOREIGN TABLE IF NOT EXISTS table_without_oai_node (
   xmldoc xml, 
@@ -140,7 +140,7 @@ CREATE FOREIGN TABLE IF NOT EXISTS table_without_oai_node (
  ) SERVER oai_server_dnb OPTIONS (metadataprefix 'oai_dc');
 CALL OAI_HarvestTable('table_without_oai_node', 'clone_table_without_oai_node', interval '1 day', '2020-01-01 00:00:00', '2020-01-03 00:00:00',true,true); 
 ERROR:  foreign table "public.table_without_oai_node" has no datestamp column
-CONTEXT:  PL/pgSQL function oai_harvesttable(text,text,interval,timestamp without time zone,timestamp without time zone,boolean,boolean) line 68 at RAISE
+CONTEXT:  PL/pgSQL function oai_harvesttable(text,text,interval,timestamp without time zone,timestamp without time zone,boolean,boolean) line 76 at RAISE
 DROP SERVER IF EXISTS oai_server_dnb CASCADE;
 NOTICE:  drop cascades to 5 other objects
 DETAIL:  drop cascades to foreign table dnb_oai_dc

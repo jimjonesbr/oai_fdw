@@ -163,5 +163,18 @@ ERROR:  OAI request failed: HTTP 0
 DETAIL:  URL: "http://127.0.0.1:1/oai?verb=GetRecord&identifier=oai%3Ax%3A1&metadataPrefix=oai_dc"
 HINT:  Check your request parameters and try again.
 \set VERBOSITY terse
+-- OAI_HarvestTable checks its arguments before creating anything
+CALL OAI_HarvestTable('regress_t', 'regress_h', interval '-1 day', '2020-01-01', '2020-01-10');
+ERROR:  invalid page size [@ 1 day ago]. It must be a positive interval
+CALL OAI_HarvestTable('regress_t', 'regress_h', interval '0', '2020-01-01', '2020-01-10');
+ERROR:  invalid page size [@ 0]. It must be a positive interval
+CALL OAI_HarvestTable('regress_t', 'regress_h', interval '1 day', NULL, '2020-01-10');
+ERROR:  page_size, start_date and end_date must not be NULL
+SELECT to_regclass('regress_h') IS NULL AS no_target_table;
+ no_target_table 
+-----------------
+ t
+(1 row)
+
 DROP SERVER regress_offline CASCADE;
 NOTICE:  drop cascades to 3 other objects

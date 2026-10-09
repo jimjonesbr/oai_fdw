@@ -96,4 +96,10 @@ CREATE FOREIGN TABLE regress_from_t (id text OPTIONS (oai_node 'identifier'))
 SELECT id FROM regress_from_t WHERE id = 'oai:x:1';
 \set VERBOSITY terse
 
+-- OAI_HarvestTable checks its arguments before creating anything
+CALL OAI_HarvestTable('regress_t', 'regress_h', interval '-1 day', '2020-01-01', '2020-01-10');
+CALL OAI_HarvestTable('regress_t', 'regress_h', interval '0', '2020-01-01', '2020-01-10');
+CALL OAI_HarvestTable('regress_t', 'regress_h', interval '1 day', NULL, '2020-01-10');
+SELECT to_regclass('regress_h') IS NULL AS no_target_table;
+
 DROP SERVER regress_offline CASCADE;
