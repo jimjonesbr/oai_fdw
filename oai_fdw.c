@@ -1425,11 +1425,17 @@ static size_t HeaderCallbackFunction(char *contents, size_t size, size_t nmemb, 
 	 */
 	if (pg_strncasecmp(line, "HTTP/", 5) == 0)
 		mem->unsupported_ctype[0] = '\0';
-	else if (pg_strncasecmp(line, "content-type:", 13) == 0 &&
-		pg_strncasecmp(line, "content-type: text/xml", 22) != 0 &&
-		pg_strncasecmp(line, "content-type: application/xml", 29) != 0)
+	else if (pg_strncasecmp(line, "content-type:", 13) == 0)
 	{
-		strlcpy(mem->unsupported_ctype, line, sizeof(mem->unsupported_ctype));
+		const char *value = line + 13;
+
+		/* the whitespace before the value is optional (RFC 9110, 5.6.3) */
+		while (*value == ' ' || *value == '\t')
+			value++;
+
+		if (pg_strncasecmp(value, "text/xml", 8) != 0 &&
+			pg_strncasecmp(value, "application/xml", 15) != 0)
+			strlcpy(mem->unsupported_ctype, line, sizeof(mem->unsupported_ctype));
 	}
 
 	ptr = realloc(mem->memory, mem->size + nbytes + 1);

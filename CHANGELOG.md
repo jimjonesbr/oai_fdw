@@ -41,7 +41,7 @@
 
   **User mapping of views**: a foreign table queried through a view now uses the user mapping of the view owner, as permissions are checked as that role.
 
-  **Redirects**: a redirect that is not followed now raises an error naming its target and suggesting `request_redirect`, instead of reporting an invalid response. A followed redirect no longer warns about the content-type of the redirect response.
+  **Redirects**: a redirect that is not followed now raises an error naming its target and suggesting `request_redirect`, instead of reporting an invalid response. A followed redirect no longer warns about the content-type of the redirect response. Neither does a `Content-Type` header without a space after the colon.
 
   **`OAI_HarvestTable`**: the last time window is no longer skipped, quoted table names work, and same-named tables in other schemas are no longer mixed up. A `page_size` that is not positive, or a NULL argument, is rejected instead of reporting a completed harvest of nothing.
 
