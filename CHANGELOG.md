@@ -31,7 +31,7 @@
 
   **Pushdown**: `date` constants, infinite and BC timestamps, and constants of other types (e.g. `name`) are no longer pushed down with a wrong value.
 
-  **Pushdown of values known at execution time**: conditions comparing with a parameter (e.g. `$1` in a generic plan of a prepared statement or PL/pgSQL) or an expression such as `now() - interval '1 day'` were not pushed down, so they harvested the whole repository. They are now evaluated when the scan starts.
+  **Pushdown of values known at execution time**: conditions comparing with a parameter (e.g. `$1` in a generic plan of a prepared statement or PL/pgSQL) or an expression such as `now() - interval '1 day'` were not pushed down, so they harvested the whole repository. They are now evaluated when the scan starts, and `EXPLAIN` lists them as `Runtime arguments`.
 
   **`varchar` columns**: `varchar(n)` limits are applied, and array operators work on `varchar[]` `setspec` columns.
 

@@ -147,6 +147,21 @@ SELECT id FROM regress_t WHERE sets && ARRAY[current_setting('regress.oai_set')]
 ERROR:  OAI request failed: HTTP 0
 DETAIL:  URL: "http://127.0.0.1:1/oai?verb=ListIdentifiers&set=a&metadataPrefix=oai_dc"
 HINT:  Check your request parameters and try again.
+\set VERBOSITY terse
+EXPLAIN (COSTS OFF) SELECT id FROM regress_t
+WHERE id = current_setting('regress.oai_id') AND updated > now() - interval '1 day'
+  AND updated > now() - interval '2 days';
+                                                                       QUERY PLAN                                                                        
+---------------------------------------------------------------------------------------------------------------------------------------------------------
+ Foreign Scan on regress_t
+   Filter: ((id = current_setting('regress.oai_id'::text)) AND (updated > (now() - '@ 1 day'::interval)) AND (updated > (now() - '@ 2 days'::interval)))
+   Foreign Server URL: http://127.0.0.1:1/oai
+   requestVerb: ListIdentifiers
+   metadataPrefix: oai_dc
+   Runtime arguments: identifier, from
+(6 rows)
+
+\set VERBOSITY default
 -- a parameter is evaluated again on each rescan, a NULL one needs no request
 SELECT v.x, (SELECT count(*) FROM regress_t WHERE id = v.x)
 FROM (VALUES (NULL), ('oai:x:1')) v(x);

@@ -3199,6 +3199,37 @@ static void OAIExplainForeignScan(ForeignScanState *node, ExplainState *es)
 
 		if (state->until && strlen(state->until) > 0)
 			ExplainPropertyText("until", state->until, es);
+
+		/*
+		 * Arguments whose value is only known when the scan runs, e.g. from
+		 * $1 or now(). EXPLAIN ANALYZE shows their values above instead.
+		 */
+		if (state->pushdown_kinds != NIL && !state->pushdown_evaluated)
+		{
+			static const char *const names[] = {
+				[OAI_PUSHDOWN_IDENTIFIER] = "identifier",
+				[OAI_PUSHDOWN_METADATAPREFIX] = "metadataPrefix",
+				[OAI_PUSHDOWN_DATESTAMP] = "from, until",
+				[OAI_PUSHDOWN_FROM] = "from",
+				[OAI_PUSHDOWN_UNTIL] = "until",
+				[OAI_PUSHDOWN_SET] = "setSpec"};
+			bool present[lengthof(names)] = {false};
+			StringInfoData buf;
+			ListCell *lc;
+
+			foreach (lc, state->pushdown_kinds)
+				present[lfirst_int(lc)] = true;
+
+			initStringInfo(&buf);
+
+			for (int kind = 0; kind < lengthof(names); kind++)
+			{
+				if (present[kind])
+					appendStringInfo(&buf, "%s%s", buf.len > 0 ? ", " : "", names[kind]);
+			}
+
+			ExplainPropertyText("Runtime arguments", buf.data, es);
+		}
 	}
 }
 

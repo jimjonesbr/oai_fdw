@@ -798,6 +798,7 @@ The plan output includes FDW-specific lines for each Foreign Scan node:
 * `metadataPrefix`: shows the metadata format requested.
 * `from`: shows the lower bound for datestamp-based selective harvesting.
 * `until`: shows the upper bound for datestamp-based selective harvesting.
+* `Runtime arguments`: request arguments whose value is only known when the query runs, e.g. from a parameter (`$1`) or `now()`. `EXPLAIN ANALYZE` shows their values in the lines above instead.
 
 **Example:**
 ```sql

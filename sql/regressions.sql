@@ -84,6 +84,11 @@ SET regress.oai_id = 'oai:x:2';
 SELECT id FROM regress_t WHERE id = current_setting('regress.oai_id');
 SET regress.oai_set = 'a';
 SELECT id FROM regress_t WHERE sets && ARRAY[current_setting('regress.oai_set')];
+\set VERBOSITY terse
+EXPLAIN (COSTS OFF) SELECT id FROM regress_t
+WHERE id = current_setting('regress.oai_id') AND updated > now() - interval '1 day'
+  AND updated > now() - interval '2 days';
+\set VERBOSITY default
 -- a parameter is evaluated again on each rescan, a NULL one needs no request
 SELECT v.x, (SELECT count(*) FROM regress_t WHERE id = v.x)
 FROM (VALUES (NULL), ('oai:x:1')) v(x);
