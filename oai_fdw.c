@@ -412,6 +412,7 @@ static TupleTableSlot *OAIFdwExecForeignUpdate(EState *estate, ResultRelInfo *ri
 static TupleTableSlot *OAIFdwExecForeignInsert(EState *estate, ResultRelInfo *rinfo, TupleTableSlot *slot, TupleTableSlot *planSlot);
 static TupleTableSlot *OAIFdwExecForeignDelete(EState *estate, ResultRelInfo *rinfo, TupleTableSlot *slot, TupleTableSlot *planSlot);
 static List *OAIFdwImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid serverOid);
+static char *SetTableName(const char *setSpec);
 
 static void appendTextArray(ArrayType **array, char *text_element);
 static int ExecuteOAIRequest(OAIFdwState *state);
@@ -3836,6 +3837,30 @@ static void OAIFdwEndForeignScan(ForeignScanState *node)
 	elog(DEBUG2, "%s exit oai_fdw: so long .. \n", __func__);
 }
 
+/*
+ * SetTableName
+ * ------------
+ * Returns the name of the foreign table IMPORT FOREIGN SCHEMA creates for a
+ * set. Longer setSpecs (e.g. EPrints' hex-encoded ones) would be truncated
+ * to the same name, so they are shortened and made unique with a hash of
+ * the whole setSpec instead.
+ */
+static char *SetTableName(const char *setSpec)
+{
+	int len = strlen(setSpec);
+	uint32 hash = 2166136261u; /* FNV-1a */
+
+	if (len < NAMEDATALEN)
+		return pstrdup(setSpec);
+
+	for (int i = 0; i < len; i++)
+		hash = (hash ^ (unsigned char)setSpec[i]) * 16777619u;
+
+	return psprintf("%.*s_%08x",
+					pg_mbcliplen(setSpec, len, NAMEDATALEN - 1 - 9),
+					setSpec, hash);
+}
+
 static List *OAIFdwImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid serverOid)
 {
 	ListCell *cell;
@@ -3914,7 +3939,7 @@ static List *OAIFdwImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid server
 				{
 					RangeVar *rv = (RangeVar *)lfirst(cell_list);
 
-					if (strcmp(rv->relname, set->setSpec) == 0)
+					if (strcmp(rv->relname, SetTableName(set->setSpec)) == 0)
 					{
 						listed = true;
 						break;
@@ -3934,7 +3959,7 @@ static List *OAIFdwImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid server
 			OAISet *set = (OAISet *)lfirst(cell);
 			initStringInfo(&buffer);
 
-			appendStringInfo(&buffer, "\nCREATE FOREIGN TABLE %s (\n", quote_identifier(set->setSpec));
+			appendStringInfo(&buffer, "\nCREATE FOREIGN TABLE %s (\n", quote_identifier(SetTableName(set->setSpec)));
 			appendStringInfo(&buffer, "  id text                OPTIONS (oai_node 'identifier'),\n");
 			appendStringInfo(&buffer, "  xmldoc xml             OPTIONS (oai_node 'content'),\n");
 			appendStringInfo(&buffer, "  sets text[]            OPTIONS (oai_node 'setspec'),\n");

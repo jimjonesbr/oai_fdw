@@ -223,7 +223,7 @@ FROM information_schema.foreign_tables;
 
 ``` 
 
-The created foreign tables are named with `set` name, for instance the set `ulbmshbw`:
+The created foreign tables are named with `set` name. A `setSpec` longer than 63 characters, the maximum length of a PostgreSQL identifier, is shortened and given a suffix derived from the whole `setSpec`, so that the names stay unique; the `setspec` option of the table always holds the whole `setSpec`. For instance, the table for the set `ulbmshbw`:
 
 ```
                                    Foreign table "ulb_schema.ulbmshbw"

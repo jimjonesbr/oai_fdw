@@ -37,7 +37,7 @@
 
   **`<metadata>` content**: the root element is returned, even if a comment precedes it.
 
-  **`IMPORT FOREIGN SCHEMA`**: the user mapping is used, and `LIMIT TO` only imports sets that exist.
+  **`IMPORT FOREIGN SCHEMA`**: the user mapping is used, and `LIMIT TO` only imports sets that exist. Sets whose `setSpec` is longer than 63 characters get unique table names instead of making the import fail.
 
   **User mapping of views**: a foreign table queried through a view now uses the user mapping of the view owner, as permissions are checked as that role.
 
