@@ -332,9 +332,9 @@ CREATE FOREIGN TABLE dnb_maps (
 | `metadataprefix`  | **required**        | an argument that specifies the metadataPrefix of the format that should be included in the metadata part of the returned records. Records should be included only for items from which the metadata format matching the metadataPrefix can be disseminated. The metadata formats supported by a repository and for a particular item can be retrieved using the [ListMetadataFormats](http://www.openarchives.org/OAI/openarchivesprotocol.html#ListMetadataFormats) request.  
 | `from`  | optional        | an argument with a UTCdatetime value, which specifies a lower bound for datestamp-based selective harvesting.  
 | `until`  | optional        | an argument with a UTCdatetime value, which specifies an upper bound for datestamp-based selective harvesting.  
+| `setspec`  | optional        | an argument with a setSpec value , which specifies set criteria for selective harvesting. 
 
 `from` and `until` accept `YYYY-MM-DD` and `YYYY-MM-DDThh:mm:ssZ`. Before a request is sent, both are brought to a granularity the repository supports (see `granularity` in [OAI_Identify](#oai_identify)).
-| `setspec`  | optional        | an argument with a setSpec value , which specifies set criteria for selective harvesting. 
 
 #### [Examples](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#examples)
 
@@ -756,9 +756,9 @@ SELECT * FROM oai_fdw_settings;
 
 `start_date`:  Start date from the time window.
 
-`end_date` (optional): End date from the time window. Default **CURRENT_TIMESTAMP**.
+`end_date` (optional): End date from the time window, exclusive. Default **CURRENT_TIMESTAMP**.
 
-`create_table` (optional): Set this parameter to `false` in case the target table already exists. Default **TRUE**.
+`create_table` (optional): Creates the `target_table` if it does not exist. Set it to `false` to require an existing table. Default **TRUE**.
 
 `exec_verbose` (optional): Set this parameter to `true` for more comprehensive output messages. Default **FALSE**.
 
@@ -768,8 +768,10 @@ SELECT * FROM oai_fdw_settings;
 
 Often it is the case that an OAI repository contains so much data, that requests over large time intervals become just too expensive and end up being denied by the server. This stored procedure addresses this issue by internally partitioning a single request into several small ones using the given [time interval](https://www.postgresql.org/docs/current/datatype-datetime.html) as partition unit - parameter `page_size`. 
 
-For instance, an OAI ListRecords request for all records from the year 2021 (`2021-01-01` to `2021-12-31`) can be split into 12 smaller requests by setting the `page_size` parameter to `interval '1 month'`. Although in the end the result sets from both approaches are pretty much the same, both client and server may significantly profit from having smaller result sets instead of a single large one.
+For instance, an OAI ListRecords request for all records from the year 2021 (`start_date` `2021-01-01` and `end_date` `2022-01-01`) can be split into 12 smaller requests by setting the `page_size` parameter to `interval '1 month'`. Although in the end the result sets from both approaches are pretty much the same, both client and server may significantly profit from having smaller result sets instead of a single large one.
 
+
+`OAI_HarvestTable` commits after each page, so that a failure does not lose the pages already stored. It therefore cannot be called inside a transaction block.
 
 **Usage**
 
