@@ -3052,11 +3052,12 @@ static void OAIFdwBeginForeignScan(ForeignScanState *node, int eflags)
 
 	node->fdw_state = (void *)state;
 
-	if (eflags & EXEC_FLAG_EXPLAIN_ONLY)
-		return;
-
+	/* catalog lookups only: EXPLAIN shows the server, too */
 	state->foreign_table = GetForeignTable(state->foreigntableid);
 	state->foreign_server = GetForeignServer(state->foreign_table->serverid);
+
+	if (eflags & EXEC_FLAG_EXPLAIN_ONLY)
+		return;
 
 	/*
 	 * Use the user mapping of the role the permissions are checked as, e.g.

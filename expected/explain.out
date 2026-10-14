@@ -15,13 +15,14 @@ SELECT * FROM dnb_zdb_oai_dc;
                                   QUERY PLAN                                   
 -------------------------------------------------------------------------------
  Foreign Scan on dnb_zdb_oai_dc  (cost=10000.00..20000.00 rows=1000 width=136)
+   Foreign Server: oai_server_dnb
    Foreign Server URL: https://services.dnb.de/oai/repository
    requestVerb: ListRecords
    setSpec: zdb
    metadataPrefix: oai_dc
    from: 2022-01-31
    until: 2022-02-01
-(7 rows)
+(8 rows)
 
 EXPLAIN
 SELECT * FROM dnb_zdb_oai_dc 
@@ -33,13 +34,14 @@ WHERE
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  Foreign Scan on dnb_zdb_oai_dc  (cost=10000.00..20000.00 rows=1000 width=136)
    Filter: ((datestamp >= 'Tue Mar 01 00:00:00 2022'::timestamp without time zone) AND (datestamp <= 'Wed Mar 02 00:00:00 2022'::timestamp without time zone) AND (setspec <@ '{dnb:reiheC}'::text[]) AND (meta = 'MARC21-xml'::text))
+   Foreign Server: oai_server_dnb
    Foreign Server URL: https://services.dnb.de/oai/repository
    requestVerb: ListRecords
    setSpec: dnb:reiheC
    metadataPrefix: MARC21-xml
    from: 2022-03-01T00:00:00Z
    until: 2022-03-02T00:00:00Z
-(8 rows)
+(9 rows)
 
 DROP SERVER oai_server_dnb CASCADE;
 NOTICE:  drop cascades to foreign table dnb_zdb_oai_dc

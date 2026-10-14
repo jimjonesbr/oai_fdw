@@ -13,6 +13,8 @@
 
   **Row estimate of identifier lookups**: a query on an identifier (`GetRecord`), also with a parameter such as `$1`, is now estimated at one row instead of the 1000 of a full harvest, so the planner can tell a lookup from a harvest. The request is now planned in `GetForeignRelSize`, where the planner expects it, instead of in `GetForeignPlan`, after the estimates had been taken.
 
+  **`EXPLAIN` shows the foreign server**: the `Foreign Server` line was only shown by `EXPLAIN ANALYZE`.
+
   **`INSERT`, `UPDATE` and `DELETE` are refused before any request**: they used to harvest the rows to change from the repository before failing with "Operation not supported", and a `DELETE` or `UPDATE` matching no record reported success. They now fail right away with PostgreSQL's own error, e.g. `cannot update foreign table "t"`.
 
 ### oai_fdw 1.15

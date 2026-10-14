@@ -15,10 +15,11 @@ EXPLAIN (COSTS OFF) SELECT id FROM regress_t WHERE sets && ARRAY[NULL::text];
 ----------------------------------------------
  Foreign Scan on regress_t
    Filter: (sets && '{NULL}'::text[])
+   Foreign Server: regress_offline
    Foreign Server URL: http://127.0.0.1:1/oai
    requestVerb: ListIdentifiers
    metadataPrefix: oai_dc
-(5 rows)
+(6 rows)
 
 -- prefix operator: used to read past the argument list and crash
 CREATE FUNCTION regress_not(boolean) RETURNS boolean
@@ -29,10 +30,11 @@ EXPLAIN (COSTS OFF) SELECT id FROM regress_t WHERE !!! deleted;
 ----------------------------------------------
  Foreign Scan on regress_t
    Filter: (!!! deleted)
+   Foreign Server: regress_offline
    Foreign Server URL: http://127.0.0.1:1/oai
    requestVerb: ListIdentifiers
    metadataPrefix: oai_dc
-(5 rows)
+(6 rows)
 
 DROP OPERATOR !!! (NONE, boolean);
 DROP FUNCTION regress_not(boolean);
@@ -42,41 +44,45 @@ EXPLAIN (COSTS OFF) SELECT id FROM regress_t WHERE updated < '2020-01-06'::date;
 ----------------------------------------------
  Foreign Scan on regress_t
    Filter: (updated < '01-06-2020'::date)
+   Foreign Server: regress_offline
    Foreign Server URL: http://127.0.0.1:1/oai
    requestVerb: ListIdentifiers
    metadataPrefix: oai_dc
    until: 2020-01-06T00:00:00Z
-(6 rows)
+(7 rows)
 
 EXPLAIN (COSTS OFF) SELECT id FROM regress_t WHERE updated > '-infinity';
                            QUERY PLAN                           
 ----------------------------------------------------------------
  Foreign Scan on regress_t
    Filter: (updated > '-infinity'::timestamp without time zone)
+   Foreign Server: regress_offline
    Foreign Server URL: http://127.0.0.1:1/oai
    requestVerb: ListIdentifiers
    metadataPrefix: oai_dc
-(5 rows)
+(6 rows)
 
 EXPLAIN (COSTS OFF) SELECT id FROM regress_t WHERE updated > '4714-11-24 BC';
                                     QUERY PLAN                                    
 ----------------------------------------------------------------------------------
  Foreign Scan on regress_t
    Filter: (updated > 'Mon Nov 24 00:00:00 4714 BC'::timestamp without time zone)
+   Foreign Server: regress_offline
    Foreign Server URL: http://127.0.0.1:1/oai
    requestVerb: ListIdentifiers
    metadataPrefix: oai_dc
-(5 rows)
+(6 rows)
 
 EXPLAIN (COSTS OFF) SELECT id FROM regress_t WHERE id = 'oai:x:1';
                   QUERY PLAN                  
 ----------------------------------------------
  Foreign Scan on regress_t
    Filter: (id = 'oai:x:1'::text)
+   Foreign Server: regress_offline
    Foreign Server URL: http://127.0.0.1:1/oai
    requestVerb: GetRecord
    metadataPrefix: oai_dc
-(5 rows)
+(6 rows)
 
 -- support functions on a server of another FDW: used to crash
 CREATE FOREIGN DATA WRAPPER regress_dummy_fdw;
@@ -124,10 +130,11 @@ EXPLAIN (COSTS OFF) SELECT id FROM regress_t WHERE id = 'oai:x:1';
 ----------------------------------------------
  Foreign Scan on regress_t
    Filter: (id = 'oai:x:1'::text)
+   Foreign Server: regress_offline
    Foreign Server URL: http://127.0.0.1:1/oai
    requestVerb: GetRecord
    metadataPrefix: oai_dc
-(5 rows)
+(6 rows)
 
 ALTER SERVER regress_offline OPTIONS (DROP max_response_size);
 -- from/until table options
@@ -180,11 +187,12 @@ WHERE id = current_setting('regress.oai_id') AND updated > now() - interval '1 d
 ---------------------------------------------------------------------------------------------------------------------------------------------------------
  Foreign Scan on regress_t
    Filter: ((id = current_setting('regress.oai_id'::text)) AND (updated > (now() - '@ 1 day'::interval)) AND (updated > (now() - '@ 2 days'::interval)))
+   Foreign Server: regress_offline
    Foreign Server URL: http://127.0.0.1:1/oai
    requestVerb: ListIdentifiers
    metadataPrefix: oai_dc
    Runtime arguments: identifier, from
-(6 rows)
+(7 rows)
 
 \set VERBOSITY default
 -- a parameter is evaluated again on each rescan, a NULL one needs no request
@@ -235,20 +243,22 @@ EXPLAIN SELECT id FROM regress_t;
                                QUERY PLAN                                
 -------------------------------------------------------------------------
  Foreign Scan on regress_t  (cost=10000.00..20000.00 rows=1000 width=32)
+   Foreign Server: regress_offline
    Foreign Server URL: http://127.0.0.1:1/oai
    requestVerb: ListIdentifiers
    metadataPrefix: oai_dc
-(4 rows)
+(5 rows)
 
 EXPLAIN SELECT id FROM regress_t WHERE id = 'oai:x:1';
                               QUERY PLAN                              
 ----------------------------------------------------------------------
  Foreign Scan on regress_t  (cost=10000.00..10010.00 rows=1 width=32)
    Filter: (id = 'oai:x:1'::text)
+   Foreign Server: regress_offline
    Foreign Server URL: http://127.0.0.1:1/oai
    requestVerb: GetRecord
    metadataPrefix: oai_dc
-(5 rows)
+(6 rows)
 
 SET regress.oai_id = 'oai:x:1';
 EXPLAIN SELECT id FROM regress_t WHERE id = current_setting('regress.oai_id');
@@ -256,11 +266,12 @@ EXPLAIN SELECT id FROM regress_t WHERE id = current_setting('regress.oai_id');
 ----------------------------------------------------------------------
  Foreign Scan on regress_t  (cost=10000.00..10010.00 rows=1 width=32)
    Filter: (id = current_setting('regress.oai_id'::text))
+   Foreign Server: regress_offline
    Foreign Server URL: http://127.0.0.1:1/oai
    requestVerb: ListIdentifiers
    metadataPrefix: oai_dc
    Runtime arguments: identifier
-(6 rows)
+(7 rows)
 
 RESET regress.oai_id;
 -- the tables are read-only: refused before any request (port 1 would fail)
