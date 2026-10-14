@@ -2095,7 +2095,8 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 		appendStringInfo(&user_agent, "PostgreSQL/%s oai_fdw/%s libxml2/%s %s", PG_VERSION, OAI_FDW_VERSION, LIBXML_DOTTED_VERSION, curl_version());
 		curl_easy_setopt(curl, CURLOPT_USERAGENT, user_agent.data);
 
-		headers = curl_slist_append(headers, "Accept: application/xml");
+		/* OAI-PMH responses are text/xml (spec 3.1.2.1) */
+		headers = curl_slist_append(headers, "Accept: text/xml, application/xml");
 		curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 
 		elog(DEBUG2, "  %s (%s): performing cURL request ... ", __func__, state->requestVerb);
