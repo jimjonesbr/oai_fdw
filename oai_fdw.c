@@ -424,7 +424,6 @@ static void CreateOAITuple(TupleTableSlot *slot, OAIFdwState *state, OAIRecord *
 static OAIRecord *FetchNextOAIRecord(OAIFdwState **state);
 static void LoadOAIRecords(struct OAIFdwState **state);
 static void deparseExpr(Expr *expr, OAIFdwState *state);
-static char *datumToString(Datum datum, Oid type);
 static char *GetOAINodeFromColumn(Oid foreigntableid, int16 attnum);
 static void deparseWhereClause(OAIFdwState *state, List *conditions);
 static void OAIRequestPlanner(OAIFdwState *state, RelOptInfo *baserel);
@@ -450,7 +449,6 @@ static List *GetIdentity(OAIFdwState *state);
 static List *GetSets(OAIFdwState *state);
 static void RaiseOAIException(xmlNodePtr error);
 static void CheckOAIResponse(OAIFdwState *state);
-static Datum CreateDatum(int pgtype, int pgtypmod, char *value);
 static void LoadOAIServerInfo(OAIFdwState *state);
 static void LoadOAITableInfo(OAIFdwState *state);
 static void LoadOAIUserMapping(OAIFdwState *state, Oid userid);
@@ -660,9 +658,9 @@ Datum oai_fdw_identity(PG_FUNCTION_ARGS)
 			Form_pg_attribute att = TupleDescAttr(funcctx->attinmeta->tupdesc, i);
 
 			if (strcmp(NameStr(att->attname), "name") == 0)
-				values[i] = CreateDatum(att->atttypid, att->atttypmod, identity_node->name);
+				values[i] = CStringGetTextDatum(identity_node->name);
 			else if (strcmp(NameStr(att->attname), "description") == 0 && identity_node->description)
-				values[i] = CreateDatum(att->atttypid, att->atttypmod, identity_node->description);
+				values[i] = CStringGetTextDatum(identity_node->description);
 			else
 				nulls[i] = true;
 		}
@@ -738,9 +736,9 @@ Datum oai_fdw_listSets(PG_FUNCTION_ARGS)
 			Form_pg_attribute att = TupleDescAttr(funcctx->attinmeta->tupdesc, i);
 
 			if (strcmp(NameStr(att->attname), "setname") == 0 && set_node->setName)
-				values[i] = CreateDatum(att->atttypid, att->atttypmod, set_node->setName);
+				values[i] = CStringGetTextDatum(set_node->setName);
 			else if (strcmp(NameStr(att->attname), "setspec") == 0)
-				values[i] = CreateDatum(att->atttypid, att->atttypmod, set_node->setSpec);
+				values[i] = CStringGetTextDatum(set_node->setSpec);
 			else
 				nulls[i] = true;
 		}
@@ -820,11 +818,11 @@ Datum oai_fdw_listMetadataFormats(PG_FUNCTION_ARGS)
 			Form_pg_attribute att = TupleDescAttr(funcctx->attinmeta->tupdesc, i);
 
 			if (strcmp(NameStr(att->attname), "metadataprefix") == 0)
-				values[i] = CreateDatum(att->atttypid, att->atttypmod, format->metadataPrefix);
+				values[i] = CStringGetTextDatum(format->metadataPrefix);
 			else if (strcmp(NameStr(att->attname), "schema") == 0 && format->schema)
-				values[i] = CreateDatum(att->atttypid, att->atttypmod, format->schema);
+				values[i] = CStringGetTextDatum(format->schema);
 			else if (strcmp(NameStr(att->attname), "metadatanamespace") == 0 && format->metadataNamespace)
-				values[i] = CreateDatum(att->atttypid, att->atttypmod, format->metadataNamespace);
+				values[i] = CStringGetTextDatum(format->metadataNamespace);
 			else
 				nulls[i] = true;
 		}
@@ -2394,38 +2392,6 @@ static char *GetOAINodeFromColumn(Oid foreigntableid, int16 attnum)
 	return optionValue;
 }
 
-static char *datumToString(Datum datum, Oid type)
-{
-
-	regproc typoutput;
-	HeapTuple tuple;
-	char *result;
-
-	tuple = SearchSysCache1(TYPEOID, ObjectIdGetDatum(type));
-
-	if (!HeapTupleIsValid(tuple))
-		elog(ERROR, "%s: cache lookup failed for type %u", __func__, type);
-
-	typoutput = ((Form_pg_type)GETSTRUCT(tuple))->typoutput;
-
-	ReleaseSysCache(tuple);
-
-	elog(DEBUG2, "%s: type > %u", __func__, type);
-
-	switch (type)
-	{
-
-	case TEXTOID:
-	case VARCHAROID:
-		result = DatumGetCString(OidFunctionCall1(typoutput, datum));
-		break;
-	default:
-		return NULL;
-	}
-
-	return result;
-}
-
 static void deparseExpr(Expr *expr, OAIFdwState *state)
 {
 	OpExpr *oper;
@@ -2565,7 +2531,7 @@ static char *deparseTextConst(Const *constant)
 		(constant->consttype != TEXTOID && constant->consttype != VARCHAROID))
 		return NULL;
 
-	return datumToString(constant->constvalue, constant->consttype);
+	return TextDatumGetCString(constant->constvalue);
 }
 
 /*
@@ -2680,7 +2646,7 @@ static void ApplyPushdown(OAIFdwState *state, OAIPushdownKind kind, Const *const
 				if (isnull)
 					continue;
 
-				state->set = datumToString(item, TEXTOID);
+				state->set = TextDatumGetCString(item);
 				elog(DEBUG2, "  %s: setSpec set to '%s'", __func__, state->set);
 			}
 
@@ -2944,7 +2910,6 @@ static void CreateOAITuple(TupleTableSlot *slot, OAIFdwState *state, OAIRecord *
 	{
 		Oid pgtype = state->oaiTable->cols[i]->pgtype;
 		char *oai_node = state->oaiTable->cols[i]->oai_node;
-		char *colname = state->oaiTable->cols[i]->name;
 		int pgtypmod = state->oaiTable->cols[i]->pgtypmod;
 
 		if (oai_node)
@@ -2993,30 +2958,12 @@ static void CreateOAITuple(TupleTableSlot *slot, OAIFdwState *state, OAIRecord *
 			}
 			else if (strcmp(oai_node, OAI_NODE_DATESTAMP) == 0)
 			{
+				/* the column is a timestamp, see OAIRequestPlanner() */
 				if (oai->datestamp)
-				{
-					HeapTuple tuple;
-					regproc typinput;
-					Datum datum;
-
-					datum = CStringGetDatum(oai->datestamp);
-					/* find the appropriate conversion function */
-					tuple = SearchSysCache1(TYPEOID, ObjectIdGetDatum(pgtype));
-
-					if (!HeapTupleIsValid(tuple))
-						ereport(ERROR,
-								(errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
-								 errmsg("cache lookup failed for type %u > column '%s'", pgtype, colname)));
-
-					typinput = ((Form_pg_type)GETSTRUCT(tuple))->typinput;
-					ReleaseSysCache(tuple);
-
-					slot->tts_values[i] = OidFunctionCall3(
-						typinput,
-						datum,
-						ObjectIdGetDatum(InvalidOid),
-						Int32GetDatum(pgtypmod));
-				}
+					slot->tts_values[i] = DirectFunctionCall3(timestamp_in,
+															  CStringGetDatum(oai->datestamp),
+															  ObjectIdGetDatum(InvalidOid),
+															  Int32GetDatum(pgtypmod));
 				else
 					slot->tts_isnull[i] = true;
 			}
@@ -3858,47 +3805,6 @@ static List *OAIFdwImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid server
 				 errmsg("invalid FOREIGN SCHEMA: '%s'", stmt->remote_schema)));
 
 	return sql_commands;
-}
-
-/*
- * CreateDatum
- * ----------
- *
- * Creates a Datum from a given value based on the postgres types and modifiers.
- *
- * tuple: a Heaptuple
- * pgtype: postgres type
- * pgtypemod: postgres type modifier
- * value: value to be converted
- *
- * returns Datum
- */
-static Datum CreateDatum(int pgtype, int pgtypmod, char *value)
-{
-	regproc typinput;
-	HeapTuple tuple = SearchSysCache1(TYPEOID, ObjectIdGetDatum(pgtype));
-
-	if (!HeapTupleIsValid(tuple))
-		ereport(ERROR,
-				(errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
-				 errmsg("cache lookup failed for type %u", pgtype)));
-
-	typinput = ((Form_pg_type)GETSTRUCT(tuple))->typinput;
-	ReleaseSysCache(tuple);
-
-	if (pgtype == FLOAT4OID ||
-		pgtype == FLOAT8OID ||
-		pgtype == NUMERICOID ||
-		pgtype == TIMESTAMPOID ||
-		pgtype == TIMESTAMPTZOID ||
-		pgtype == VARCHAROID)
-		return OidFunctionCall3(
-			typinput,
-			CStringGetDatum(value),
-			ObjectIdGetDatum(InvalidOid),
-			Int32GetDatum(pgtypmod));
-	else
-		return OidFunctionCall1(typinput, CStringGetDatum(value));
 }
 
 static void LoadOAIUserMapping(OAIFdwState *state, Oid userid)
