@@ -158,7 +158,6 @@
 
 #define OAI_SUCCESS 0
 #define OAI_FAIL 1
-#define OAI_UNKNOWN_REQUEST 2
 
 /*
  * OAI-PMH flow control (protocol spec, section 3.4): a repository may answer
@@ -1803,55 +1802,31 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 
 	appendStringInfo(&url_buffer, "verb=%s", state->requestVerb);
 
-	if (strcmp(state->requestVerb, OAI_REQUEST_LISTRECORDS) == 0)
+	if (state->resumptionToken &&
+		(strcmp(state->requestVerb, OAI_REQUEST_LISTRECORDS) == 0 ||
+		 strcmp(state->requestVerb, OAI_REQUEST_LISTIDENTIFIERS) == 0 ||
+		 strcmp(state->requestVerb, OAI_REQUEST_LISTSETS) == 0))
 	{
-		if (state->set)
-			AppendOAIArgument(&url_buffer, curl, "set", state->set);
+		/*
+		 * The resumption token is an exclusive argument (spec 3.5), sent back
+		 * as received, but URL-encoded: it may contain e.g. '&'.
+		 */
+		char *encoded_token = curl_easy_escape(curl, state->resumptionToken, 0);
 
-		if (state->from)
-			AppendOAIArgument(&url_buffer, curl, "from", state->from);
-
-		if (state->until)
-			AppendOAIArgument(&url_buffer, curl, "until", state->until);
-
-		if (state->metadataPrefix)
-			AppendOAIArgument(&url_buffer, curl, "metadataPrefix", state->metadataPrefix);
-
-		if (state->resumptionToken)
-		{
-			char *encoded_token;
-
-			elog(DEBUG2, "  %s (%s): appending 'resumptionToken' > %s", __func__, state->requestVerb, state->resumptionToken);
-			resetStringInfo(&url_buffer);
-
-			/* URL-encode the resumption token to handle special characters like & */
-			encoded_token = curl_easy_escape(curl, state->resumptionToken, 0);
-			if (encoded_token)
-			{
-				elog(DEBUG2, "  %s (%s): encoded resumptionToken > %s", __func__, state->requestVerb, encoded_token);
-				appendStringInfo(&url_buffer, "verb=%s&resumptionToken=%s", state->requestVerb, encoded_token);
-				curl_free(encoded_token);
-			}
-			else
-			{
-				/* Fallback to unencoded if encoding fails */
-				elog(DEBUG2, "  %s (%s): encoding failed, using raw token", __func__, state->requestVerb);
-				appendStringInfo(&url_buffer, "verb=%s&resumptionToken=%s", state->requestVerb, state->resumptionToken);
-			}
-		}
+		appendStringInfo(&url_buffer, "&resumptionToken=%s", encoded_token);
+		curl_free(encoded_token);
 	}
 	else if (strcmp(state->requestVerb, OAI_REQUEST_GETRECORD) == 0)
 	{
-
 		if (state->identifier)
 			AppendOAIArgument(&url_buffer, curl, "identifier", state->identifier);
 
 		if (state->metadataPrefix)
 			AppendOAIArgument(&url_buffer, curl, "metadataPrefix", state->metadataPrefix);
 	}
-	else if (strcmp(state->requestVerb, OAI_REQUEST_LISTIDENTIFIERS) == 0)
+	else if (strcmp(state->requestVerb, OAI_REQUEST_LISTRECORDS) == 0 ||
+			 strcmp(state->requestVerb, OAI_REQUEST_LISTIDENTIFIERS) == 0)
 	{
-
 		if (state->set)
 			AppendOAIArgument(&url_buffer, curl, "set", state->set);
 
@@ -1863,57 +1838,6 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 
 		if (state->metadataPrefix)
 			AppendOAIArgument(&url_buffer, curl, "metadataPrefix", state->metadataPrefix);
-
-		if (state->resumptionToken)
-		{
-			char *encoded_token;
-
-			elog(DEBUG2, "  %s (%s): appending 'resumptionToken' > %s", __func__, state->requestVerb, state->resumptionToken);
-			resetStringInfo(&url_buffer);
-
-			/* URL-encode the resumption token to handle special characters like & */
-			encoded_token = curl_easy_escape(curl, state->resumptionToken, 0);
-			if (encoded_token)
-			{
-				elog(DEBUG2, "  %s (%s): encoded resumptionToken > %s", __func__, state->requestVerb, encoded_token);
-				appendStringInfo(&url_buffer, "verb=%s&resumptionToken=%s", state->requestVerb, encoded_token);
-				curl_free(encoded_token);
-			}
-			else
-			{
-				/* Fallback to unencoded if encoding fails */
-				elog(DEBUG2, "  %s (%s): encoding failed, using raw token", __func__, state->requestVerb);
-				appendStringInfo(&url_buffer, "verb=%s&resumptionToken=%s", state->requestVerb, state->resumptionToken);
-			}
-		}
-	}
-	else if (strcmp(state->requestVerb, OAI_REQUEST_LISTSETS) == 0)
-	{
-		if (state->resumptionToken)
-		{
-			char *encoded_token = curl_easy_escape(curl, state->resumptionToken, 0);
-			appendStringInfo(&url_buffer, "&resumptionToken=%s", encoded_token);
-			curl_free(encoded_token);
-		}
-	}
-	else
-	{
-		if (strcmp(state->requestVerb, OAI_REQUEST_LISTMETADATAFORMATS) != 0 &&
-			strcmp(state->requestVerb, OAI_REQUEST_LISTSETS) != 0 &&
-			strcmp(state->requestVerb, OAI_REQUEST_IDENTIFY) != 0)
-		{
-			/*
-			 * Nothing was requested, so no document is produced. Clear any
-			 * document left over from a previous request, so that the caller
-			 * cannot mistake it for the response to this one and free it twice.
-			 */
-			OAIFreeXmlDoc(state);
-			free(chunk.memory);
-			free(chunk_header.memory);
-			curl_easy_cleanup(curl);
-
-			return OAI_UNKNOWN_REQUEST;
-		}
 	}
 
 	/*
