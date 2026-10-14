@@ -316,13 +316,13 @@ IMPORT FOREIGN SCHEMA foo FROM SERVER oai_server_ulb INTO exception_schema OPTIO
 ERROR:  invalid FOREIGN SCHEMA: 'foo'
 -- UPDATE query
 UPDATE ulb_ulbmsuo_oai_dc SET status = true;
-ERROR:  Operation not supported.
+ERROR:  cannot update foreign table "ulb_ulbmsuo_oai_dc"
 -- INSERT query
 INSERT INTO ulb_ulbmsuo_oai_dc (status) VALUES (false);
-ERROR:  Operation not supported.
+ERROR:  cannot insert into foreign table "ulb_ulbmsuo_oai_dc"
 -- DELETE query
 DELETE FROM ulb_ulbmsuo_oai_dc;
-ERROR:  Operation not supported.
+ERROR:  cannot delete from foreign table "ulb_ulbmsuo_oai_dc"
 -- empty user name
 CREATE USER MAPPING FOR postgres SERVER oai_server_ulb OPTIONS (user '', password 'foo');
 ERROR:  empty value in option 'user'

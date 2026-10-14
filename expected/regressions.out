@@ -229,5 +229,12 @@ SELECT to_regclass('regress_h') IS NULL AS no_target_table;
  t
 (1 row)
 
+-- the tables are read-only: refused before any request (port 1 would fail)
+UPDATE regress_t SET deleted = true;
+ERROR:  cannot update foreign table "regress_t"
+INSERT INTO regress_t (id) VALUES ('oai:x:1');
+ERROR:  cannot insert into foreign table "regress_t"
+DELETE FROM regress_t WHERE id = 'oai:x:1';
+ERROR:  cannot delete from foreign table "regress_t"
 DROP SERVER regress_offline CASCADE;
 NOTICE:  drop cascades to 3 other objects

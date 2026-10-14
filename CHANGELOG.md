@@ -9,6 +9,10 @@
 
   **Added `max_response_size` server option**: a response body larger than this many bytes is aborted as soon as it exceeds the limit, and the query fails without retrying. Independently of it, a response can no longer exceed 1 GB: until now, a repository could make the backend allocate memory without limit, outside PostgreSQL's memory accounting, and a body over 2 GB had its length truncated when handed to libxml2.
 
+* Bug fixes
+
+  **`INSERT`, `UPDATE` and `DELETE` are refused before any request**: they used to harvest the rows to change from the repository before failing with "Operation not supported", and a `DELETE` or `UPDATE` matching no record reported success. They now fail right away with PostgreSQL's own error, e.g. `cannot update foreign table "t"`.
+
 ### oai_fdw 1.15
 **2026-10-01**
 

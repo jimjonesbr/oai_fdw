@@ -431,9 +431,6 @@ static void OAIExplainForeignScan(ForeignScanState *node, ExplainState *es);
 static TupleTableSlot *OAIFdwIterateForeignScan(ForeignScanState *node);
 static void OAIFdwReScanForeignScan(ForeignScanState *node);
 static void OAIFdwEndForeignScan(ForeignScanState *node);
-static TupleTableSlot *OAIFdwExecForeignUpdate(EState *estate, ResultRelInfo *rinfo, TupleTableSlot *slot, TupleTableSlot *planSlot);
-static TupleTableSlot *OAIFdwExecForeignInsert(EState *estate, ResultRelInfo *rinfo, TupleTableSlot *slot, TupleTableSlot *planSlot);
-static TupleTableSlot *OAIFdwExecForeignDelete(EState *estate, ResultRelInfo *rinfo, TupleTableSlot *slot, TupleTableSlot *planSlot);
 static List *OAIFdwImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid serverOid);
 static char *SetTableName(const char *setSpec);
 
@@ -511,9 +508,13 @@ Datum oai_fdw_handler(PG_FUNCTION_ARGS)
 	fdwroutine->ReScanForeignScan = OAIFdwReScanForeignScan;
 	fdwroutine->EndForeignScan = OAIFdwEndForeignScan;
 
-	fdwroutine->ExecForeignUpdate = OAIFdwExecForeignUpdate;
-	fdwroutine->ExecForeignDelete = OAIFdwExecForeignDelete;
-	fdwroutine->ExecForeignInsert = OAIFdwExecForeignInsert;
+	/*
+	 * No ExecForeignInsert/Update/Delete: the tables are read-only, and
+	 * without these callbacks INSERT, UPDATE and DELETE are refused when the
+	 * executor starts - with stubs raising an error, the rows to update or
+	 * delete were harvested first, and a DELETE matching none of them
+	 * reported success.
+	 */
 	fdwroutine->ImportForeignSchema = OAIFdwImportForeignSchema;
 
 	PG_RETURN_POINTER(fdwroutine);
@@ -2533,38 +2534,6 @@ static void OAIRequestPlanner(OAIFdwState *state, RelOptInfo *baserel)
 #endif
 
 	elog(DEBUG2, "%s => finished.", __func__);
-}
-
-static TupleTableSlot *OAIFdwExecForeignUpdate(EState *estate, ResultRelInfo *rinfo, TupleTableSlot *slot, TupleTableSlot *planSlot)
-{
-	ereport(
-		ERROR, (
-				   errcode(ERRCODE_FDW_UNABLE_TO_CREATE_EXECUTION),
-				   errmsg("Operation not supported."),
-				   errhint("The OAI Foreign Data Wrapper does not support UPDATE queries.")));
-	return NULL;
-}
-
-static TupleTableSlot *OAIFdwExecForeignInsert(EState *estate, ResultRelInfo *rinfo, TupleTableSlot *slot, TupleTableSlot *planSlot)
-{
-	ereport(
-		ERROR, (
-				   errcode(ERRCODE_FDW_UNABLE_TO_CREATE_EXECUTION),
-				   errmsg("Operation not supported."),
-				   errhint("The OAI Foreign Data Wrapper does not support INSERT queries.")));
-
-	return NULL;
-}
-
-static TupleTableSlot *OAIFdwExecForeignDelete(EState *estate, ResultRelInfo *rinfo, TupleTableSlot *slot, TupleTableSlot *planSlot)
-{
-	ereport(
-		ERROR, (
-				   errcode(ERRCODE_FDW_UNABLE_TO_CREATE_EXECUTION),
-				   errmsg("Operation not supported."),
-				   errhint("The OAI Foreign Data Wrapper does not support DELETE queries.")));
-
-	return NULL;
 }
 
 static char *GetOAINodeFromColumn(Oid foreigntableid, int16 attnum)

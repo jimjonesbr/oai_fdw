@@ -132,4 +132,9 @@ CALL OAI_HarvestTable('regress_t', 'regress_h', interval '0', '2020-01-01', '202
 CALL OAI_HarvestTable('regress_t', 'regress_h', interval '1 day', NULL, '2020-01-10');
 SELECT to_regclass('regress_h') IS NULL AS no_target_table;
 
+-- the tables are read-only: refused before any request (port 1 would fail)
+UPDATE regress_t SET deleted = true;
+INSERT INTO regress_t (id) VALUES ('oai:x:1');
+DELETE FROM regress_t WHERE id = 'oai:x:1';
+
 DROP SERVER regress_offline CASCADE;
