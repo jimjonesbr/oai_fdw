@@ -9,6 +9,8 @@
 
   **Added `max_response_size` server option**: a response body larger than this many bytes is aborted as soon as it exceeds the limit, and the query fails without retrying. Independently of it, a response can no longer exceed 1 GB: until now, a repository could make the backend allocate memory without limit, outside PostgreSQL's memory accounting, and a body over 2 GB had its length truncated when handed to libxml2.
 
+  **No more content-type warnings**: a response is no longer warned about because of its `Content-Type`. The warning added nothing: a response that is not an OAI-PMH document already fails with an error, and a valid one is processed whatever its `Content-Type` says.
+
 * Bug fixes
 
   **Row estimate of identifier lookups**: a query on an identifier (`GetRecord`), also with a parameter such as `$1`, is now estimated at one row instead of the 1000 of a full harvest, so the planner can tell a lookup from a harvest. The request is now planned in `GetForeignRelSize`, where the planner expects it, instead of in `GetForeignPlan`, after the estimates had been taken.

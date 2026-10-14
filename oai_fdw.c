@@ -343,16 +343,10 @@ struct MemoryStruct
 	bool size_exceeded;
 	/*
 	 * Set by the libcurl callbacks when an allocation fails. The callbacks
-	 * must not raise errors themselves (see WriteMemoryCallback), so the
+	 * must not raise errors themselves (see CURLWriteMemoryCallback), so the
 	 * condition is recorded here and reported once the transfer has ended.
 	 */
 	bool alloc_failed;
-	/*
-	 * Content-type reported by the server when it is not one of the XML types
-	 * oai_fdw expects; empty otherwise. Warned about after the transfer, for
-	 * the same reason.
-	 */
-	char unsupported_ctype[128];
 };
 
 typedef struct OAIfdwTable
@@ -1353,19 +1347,22 @@ static int CheckURL(char *url)
 }
 
 /*
- * WriteMemoryCallback / HeaderCallbackFunction
- * --------------------------------------------
- * These run inside curl_easy_perform(). They must therefore never raise a
+ * CURLWriteMemoryCallback
+ * -----------------------
+ * Collects the response body (CURLOPT_WRITEFUNCTION) and the headers
+ * (CURLOPT_HEADERFUNCTION), each in the MemoryStruct passed along with it.
+ *
+ * It runs inside curl_easy_perform(). It must therefore never raise a
  * PostgreSQL error: doing so longjmps straight out of libcurl, leaving its
  * handle and connection state inconsistent and skipping every cleanup below
- * the transfer. For the same reason they use malloc() rather than palloc(),
+ * the transfer. For the same reason it uses malloc() rather than palloc(),
  * whose out-of-memory path throws.
  *
  * A failure is recorded in the MemoryStruct and signalled to libcurl by
  * returning a short count, which makes curl_easy_perform() fail cleanly with
  * CURLE_WRITE_ERROR; the caller then reports it as an ordinary error.
  */
-static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp)
+static size_t CURLWriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp)
 {
 	size_t realsize = size * nmemb;
 	struct MemoryStruct *mem = (struct MemoryStruct *)userp;
@@ -1391,63 +1388,6 @@ static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, voi
 	mem->memory[mem->size] = 0;
 
 	return realsize;
-}
-
-static size_t HeaderCallbackFunction(char *contents, size_t size, size_t nmemb, void *userp)
-{
-	size_t nbytes = size * nmemb;
-	struct MemoryStruct *mem = (struct MemoryStruct *)userp;
-	char *ptr;
-	char line[256];
-	size_t linelen = Min(nbytes, sizeof(line) - 1);
-
-	memcpy(line, contents, linelen);
-	line[linelen] = '\0';
-
-	while (linelen > 0 && (line[linelen - 1] == '\r' || line[linelen - 1] == '\n'))
-		line[--linelen] = '\0';
-
-	/*
-	 * Record an unexpected content-type instead of warning from here: this
-	 * runs inside libcurl, where raising an error is unsafe and even a WARNING
-	 * would allocate. The caller emits the warning once the transfer is done.
-	 * Only the final response counts: with redirects, every hop starts with
-	 * a status line of its own.
-	 */
-	if (pg_strncasecmp(line, "HTTP/", 5) == 0)
-		mem->unsupported_ctype[0] = '\0';
-	else if (pg_strncasecmp(line, "content-type:", 13) == 0)
-	{
-		const char *value = line + 13;
-
-		/* the whitespace before the value is optional (RFC 9110, 5.6.3) */
-		while (*value == ' ' || *value == '\t')
-			value++;
-
-		if (pg_strncasecmp(value, "text/xml", 8) != 0 &&
-			pg_strncasecmp(value, "application/xml", 15) != 0)
-			strlcpy(mem->unsupported_ctype, line, sizeof(mem->unsupported_ctype));
-	}
-
-	if (nbytes > mem->max_size - mem->size)
-	{
-		mem->size_exceeded = true;
-		return 0; /* abort the transfer */
-	}
-
-	ptr = realloc(mem->memory, mem->size + nbytes + 1);
-
-	if (!ptr)
-	{
-		mem->alloc_failed = true;
-		return 0; /* abort the transfer */
-	}
-
-	mem->memory = ptr;
-	memcpy(&(mem->memory[mem->size]), contents, nbytes);
-	mem->size += nbytes;
-	mem->memory[mem->size] = 0;
-	return nbytes;
 }
 
 /*
@@ -1827,7 +1767,7 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 
 	/*
 	 * These buffers are filled by libcurl callbacks, so they are malloc'd
-	 * rather than palloc'd; see WriteMemoryCallback. They are released on
+	 * rather than palloc'd; see CURLWriteMemoryCallback. They are released on
 	 * every exit path below.
 	 */
 	memset(&chunk, 0, sizeof(chunk));
@@ -2079,9 +2019,9 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 		curl_easy_setopt(curl, CURLOPT_DEBUGFUNCTION, CURLDebugCallback);
 		curl_easy_setopt(curl, CURLOPT_DEBUGDATA, NULL);
 
-		curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, HeaderCallbackFunction);
+		curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, CURLWriteMemoryCallback);
 		curl_easy_setopt(curl, CURLOPT_HEADERDATA, (void *)&chunk_header);
-		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
+		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, CURLWriteMemoryCallback);
 		curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&chunk);
 		curl_easy_setopt(curl, CURLOPT_FAILONERROR, 1L);
 
@@ -2189,7 +2129,6 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 				chunk_header.size = 0;
 				chunk_header.memory[0] = '\0';
 				chunk_header.alloc_failed = false;
-				chunk_header.unsupported_ctype[0] = '\0';
 
 				res = curl_easy_perform(curl);
 			}
@@ -2220,9 +2159,8 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 		}
 
 		/*
-		 * Report the conditions the libcurl callbacks recorded rather than
-		 * raising: an allocation failure is fatal, an unexpected content-type
-		 * is only worth a warning.
+		 * Report an allocation failure the libcurl callbacks recorded rather
+		 * than raised.
 		 */
 		if (chunk.alloc_failed || chunk_header.alloc_failed)
 		{
@@ -2293,9 +2231,6 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 					 errhint("Set '%s' on the FOREIGN SERVER to follow redirects, or use the new URL.",
 							 OAI_SERVER_OPTION_REQUEST_REDIRECT)));
 		}
-
-		if (chunk_header.unsupported_ctype[0] != '\0')
-			elog(WARNING, "unsupported content-type: \"%s\"", chunk_header.unsupported_ctype);
 
 		if (res != CURLE_OK)
 		{
