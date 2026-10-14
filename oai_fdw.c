@@ -215,7 +215,6 @@ typedef struct OAIFdwState
 	char *url;				 /* Concatenated URL with the OAI request. */
 	char *metadataPrefix;	 /* Metadata format in OAI requests issued to the repository. */
 	char *proxy;			 /* Proxy for HTTP requests, if necessary. */
-	char *proxyType;		 /* Proxy protocol (HTTPS, HTTP). */
 	char *proxyUser;		 /* User name for proxy authentication. */
 	char *proxyPassword;	 /* Password for proxy authentication. */
 	char *from;				 /* Beginning of am interval to filter an OAI request. */
@@ -1892,11 +1891,6 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 
 			curl_easy_setopt(curl, CURLOPT_PROXY, state->proxy);
 
-			if (strcmp(state->proxyType, OAI_SERVER_OPTION_HTTP_PROXY) == 0)
-			{
-				elog(DEBUG2, "%s (%s): proxy protocol > 'HTTP'", __func__, state->requestVerb);
-				curl_easy_setopt(curl, CURLOPT_PROXYTYPE, CURLPROXY_HTTP);
-			}
 			if (state->proxyUser)
 			{
 				elog(DEBUG2, "%s (%s): entering proxy user ('%s').", __func__, state->requestVerb, state->proxyUser);
@@ -4095,10 +4089,7 @@ static void LoadOAIServerInfo(OAIFdwState *state)
 			else if (strcmp(OAI_NODE_METADATAPREFIX, def->defname) == 0)
 				state->metadataPrefix = defGetString(def);
 			else if (strcmp(OAI_SERVER_OPTION_HTTP_PROXY, def->defname) == 0)
-			{
 				state->proxy = defGetString(def);
-				state->proxyType = OAI_SERVER_OPTION_HTTP_PROXY;
-			}
 			/* servers created before 1.13 may still have them; user mappings win */
 			else if (strcmp(OAI_USERMAPPING_OPTION_PROXY_USER, def->defname) == 0)
 				state->proxyUser = defGetString(def);
@@ -4200,7 +4191,6 @@ static List *SerializePlanData(OAIFdwState *state)
 	result = lappend(result, CStringToConst(state->url));
 	result = lappend(result, CStringToConst(state->metadataPrefix));
 	result = lappend(result, CStringToConst(state->proxy));
-	result = lappend(result, CStringToConst(state->proxyType));
 	result = lappend(result, CStringToConst(state->from));
 	result = lappend(result, CStringToConst(state->until));
 	result = lappend(result, CStringToConst(state->resumptionToken));
@@ -4303,9 +4293,6 @@ static struct OAIFdwState *DeserializePlanData(List *list)
 	cell = list_next(list, cell);
 
 	state->proxy = ConstToCString(lfirst(cell));
-	cell = list_next(list, cell);
-
-	state->proxyType = ConstToCString(lfirst(cell));
 	cell = list_next(list, cell);
 
 	state->from = ConstToCString(lfirst(cell));
