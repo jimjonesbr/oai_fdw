@@ -429,7 +429,6 @@ static void deparseExpr(Expr *expr, OAIFdwState *state);
 static char *datumToString(Datum datum, Oid type);
 static char *GetOAINodeFromColumn(Oid foreigntableid, int16 attnum);
 static void deparseWhereClause(OAIFdwState *state, List *conditions);
-static void deparseSelectColumns(OAIFdwState *state, List *exprs);
 static void OAIRequestPlanner(OAIFdwState *state, RelOptInfo *baserel);
 static char *deparseTimestamp(Datum datum);
 static char *deparseDatestampConst(Const *constant);
@@ -2420,9 +2419,6 @@ static void OAIRequestPlanner(OAIFdwState *state, RelOptInfo *baserel)
 			 __func__, relname, OAI_REQUEST_LISTIDENTIFIERS);
 	}
 
-	if (state->numfdwcols != 0)
-		deparseSelectColumns(state, baserel->reltarget->exprs);
-
 	deparseWhereClause(state, conditions);
 
 #if PG_VERSION_NUM < 130000
@@ -2585,22 +2581,6 @@ static void deparseExpr(Expr *expr, OAIFdwState *state)
 	default:
 
 		break;
-	}
-}
-
-static void deparseSelectColumns(OAIFdwState *state, List *exprs)
-{
-	ListCell *cell;
-
-	elog(DEBUG2, "%s called", __func__);
-
-	foreach (cell, exprs)
-	{
-		Expr *expr = (Expr *)lfirst(cell);
-
-		elog(DEBUG2, "  %s: evaluating expr->type = %u", __func__, expr->type);
-
-		deparseExpr(expr, state);
 	}
 }
 

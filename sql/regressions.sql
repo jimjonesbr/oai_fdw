@@ -29,6 +29,9 @@ EXPLAIN (COSTS OFF) SELECT id FROM regress_t WHERE updated > '-infinity';
 EXPLAIN (COSTS OFF) SELECT id FROM regress_t WHERE updated > '4714-11-24 BC';
 EXPLAIN (COSTS OFF) SELECT id FROM regress_t WHERE id = 'oai:x:1';
 
+-- an expression in the select list is no condition for the request
+EXPLAIN (COSTS OFF) SELECT id = 'oai:x:1' AS is_x FROM regress_t;
+
 -- support functions on a server of another FDW: used to crash
 CREATE FOREIGN DATA WRAPPER regress_dummy_fdw;
 CREATE SERVER regress_other FOREIGN DATA WRAPPER regress_dummy_fdw;

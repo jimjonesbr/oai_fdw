@@ -84,6 +84,17 @@ EXPLAIN (COSTS OFF) SELECT id FROM regress_t WHERE id = 'oai:x:1';
    metadataPrefix: oai_dc
 (6 rows)
 
+-- an expression in the select list is no condition for the request
+EXPLAIN (COSTS OFF) SELECT id = 'oai:x:1' AS is_x FROM regress_t;
+                  QUERY PLAN                  
+----------------------------------------------
+ Foreign Scan on regress_t
+   Foreign Server: regress_offline
+   Foreign Server URL: http://127.0.0.1:1/oai
+   requestVerb: ListIdentifiers
+   metadataPrefix: oai_dc
+(5 rows)
+
 -- support functions on a server of another FDW: used to crash
 CREATE FOREIGN DATA WRAPPER regress_dummy_fdw;
 CREATE SERVER regress_other FOREIGN DATA WRAPPER regress_dummy_fdw;
