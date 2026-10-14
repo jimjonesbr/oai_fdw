@@ -18,7 +18,8 @@ DATA = oai_fdw--1.0.sql \
 	   oai_fdw--1.12--1.13.sql \
 	   oai_fdw--1.13--1.14.sql \
 	   oai_fdw--1.14--1.15.sql \
-	   oai_fdw--1.15.sql
+	   oai_fdw--1.15--1.16.sql \
+	   oai_fdw--1.16.sql
 
 REGRESS = create-extension \
 		  upgrade \

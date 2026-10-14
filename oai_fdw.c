@@ -87,7 +87,7 @@
 #include "utils/memutils.h"
 #include "mb/pg_wchar.h"
 
-#define OAI_FDW_VERSION "1.15"
+#define OAI_FDW_VERSION "1.16-dev"
 #define OAI_REQUEST_LISTRECORDS "ListRecords"
 #define OAI_REQUEST_LISTIDENTIFIERS "ListIdentifiers"
 #define OAI_REQUEST_IDENTIFY "Identify"
