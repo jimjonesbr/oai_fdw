@@ -57,7 +57,7 @@ CREATE EXTENSION oai_fdw;
 To install a specific version add the full version number in the `WITH VERSION` clause
 
 ```sql
-CREATE EXTENSION oai_fdw WITH VERSION '1.15';
+CREATE EXTENSION oai_fdw WITH VERSION '1.16';
 ```
 
 To run the predefined regression tests run `make installcheck` with the user `postgres`:
@@ -84,7 +84,7 @@ ALTER EXTENSION oai_fdw UPDATE;
 To update to a specific version use `UPDATE TO` and the full version number
 
 ```sql
-ALTER EXTENSION oai_fdw UPDATE TO '1.15';
+ALTER EXTENSION oai_fdw UPDATE TO '1.6';
 ```
 
 ## [Usage](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#usage)
@@ -706,9 +706,9 @@ Shows the version of the installed OAI FDW and its main libraries.
 
 ```sql
 SELECT oai_fdw_version();
-                                               oai_fdw_version                                               
--------------------------------------------------------------------------------------------------------------
- oai_fdw 1.16-dev (PostgreSQL 18.4 (Debian 18.4-1.pgdg13+1), compiled by gcc, libxml 2.9.14, libcurl 8.14.1)
+                                             oai_fdw_version                                             
+---------------------------------------------------------------------------------------------------------
+ oai_fdw 1.16 (PostgreSQL 18.4 (Debian 18.4-1.pgdg13+1), compiled by gcc, libxml 2.9.14, libcurl 8.14.1)
 (1 row)
 ```
 ### [oai_fdw_settings](#oai_fdw_settings)
@@ -723,7 +723,7 @@ A system view that provides detailed version information for `oai_fdw` and all i
 SELECT * FROM oai_fdw_settings;
  component  |            version            
 ------------+-------------------------------
- oai_fdw    | 1.16-dev
+ oai_fdw    | 1.16
  PostgreSQL | 18.4 (Debian 18.4-1.pgdg13+1)
  libxml     | 2.9.14
  libcurl    | 8.14.1
@@ -732,7 +732,7 @@ SELECT * FROM oai_fdw_settings;
  libSSH     | libssh2/1.11.1
  nghttp2    | 1.64.0
  compiler   | gcc
- built      | 2026-10-14 08:23:05 UTC
+ built      | 2026-10-14 11:01:27 UTC
 (10 rows)
 ```
 
@@ -839,8 +839,8 @@ FROM postgres:18
 RUN apt-get update && \
     apt-get install -y make gcc postgresql-server-dev-18 libxml2-dev libcurl4-openssl-dev
 
-RUN tar xvzf oai_fdw-1.15.0.tar.gz && \
-    cd oai_fdw-1.15.0 && \
+RUN tar xvzf oai_fdw-1.16.tar.gz && \
+    cd oai_fdw-1.16 && \
     make -j && \
     make install
 ```
