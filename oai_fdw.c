@@ -922,10 +922,11 @@ Datum oai_fdw_validator(PG_FUNCTION_ARGS)
 				{
 					char *endptr;
 					char *size_str = defGetString(def);
-					long size_val;
+					long long size_val;
 
+					/* long long: sizes above 2 GB must parse on 32-bit platforms, too */
 					errno = 0;
-					size_val = strtol(size_str, &endptr, 10);
+					size_val = strtoll(size_str, &endptr, 10);
 
 					if (*endptr != '\0' || errno == ERANGE || size_val < 0)
 						ereport(ERROR,
@@ -2189,10 +2190,10 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 					parse_error = pchomp(error->message);
 			}
 
-			elog(DEBUG1, "HTTP %ld, %ld bytes", response_code, chunk.size);
+			elog(DEBUG1, "HTTP %ld, %zu bytes", response_code, chunk.size);
 
 			elog(DEBUG2, "  %s (%s): http response code = %ld", __func__, state->requestVerb, response_code);
-			elog(DEBUG2, "  %s (%s): http response size = %ld", __func__, state->requestVerb, chunk.size);
+			elog(DEBUG2, "  %s (%s): http response size = %zu", __func__, state->requestVerb, chunk.size);
 			elog(DEBUG2, "  %s (%s): http response header = \n%s", __func__, state->requestVerb, chunk_header.memory);
 		}
 	}
@@ -3882,8 +3883,8 @@ static void LoadOAIServerInfo(OAIFdwState *state)
 				 * Anything above the hard limit means the hard limit, which also
 				 * keeps the value within the int it is serialized into.
 				 */
-				state->max_response_size = Min(strtol(size_str, &tailpt, 10),
-											   (long)OAI_FDW_MAX_RESPONSE_SIZE);
+				state->max_response_size = Min(strtoll(size_str, &tailpt, 10),
+											   (long long)OAI_FDW_MAX_RESPONSE_SIZE);
 			}
 			else
 				elog(WARNING, "Invalid SERVER OPTION > '%s'", def->defname);
