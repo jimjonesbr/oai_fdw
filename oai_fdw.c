@@ -88,6 +88,7 @@
 #include "mb/pg_wchar.h"
 
 #define OAI_FDW_VERSION "1.16-dev"
+#define OAI_FDW_URL "https://github.com/jimjonesbr/oai_fdw"
 #define OAI_REQUEST_LISTRECORDS "ListRecords"
 #define OAI_REQUEST_LISTIDENTIFIERS "ListIdentifiers"
 #define OAI_REQUEST_IDENTIFY "Identify"
@@ -2044,8 +2045,14 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 			curl_easy_setopt(curl, CURLOPT_USERNAME, state->user);
 		}
 
+		/*
+		 * The User-Agent names the wrapper and where to find it - and nothing
+		 * else: no version of PostgreSQL, libxml2, libcurl or the TLS library,
+		 * which would tell every repository and proxy on the way which known
+		 * vulnerabilities to try. oai_fdw_settings reports those locally.
+		 */
 		initStringInfo(&user_agent);
-		appendStringInfo(&user_agent, "PostgreSQL/%s oai_fdw/%s libxml2/%s %s", PG_VERSION, OAI_FDW_VERSION, LIBXML_DOTTED_VERSION, curl_version());
+		appendStringInfo(&user_agent, "oai_fdw/%s (+%s)", OAI_FDW_VERSION, OAI_FDW_URL);
 		curl_easy_setopt(curl, CURLOPT_USERAGENT, user_agent.data);
 
 		/* OAI-PMH responses are text/xml (spec 3.1.2.1) */

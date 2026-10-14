@@ -1,6 +1,10 @@
 ### oai_fdw 1.16
 **unreleased**
 
+* Breaking changes
+
+  **New `User-Agent`**: requests now identify themselves as `oai_fdw/<version> (+https://github.com/jimjonesbr/oai_fdw)`. The previous `User-Agent` disclosed the exact versions of PostgreSQL, libxml2, libcurl, the TLS library and others to every OAI-PMH repository and proxy on the way; `oai_fdw_settings` still reports them locally.
+
 ### oai_fdw 1.15
 **2026-10-01**
 
