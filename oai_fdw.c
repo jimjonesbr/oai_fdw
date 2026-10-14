@@ -422,7 +422,6 @@ static void CreateOAITuple(TupleTableSlot *slot, OAIFdwState *state, OAIRecord *
 static OAIRecord *FetchNextOAIRecord(OAIFdwState **state);
 static void LoadOAIRecords(struct OAIFdwState **state);
 static void deparseExpr(Expr *expr, OAIFdwState *state);
-static char *GetOAINodeFromColumn(Oid foreigntableid, int16 attnum);
 static void deparseWhereClause(OAIFdwState *state, List *conditions);
 static void OAIRequestPlanner(OAIFdwState *state, RelOptInfo *baserel);
 static char *deparseTimestamp(Datum datum);
@@ -2344,52 +2343,6 @@ static void OAIRequestPlanner(OAIFdwState *state, RelOptInfo *baserel)
 	elog(DEBUG2, "%s => finished.", __func__);
 }
 
-static char *GetOAINodeFromColumn(Oid foreigntableid, int16 attnum)
-{
-
-	List *options;
-	TupleDesc tupdesc;
-	char *optionValue = NULL;
-
-#if PG_VERSION_NUM < 130000
-	Relation rel = heap_open(foreigntableid, NoLock);
-#else
-	Relation rel = table_open(foreigntableid, NoLock);
-#endif
-
-	elog(DEBUG2, "  %s called", __func__);
-	tupdesc = rel->rd_att;
-
-	for (int i = 0; i < rel->rd_att->natts; i++)
-	{
-		ListCell *lc;
-		Form_pg_attribute attr = TupleDescAttr(tupdesc, i);
-		options = GetForeignColumnOptions(foreigntableid, i + 1);
-
-		if (attr->attnum == attnum)
-		{
-			foreach (lc, options)
-			{
-				DefElem *def = (DefElem *)lfirst(lc);
-
-				if (strcmp(def->defname, OAI_NODE_COLUMN_OPTION) == 0)
-				{
-					optionValue = defGetString(def);
-					break;
-				}
-			}
-		}
-	}
-
-#if PG_VERSION_NUM < 130000
-	heap_close(rel, NoLock);
-#else
-	table_close(rel, NoLock);
-#endif
-
-	return optionValue;
-}
-
 static void deparseExpr(Expr *expr, OAIFdwState *state)
 {
 	OpExpr *oper;
@@ -2433,7 +2386,13 @@ static void deparseExpr(Expr *expr, OAIFdwState *state)
 			break; /* let PG evaluate locally */
 
 		var = (Var *)left;
-		oaiNode = GetOAINodeFromColumn(state->foreign_table->relid, var->varattno);
+
+		/* system columns and whole-row references have no oai_node */
+		if (var->varattno <= 0)
+			break;
+
+		/* loaded by LoadOAITableInfo() */
+		oaiNode = state->oaiTable->cols[var->varattno - 1]->oai_node;
 
 		if (!oaiNode)
 			break;

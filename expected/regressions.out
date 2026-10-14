@@ -95,6 +95,49 @@ EXPLAIN (COSTS OFF) SELECT id = 'oai:x:1' AS is_x FROM regress_t;
    metadataPrefix: oai_dc
 (5 rows)
 
+-- the oai_node of a condition's column, also behind a dropped column, and
+-- system columns, which have none
+CREATE FOREIGN TABLE regress_dropped (
+  gone int,
+  id text           OPTIONS (oai_node 'identifier'),
+  updated timestamp OPTIONS (oai_node 'datestamp')
+) SERVER regress_offline OPTIONS (metadataprefix 'oai_dc');
+ALTER FOREIGN TABLE regress_dropped DROP COLUMN gone;
+EXPLAIN (COSTS OFF) SELECT id FROM regress_dropped WHERE id = 'oai:x:1';
+                  QUERY PLAN                  
+----------------------------------------------
+ Foreign Scan on regress_dropped
+   Filter: (id = 'oai:x:1'::text)
+   Foreign Server: regress_offline
+   Foreign Server URL: http://127.0.0.1:1/oai
+   requestVerb: GetRecord
+   metadataPrefix: oai_dc
+(6 rows)
+
+EXPLAIN (COSTS OFF) SELECT id FROM regress_dropped WHERE updated >= '2020-01-01';
+                                   QUERY PLAN                                   
+--------------------------------------------------------------------------------
+ Foreign Scan on regress_dropped
+   Filter: (updated >= 'Wed Jan 01 00:00:00 2020'::timestamp without time zone)
+   Foreign Server: regress_offline
+   Foreign Server URL: http://127.0.0.1:1/oai
+   requestVerb: ListIdentifiers
+   metadataPrefix: oai_dc
+   from: 2020-01-01T00:00:00Z
+(7 rows)
+
+EXPLAIN (COSTS OFF) SELECT id FROM regress_dropped WHERE tableoid <> 0;
+                  QUERY PLAN                  
+----------------------------------------------
+ Foreign Scan on regress_dropped
+   Filter: (tableoid <> '0'::oid)
+   Foreign Server: regress_offline
+   Foreign Server URL: http://127.0.0.1:1/oai
+   requestVerb: ListIdentifiers
+   metadataPrefix: oai_dc
+(6 rows)
+
+DROP FOREIGN TABLE regress_dropped;
 -- support functions on a server of another FDW: used to crash
 CREATE FOREIGN DATA WRAPPER regress_dummy_fdw;
 CREATE SERVER regress_other FOREIGN DATA WRAPPER regress_dummy_fdw;

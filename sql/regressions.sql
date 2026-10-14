@@ -32,6 +32,19 @@ EXPLAIN (COSTS OFF) SELECT id FROM regress_t WHERE id = 'oai:x:1';
 -- an expression in the select list is no condition for the request
 EXPLAIN (COSTS OFF) SELECT id = 'oai:x:1' AS is_x FROM regress_t;
 
+-- the oai_node of a condition's column, also behind a dropped column, and
+-- system columns, which have none
+CREATE FOREIGN TABLE regress_dropped (
+  gone int,
+  id text           OPTIONS (oai_node 'identifier'),
+  updated timestamp OPTIONS (oai_node 'datestamp')
+) SERVER regress_offline OPTIONS (metadataprefix 'oai_dc');
+ALTER FOREIGN TABLE regress_dropped DROP COLUMN gone;
+EXPLAIN (COSTS OFF) SELECT id FROM regress_dropped WHERE id = 'oai:x:1';
+EXPLAIN (COSTS OFF) SELECT id FROM regress_dropped WHERE updated >= '2020-01-01';
+EXPLAIN (COSTS OFF) SELECT id FROM regress_dropped WHERE tableoid <> 0;
+DROP FOREIGN TABLE regress_dropped;
+
 -- support functions on a server of another FDW: used to crash
 CREATE FOREIGN DATA WRAPPER regress_dummy_fdw;
 CREATE SERVER regress_other FOREIGN DATA WRAPPER regress_dummy_fdw;
