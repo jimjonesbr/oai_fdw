@@ -132,6 +132,14 @@ CALL OAI_HarvestTable('regress_t', 'regress_h', interval '0', '2020-01-01', '202
 CALL OAI_HarvestTable('regress_t', 'regress_h', interval '1 day', NULL, '2020-01-10');
 SELECT to_regclass('regress_h') IS NULL AS no_target_table;
 
+-- estimates: an identifier lookup returns at most one record, also with a
+-- value known only at execution time; anything else keeps the default
+EXPLAIN SELECT id FROM regress_t;
+EXPLAIN SELECT id FROM regress_t WHERE id = 'oai:x:1';
+SET regress.oai_id = 'oai:x:1';
+EXPLAIN SELECT id FROM regress_t WHERE id = current_setting('regress.oai_id');
+RESET regress.oai_id;
+
 -- the tables are read-only: refused before any request (port 1 would fail)
 UPDATE regress_t SET deleted = true;
 INSERT INTO regress_t (id) VALUES ('oai:x:1');

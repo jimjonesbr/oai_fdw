@@ -241,8 +241,6 @@ typedef struct OAIFdwState
 	ForeignServer *foreign_server;
 	char *user;
 	char *password;
-	Cost startup_cost;
-	Cost total_cost;
 
 	struct OAIfdwTable *oaiTable; /* All necessary information of the FOREIGN TABLE used in a SQL statement */
 
@@ -2972,30 +2970,51 @@ static void deparseWhereClause(OAIFdwState *state, List *conditions)
 	}
 }
 
+/*
+ * OAIFdwGetForeignRelSize
+ * -----------------------
+ * Decides everything the plan depends on - the server and table options, the
+ * request verb and the conditions sent to the repository - so that the
+ * estimates can build on it. GetForeignPaths costs it, and GetForeignPlan
+ * only packs it into the plan.
+ */
 static void OAIFdwGetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid)
 {
 	OAIFdwState *state = (OAIFdwState *)palloc0(sizeof(OAIFdwState));
+
 	state->foreign_table = GetForeignTable(foreigntableid);
 	state->foreign_server = GetForeignServer(state->foreign_table->serverid);
-	state->startup_cost = 10000.0;
-	/* estimate total cost as startup cost + 10 * (returned rows) */
-	state->total_cost = state->startup_cost + baserel->rows * 10.0;
-
 	baserel->fdw_private = state;
+
+	InitSession(state, baserel);
+
+	/*
+	 * The size of a repository is unknown, so the core's default estimate of
+	 * 1000 rows stays - scaling it with the selectivity of the conditions
+	 * would only guess lower, and underestimating a harvest is the costly
+	 * mistake. GetRecord is the exception: an identifier names at most one
+	 * record, also when its value is only known at execution time ($1).
+	 */
+	if (strcmp(state->requestVerb, OAI_REQUEST_GETRECORD) == 0 ||
+		list_member_int(state->pushdown_kinds, OAI_PUSHDOWN_IDENTIFIER))
+		baserel->rows = 1;
 }
 
 static void OAIFdwGetForeignPaths(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid)
 {
 
-	struct OAIFdwState *state = (struct OAIFdwState *)baserel->fdw_private;
+	/* every scan starts with at least one request to the repository */
+	Cost startup_cost = 10000.0;
+	/* estimate total cost as startup cost + 10 * (returned rows) */
+	Cost total_cost = startup_cost + baserel->rows * 10.0;
 	Path *path = (Path *)create_foreignscan_path(root, baserel,
 												 NULL,			/* default pathtarget */
 												 baserel->rows, /* rows */
 #if PG_VERSION_NUM >= 180000
 												 0, /* no parallel pathflags */
 #endif
-												 state->startup_cost, /* startup cost */
-												 state->total_cost,	  /* total cost */
+												 startup_cost, /* startup cost */
+												 total_cost,   /* total cost */
 												 NIL,				  /* no pathkeys */
 												 NULL,				  /* no required outer relids */
 												 NULL,				  /* no fdw_outerpath */
@@ -3011,8 +3030,7 @@ static ForeignScan *OAIFdwGetForeignPlan(PlannerInfo *root, RelOptInfo *baserel,
 	OAIFdwState *state = baserel->fdw_private;
 	List *fdw_private = NIL;
 
-	InitSession(state, baserel);
-
+	/* the request was planned by OAIFdwGetForeignRelSize */
 	scan_clauses = extract_actual_clauses(scan_clauses, false);
 	fdw_private = SerializePlanData(state);
 

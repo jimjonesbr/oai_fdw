@@ -229,6 +229,40 @@ SELECT to_regclass('regress_h') IS NULL AS no_target_table;
  t
 (1 row)
 
+-- estimates: an identifier lookup returns at most one record, also with a
+-- value known only at execution time; anything else keeps the default
+EXPLAIN SELECT id FROM regress_t;
+                               QUERY PLAN                                
+-------------------------------------------------------------------------
+ Foreign Scan on regress_t  (cost=10000.00..20000.00 rows=1000 width=32)
+   Foreign Server URL: http://127.0.0.1:1/oai
+   requestVerb: ListIdentifiers
+   metadataPrefix: oai_dc
+(4 rows)
+
+EXPLAIN SELECT id FROM regress_t WHERE id = 'oai:x:1';
+                              QUERY PLAN                              
+----------------------------------------------------------------------
+ Foreign Scan on regress_t  (cost=10000.00..10010.00 rows=1 width=32)
+   Filter: (id = 'oai:x:1'::text)
+   Foreign Server URL: http://127.0.0.1:1/oai
+   requestVerb: GetRecord
+   metadataPrefix: oai_dc
+(5 rows)
+
+SET regress.oai_id = 'oai:x:1';
+EXPLAIN SELECT id FROM regress_t WHERE id = current_setting('regress.oai_id');
+                              QUERY PLAN                              
+----------------------------------------------------------------------
+ Foreign Scan on regress_t  (cost=10000.00..10010.00 rows=1 width=32)
+   Filter: (id = current_setting('regress.oai_id'::text))
+   Foreign Server URL: http://127.0.0.1:1/oai
+   requestVerb: ListIdentifiers
+   metadataPrefix: oai_dc
+   Runtime arguments: identifier
+(6 rows)
+
+RESET regress.oai_id;
 -- the tables are read-only: refused before any request (port 1 would fail)
 UPDATE regress_t SET deleted = true;
 ERROR:  cannot update foreign table "regress_t"
