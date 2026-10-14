@@ -86,7 +86,6 @@ FROM dnb_zdb_oai_dc
 WHERE
   datestamp BETWEEN '2021-01-03' AND '2021-01-04';
 DEBUG:  GET "https://services.dnb.de/oai/repository?verb=ListRecords&set=zdb&from=2021-01-03T00%3A00%3A00Z&until=2021-01-04T00%3A00%3A00Z&metadataPrefix=oai_dc"
-DEBUG:  ExecuteOAIRequest: no response body available for HTTP error 0
 ERROR:  OAI request failed: HTTP 0
 DETAIL:  URL: "https://services.dnb.de/oai/repository?verb=ListRecords&set=zdb&from=2021-01-03T00%3A00%3A00Z&until=2021-01-04T00%3A00%3A00Z&metadataPrefix=oai_dc"
 HINT:  Check your request parameters and try again.

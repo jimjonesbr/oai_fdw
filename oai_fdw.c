@@ -105,12 +105,6 @@
  */
 #define OAI_FDW_STALL_TIMEOUT 300
 /*
- * Maximum number of bytes from an HTTP error response body to include in
- * error messages and server logs.  Prevents huge HTML error pages (e.g.
- * from misconfigured proxies) from flooding PostgreSQL logs.
- */
-#define OAI_FDW_MAX_ERROR_BODY 512
-/*
  * Upper bound, in bytes, for the buffers a response is collected in, whatever
  * max_response_size says, including 0 (no limit of its own). The body is
  * handed to xmlReadMemory(), which takes its length as an int, and every
@@ -2235,44 +2229,15 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 		if (res != CURLE_OK)
 		{
 			long response_code = 0;
-			bool has_body = (chunk.size > 0 && chunk.memory);
-			StringInfoData display_body;
 
 			/*
-			 * Retrieve the status code up front: it is reported in the messages
-			 * below, including the DEBUG1 line taken when there is no body.
+			 * There is no error page to report: with CURLOPT_FAILONERROR,
+			 * libcurl does not hand over the body of an HTTP error.
 			 */
 			curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
 
-			initStringInfo(&display_body);
-
-			if (has_body)
-			{
-				/*
-				 * Truncate the error body before logging or including in
-				 * error messages.  Endpoints may return large HTML pages on
-				 * errors (e.g. from misconfigured proxies), which would
-				 * flood server logs.
-				 */
-				if (chunk.size > OAI_FDW_MAX_ERROR_BODY)
-				{
-					appendBinaryStringInfo(&display_body, chunk.memory, OAI_FDW_MAX_ERROR_BODY);
-					appendStringInfoString(&display_body, "... (truncated)");
-				}
-				else
-				{
-					appendStringInfoString(&display_body, chunk.memory);
-				}
-				elog(DEBUG1, "%s: error response body: %s", __func__, display_body.data);
-			}
-			else
-			{
-				elog(DEBUG1, "%s: no response body available for HTTP error %ld", __func__, response_code);
-			}
-			if (chunk.memory)
-				free(chunk.memory);
-			if (chunk_header.memory)
-				free(chunk_header.memory);
+			free(chunk.memory);
+			free(chunk_header.memory);
 			curl_slist_free_all(headers);
 			curl_easy_cleanup(curl);
 
