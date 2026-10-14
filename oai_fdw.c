@@ -349,11 +349,9 @@ typedef struct OAIfdwTable
 
 typedef struct OAIfdwColumn
 {
-	char *name;		/* Column name */
 	char *oai_node; /* OAI node identifier */
 	Oid pgtype;		/* PostgreSQL data type */
 	int pgtypmod;	/* PostgreSQL type modifier */
-	int pgattnum;	/* PostgreSQL attribute number */
 
 } OAIfdwColumn;
 
@@ -3930,9 +3928,7 @@ static void LoadOAITableInfo(OAIFdwState *state)
 		Form_pg_attribute attr = TupleDescAttr(tupdesc, i);
 		state->oaiTable->cols[i] = (struct OAIfdwColumn *)palloc0(sizeof(struct OAIfdwColumn));
 		state->oaiTable->cols[i]->pgtype = attr->atttypid;
-		state->oaiTable->cols[i]->name = pstrdup(NameStr(attr->attname));
 		state->oaiTable->cols[i]->pgtypmod = attr->atttypmod;
-		state->oaiTable->cols[i]->pgattnum = attr->attnum;
 
 		foreach (lc, options)
 		{
@@ -4085,7 +4081,6 @@ static List *SerializePlanData(OAIFdwState *state)
 
 	result = lappend(result, IntToConst((int)state->numcols));
 	result = lappend(result, IntToConst((int)state->numfdwcols));
-	result = lappend(result, IntToConst((int)state->rowcount));
 	result = lappend(result, IntToConst((int)state->requestRedirect));
 	result = lappend(result, IntToConst((int)state->requestMaxRedirect));
 	result = lappend(result, IntToConst((int)state->maxretries));
@@ -4099,16 +4094,12 @@ static List *SerializePlanData(OAIFdwState *state)
 	result = lappend(result, CStringToConst(state->proxy));
 	result = lappend(result, CStringToConst(state->from));
 	result = lappend(result, CStringToConst(state->until));
-	result = lappend(result, CStringToConst(state->resumptionToken));
 	result = lappend(result, CStringToConst(state->requestVerb));
 	result = lappend(result, OidToConst(state->foreigntableid));
 
 	elog(DEBUG2, "%s: serializing table with %d columns", __func__, state->numcols);
 	for (int i = 0; i < state->numcols; ++i)
 	{
-		elog(DEBUG2, "%s: column name '%s'", __func__, state->oaiTable->cols[i]->name);
-		result = lappend(result, CStringToConst(state->oaiTable->cols[i]->name));
-
 		if (state->oaiTable->cols[i]->oai_node)
 		{
 			elog(DEBUG2, "%s: oai_node '%s'", __func__, state->oaiTable->cols[i]->oai_node);
@@ -4122,9 +4113,6 @@ static List *SerializePlanData(OAIFdwState *state)
 
 		elog(DEBUG2, "%s: pgtypmod '%d'", __func__, state->oaiTable->cols[i]->pgtypmod);
 		result = lappend(result, IntToConst(state->oaiTable->cols[i]->pgtypmod));
-
-		elog(DEBUG2, "%s: pgattnum '%d'", __func__, state->oaiTable->cols[i]->pgattnum);
-		result = lappend(result, IntToConst(state->oaiTable->cols[i]->pgattnum));
 
 		elog(DEBUG2, "%s: pgtype '%u'", __func__, state->oaiTable->cols[i]->pgtype);
 		result = lappend(result, OidToConst(state->oaiTable->cols[i]->pgtype));
@@ -4163,9 +4151,6 @@ static struct OAIFdwState *DeserializePlanData(List *list)
 	cell = list_next(list, cell);
 
 	state->numfdwcols = (int)DatumGetInt32(((Const *)lfirst(cell))->constvalue);
-	cell = list_next(list, cell);
-
-	state->rowcount = (int)DatumGetInt32(((Const *)lfirst(cell))->constvalue);
 	cell = list_next(list, cell);
 
 	state->requestRedirect = (int)DatumGetInt32(((Const *)lfirst(cell))->constvalue);
@@ -4207,9 +4192,6 @@ static struct OAIFdwState *DeserializePlanData(List *list)
 	state->until = ConstToCString(lfirst(cell));
 	cell = list_next(list, cell);
 
-	state->resumptionToken = ConstToCString(lfirst(cell));
-	cell = list_next(list, cell);
-
 	state->requestVerb = ConstToCString(lfirst(cell));
 	cell = list_next(list, cell);
 
@@ -4224,17 +4206,10 @@ static struct OAIFdwState *DeserializePlanData(List *list)
 	{
 		state->oaiTable->cols[i] = (struct OAIfdwColumn *)palloc0(sizeof(struct OAIfdwColumn));
 
-		state->oaiTable->cols[i]->name = ConstToCString(lfirst(cell));
-		cell = list_next(list, cell);
-		elog(DEBUG2, "  %s: column name '%s'", __func__, state->oaiTable->cols[i]->name);
-
 		state->oaiTable->cols[i]->oai_node = ConstToCString(lfirst(cell));
 		cell = list_next(list, cell);
 
 		state->oaiTable->cols[i]->pgtypmod = (int)DatumGetInt32(((Const *)lfirst(cell))->constvalue);
-		cell = list_next(list, cell);
-
-		state->oaiTable->cols[i]->pgattnum = (int)DatumGetInt32(((Const *)lfirst(cell))->constvalue);
 		cell = list_next(list, cell);
 
 		state->oaiTable->cols[i]->pgtype = DatumGetObjectId(((Const *)lfirst(cell))->constvalue);
