@@ -1,23 +1,25 @@
 ### oai_fdw 1.16
 **unreleased**
 
-* Breaking changes
-
-  **New `User-Agent`**: requests now identify themselves as `oai_fdw/<version> (+https://github.com/jimjonesbr/oai_fdw)`. The previous `User-Agent` disclosed the exact versions of PostgreSQL, libxml2, libcurl, the TLS library and others to every OAI-PMH repository and proxy on the way; `oai_fdw_settings` still reports them locally.
-
 * Enhancements
 
-  **Added `max_response_size` server option**: a response body larger than this many bytes is aborted as soon as it exceeds the limit, and the query fails without retrying. Independently of it, a response can no longer exceed 1 GB: until now, a repository could make the backend allocate memory without limit, outside PostgreSQL's memory accounting, and a body over 2 GB had its length truncated when handed to libxml2.
-
-  **No more content-type warnings**: a response is no longer warned about because of its `Content-Type`. The warning added nothing: a response that is not an OAI-PMH document already fails with an error, and a valid one is processed whatever its `Content-Type` says.
+  **`max_response_size` server option**: limits the size of a response body, in bytes. Independently of it, a response can no longer exceed 1 GB; until now, a repository could make the backend allocate memory without limit.
 
 * Bug fixes
 
-  **Row estimate of identifier lookups**: a query on an identifier (`GetRecord`), also with a parameter such as `$1`, is now estimated at one row instead of the 1000 of a full harvest, so the planner can tell a lookup from a harvest. The request is now planned in `GetForeignRelSize`, where the planner expects it, instead of in `GetForeignPlan`, after the estimates had been taken.
+  **Row estimate of identifier lookups**: a query on an identifier (`GetRecord`) is estimated at one row instead of the 1000 of a full harvest.
 
-  **`EXPLAIN` shows the foreign server**: the `Foreign Server` line was only shown by `EXPLAIN ANALYZE`.
+  **`INSERT`, `UPDATE` and `DELETE`**: fail right away with PostgreSQL's own error. They used to harvest the affected rows first, and a `DELETE` matching no record reported success.
 
-  **`INSERT`, `UPDATE` and `DELETE` are refused before any request**: they used to harvest the rows to change from the repository before failing with "Operation not supported", and a `DELETE` or `UPDATE` matching no record reported success. They now fail right away with PostgreSQL's own error, e.g. `cannot update foreign table "t"`.
+  **`EXPLAIN`**: shows the `Foreign Server` line, which only `EXPLAIN ANALYZE` showed.
+
+* Minor changes
+
+  **`User-Agent`**: requests identify themselves as `oai_fdw/<version> (+https://github.com/jimjonesbr/oai_fdw)`, without the versions of PostgreSQL and the libraries.
+
+  **No content-type warnings**: a response is no longer warned about because of its `Content-Type`.
+
+  **Regression tests**: no longer require a role named `postgres`.
 
 ### oai_fdw 1.15
 **2026-10-01**
