@@ -5,6 +5,10 @@
 
   **New `User-Agent`**: requests now identify themselves as `oai_fdw/<version> (+https://github.com/jimjonesbr/oai_fdw)`. The previous `User-Agent` disclosed the exact versions of PostgreSQL, libxml2, libcurl, the TLS library and others to every OAI-PMH repository and proxy on the way; `oai_fdw_settings` still reports them locally.
 
+* Enhancements
+
+  **Added `max_response_size` server option**: a response body larger than this many bytes is aborted as soon as it exceeds the limit, and the query fails without retrying. Independently of it, a response can no longer exceed 1 GB: until now, a repository could make the backend allocate memory without limit, outside PostgreSQL's memory accounting, and a body over 2 GB had its length truncated when handed to libxml2.
+
 ### oai_fdw 1.15
 **2026-10-01**
 

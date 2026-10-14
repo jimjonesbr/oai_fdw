@@ -114,6 +114,7 @@ OPTIONS (url 'https://sammlungen.ulb.uni-muenster.de/oai');
 | `request_redirect`         | optional            | Enables URL redirect issued by the server (default `false`).
 | `request_max_redirect`         | optional            | Limit of how many times the URL redirection may occur. If that many redirections have been followed, the next redirect will cause an error. Not setting this parameter or setting it to `0` leaves the limit to libcurl (30 redirects since libcurl 8.3.0, unlimited in older versions).
 | `request_timeout` | optional | Maximum time in seconds allowed for a complete HTTP request (connect + transfer). `0` disables the limit (default). Unlike `connect_timeout`, this applies to the entire duration of the request, including data transfer. Independently of this option, a transfer that receives less than one byte per second for 300 seconds is aborted and retried as configured in `connect_retry`. |
+`max_response_size` | optional | Maximum size in bytes of a response body (default `0`, no limit of its own). A larger response is aborted as soon as it exceeds the limit, the query fails with an error, and the request is not retried. Use it to protect the database server's memory against unexpectedly large answers from untrusted or misbehaving repositories. Independently of this option, a response can never be larger than 1 GB, the most PostgreSQL can hold in a single buffer. |
 
 ### [CREATE USER MAPPING](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#create-user-mapping)
 

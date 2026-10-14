@@ -52,6 +52,20 @@ CREATE SERVER regress_bad FOREIGN DATA WRAPPER oai_fdw
 OPTIONS (url 'http://127.0.0.1:1/oai', request_max_redirect 'foo');
 CREATE SERVER regress_bad FOREIGN DATA WRAPPER oai_fdw
 OPTIONS (url 'ftp://127.0.0.1/oai');
+CREATE SERVER regress_bad FOREIGN DATA WRAPPER oai_fdw
+OPTIONS (url 'http://127.0.0.1:1/oai', max_response_size '-1');
+CREATE SERVER regress_bad FOREIGN DATA WRAPPER oai_fdw
+OPTIONS (url 'http://127.0.0.1:1/oai', max_response_size '10MB');
+CREATE SERVER regress_bad FOREIGN DATA WRAPPER oai_fdw
+OPTIONS (url 'http://127.0.0.1:1/oai', max_response_size '99999999999999999999');
+
+-- max_response_size: 0 and values above the 1 GB hard limit are accepted,
+-- and the option survives the plan (serialized with the other options)
+ALTER SERVER regress_offline OPTIONS (ADD max_response_size '0');
+ALTER SERVER regress_offline OPTIONS (SET max_response_size '9999999999');
+ALTER SERVER regress_offline OPTIONS (SET max_response_size '1048576');
+EXPLAIN (COSTS OFF) SELECT id FROM regress_t WHERE id = 'oai:x:1';
+ALTER SERVER regress_offline OPTIONS (DROP max_response_size);
 
 -- from/until table options
 CREATE FOREIGN TABLE regress_bad_t (id text OPTIONS (oai_node 'identifier'))

@@ -110,6 +110,14 @@
  * from misconfigured proxies) from flooding PostgreSQL logs.
  */
 #define OAI_FDW_MAX_ERROR_BODY 512
+/*
+ * Upper bound, in bytes, for the buffers a response is collected in, whatever
+ * max_response_size says, including 0 (no limit of its own). The body is
+ * handed to xmlReadMemory(), which takes its length as an int, and every
+ * value taken from it ends up in a palloc'd datum, so a larger response could
+ * never be processed anyway.
+ */
+#define OAI_FDW_MAX_RESPONSE_SIZE (MaxAllocSize - 1)
 
 #define OAI_USERMAPPING_OPTION_USER "user"
 #define OAI_USERMAPPING_OPTION_PASSWORD "password"
@@ -139,6 +147,7 @@
 #define OAI_SERVER_OPTION_CONNECTRETRY "connect_retry"
 #define OAI_SERVER_OPTION_REQUEST_REDIRECT "request_redirect"
 #define OAI_SERVER_OPTION_REQUEST_MAX_REDIRECT "request_max_redirect"
+#define OAI_SERVER_OPTION_MAX_RESPONSE_SIZE "max_response_size"
 #define OAI_NODE_IDENTIFIER "identifier"
 #define OAI_NODE_CONTENT "content"
 #define OAI_NODE_DATESTAMP "datestamp"
@@ -207,6 +216,7 @@ typedef struct OAIFdwState
 	long maxretries;		 /* Max number of retries in case a request returns an error message. */
 	long connectTimeout;	 /* Connection timeout for OAI requests in seconds. */
 	long request_timeout;	 /* Timeout for the entire HTTP request (connect + transfer) */
+	long max_response_size;	 /* Maximum size of a response body in bytes (0 = OAI_FDW_MAX_RESPONSE_SIZE) */
 	char *identifier;		 /* The unique identifier of an item in a repository. */
 	char *set;				 /* The set membership of the item for the purpose of selective harvesting. */
 	char *url;				 /* Concatenated URL with the OAI request. */
@@ -327,6 +337,12 @@ struct MemoryStruct
 {
 	char *memory;
 	size_t size;
+	size_t max_size; /* the transfer is aborted beyond this many bytes */
+	/*
+	 * Set by the libcurl callbacks when the data would grow beyond max_size.
+	 * Reported after the transfer, like alloc_failed below.
+	 */
+	bool size_exceeded;
 	/*
 	 * Set by the libcurl callbacks when an allocation fails. The callbacks
 	 * must not raise errors themselves (see WriteMemoryCallback), so the
@@ -368,6 +384,7 @@ static struct OAIFdwOption valid_options[] =
 		{OAI_SERVER_OPTION_CONNECTRETRY, ForeignServerRelationId, false, false},
 		{OAI_SERVER_OPTION_REQUEST_REDIRECT, ForeignServerRelationId, false, false},
 		{OAI_SERVER_OPTION_REQUEST_MAX_REDIRECT, ForeignServerRelationId, false, false},
+		{OAI_SERVER_OPTION_MAX_RESPONSE_SIZE, ForeignServerRelationId, false, false},
 
 		/* Foreign Table */
 		{OAI_NODE_IDENTIFIER, ForeignTableRelationId, false, false},
@@ -922,6 +939,22 @@ Datum oai_fdw_validator(PG_FUNCTION_ARGS)
 								 errhint("expected values are positive integers (retry attempts in case of failure)")));
 				}
 
+				if (strcmp(opt->optname, OAI_SERVER_OPTION_MAX_RESPONSE_SIZE) == 0)
+				{
+					char *endptr;
+					char *size_str = defGetString(def);
+					long size_val;
+
+					errno = 0;
+					size_val = strtol(size_str, &endptr, 10);
+
+					if (*endptr != '\0' || errno == ERANGE || size_val < 0)
+						ereport(ERROR,
+								(errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
+								 errmsg("invalid %s: %s", def->defname, size_str),
+								 errhint("expected values are non-negative integers (size in bytes, 0 = no limit)")));
+				}
+
 				if (strcmp(opt->optname, OAI_NODE_FROM) == 0 || strcmp(opt->optname, OAI_NODE_UNTIL) == 0)
 				{
 					if (!IsUTCdatetime(defGetString(def)))
@@ -1337,7 +1370,15 @@ static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, voi
 {
 	size_t realsize = size * nmemb;
 	struct MemoryStruct *mem = (struct MemoryStruct *)userp;
-	char *ptr = realloc(mem->memory, mem->size + realsize + 1);
+	char *ptr;
+
+	if (realsize > mem->max_size - mem->size)
+	{
+		mem->size_exceeded = true;
+		return 0; /* abort the transfer */
+	}
+
+	ptr = realloc(mem->memory, mem->size + realsize + 1);
 
 	if (!ptr)
 	{
@@ -1387,6 +1428,12 @@ static size_t HeaderCallbackFunction(char *contents, size_t size, size_t nmemb, 
 		if (pg_strncasecmp(value, "text/xml", 8) != 0 &&
 			pg_strncasecmp(value, "application/xml", 15) != 0)
 			strlcpy(mem->unsupported_ctype, line, sizeof(mem->unsupported_ctype));
+	}
+
+	if (nbytes > mem->max_size - mem->size)
+	{
+		mem->size_exceeded = true;
+		return 0; /* abort the transfer */
 	}
 
 	ptr = realloc(mem->memory, mem->size + nbytes + 1);
@@ -1801,6 +1848,12 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 	chunk.memory[0] = '\0';
 	chunk_header.memory[0] = '\0';
 
+	chunk.max_size = state->max_response_size > 0
+						 ? Min((size_t)state->max_response_size, OAI_FDW_MAX_RESPONSE_SIZE)
+						 : OAI_FDW_MAX_RESPONSE_SIZE;
+	/* max_response_size is about the body; the headers only get the hard limit */
+	chunk_header.max_size = OAI_FDW_MAX_RESPONSE_SIZE;
+
 	initStringInfo(&url_buffer);
 
 	elog(DEBUG2, "%s called: base url > '%s' ", __func__, state->url);
@@ -2075,6 +2128,10 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 				long connect_code = 0;
 				long delay;
 
+				/* an oversized response would be just as large the next time */
+				if (chunk.size_exceeded || chunk_header.size_exceeded)
+					break;
+
 				curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &attempt_code);
 				curl_easy_getinfo(curl, CURLINFO_HTTP_CONNECTCODE, &connect_code);
 
@@ -2179,6 +2236,36 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 					(errcode(ERRCODE_FDW_OUT_OF_MEMORY),
 					 errmsg("%s: out of memory while reading the response from '%s'",
 							__func__, state->url)));
+		}
+
+		/*
+		 * The response was cut off at the size limit, so whatever else went
+		 * wrong with it, the limit is what the user needs to hear about.
+		 */
+		if (chunk.size_exceeded || chunk_header.size_exceeded)
+		{
+			bool configured = chunk.size_exceeded &&
+							  state->max_response_size > 0 &&
+							  chunk.max_size == (size_t)state->max_response_size;
+			size_t max_size = chunk.size_exceeded ? chunk.max_size : chunk_header.max_size;
+
+			free(chunk.memory);
+			free(chunk_header.memory);
+			curl_slist_free_all(headers);
+			curl_easy_cleanup(curl);
+
+			if (configured)
+				ereport(ERROR,
+						(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
+						 errmsg("response from '%s' exceeds %s limit of %zu bytes",
+								state->url, OAI_SERVER_OPTION_MAX_RESPONSE_SIZE, max_size),
+						 errhint("Increase %s on the FOREIGN SERVER.",
+								 OAI_SERVER_OPTION_MAX_RESPONSE_SIZE)));
+			else
+				ereport(ERROR,
+						(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
+						 errmsg("response from '%s' exceeds the maximum size of %zu bytes",
+								state->url, max_size)));
 		}
 
 		/*
@@ -4201,6 +4288,7 @@ static void LoadOAIServerInfo(OAIFdwState *state)
 	state->requestRedirect = false;
 	state->requestMaxRedirect = 0;
 	state->maxretries = OAI_DEFAULT_MAX_RETRY;
+	state->max_response_size = 0;
 
 	if (state->foreign_server)
 	{
@@ -4256,6 +4344,18 @@ static void LoadOAIServerInfo(OAIFdwState *state)
 							(errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
 							 errmsg("invalid %s: %s", OAI_SERVER_OPTION_REQUEST_MAX_REDIRECT, maxredirect_str)));
 			}
+			else if (strcmp(OAI_SERVER_OPTION_MAX_RESPONSE_SIZE, def->defname) == 0)
+			{
+				char *tailpt;
+				char *size_str = defGetString(def);
+
+				/*
+				 * Anything above the hard limit means the hard limit, which also
+				 * keeps the value within the int it is serialized into.
+				 */
+				state->max_response_size = Min(strtol(size_str, &tailpt, 10),
+											   (long)OAI_FDW_MAX_RESPONSE_SIZE);
+			}
 			else
 				elog(WARNING, "Invalid SERVER OPTION > '%s'", def->defname);
 		}
@@ -4302,6 +4402,7 @@ static List *SerializePlanData(OAIFdwState *state)
 	result = lappend(result, IntToConst((int)state->maxretries));
 	result = lappend(result, IntToConst((int)state->connectTimeout));
 	result = lappend(result, IntToConst((int)state->request_timeout));
+	result = lappend(result, IntToConst((int)state->max_response_size));
 	result = lappend(result, CStringToConst(state->identifier));
 	result = lappend(result, CStringToConst(state->set));
 	result = lappend(result, CStringToConst(state->url));
@@ -4392,6 +4493,9 @@ static struct OAIFdwState *DeserializePlanData(List *list)
 	cell = list_next(list, cell);
 
 	state->request_timeout = (int)DatumGetInt32(((Const *)lfirst(cell))->constvalue);
+	cell = list_next(list, cell);
+
+	state->max_response_size = (int)DatumGetInt32(((Const *)lfirst(cell))->constvalue);
 	cell = list_next(list, cell);
 
 	state->identifier = ConstToCString(lfirst(cell));
