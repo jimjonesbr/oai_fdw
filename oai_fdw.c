@@ -650,9 +650,7 @@ OAIFdwState *GetServerInfo(const char *srvname)
 
 Datum oai_fdw_identity(PG_FUNCTION_ARGS)
 {
-	text *srvname_text = PG_GETARG_TEXT_P(0);
-	const char *srvname = text_to_cstring(srvname_text);
-	OAIFdwState *state = GetServerInfo(srvname);
+	OAIFdwState *state;
 	FuncCallContext *funcctx;
 	AttInMetadata *attinmeta;
 	TupleDesc tupdesc;
@@ -665,6 +663,8 @@ Datum oai_fdw_identity(PG_FUNCTION_ARGS)
 	{
 		funcctx = SRF_FIRSTCALL_INIT();
 		oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
+
+		state = GetServerInfo(text_to_cstring(PG_GETARG_TEXT_PP(0)));
 
 		/*
 		 * Loading USER MAPPING (if any)
@@ -694,15 +694,14 @@ Datum oai_fdw_identity(PG_FUNCTION_ARGS)
 
 	if (call_cntr < max_calls)
 	{
-		Datum values[23];
-		bool nulls[23];
+		int natts = funcctx->attinmeta->tupdesc->natts;
+		Datum *values = (Datum *)palloc(natts * sizeof(Datum));
+		bool *nulls = (bool *)palloc0(natts * sizeof(bool));
 		HeapTuple tuple;
 		Datum result;
 		OAIFdwIdentityNode *identity_node = (OAIFdwIdentityNode *)list_nth((List *)funcctx->user_fctx, call_cntr);
 
-		memset(nulls, 0, sizeof(nulls));
-
-		for (size_t i = 0; i < funcctx->attinmeta->tupdesc->natts; i++)
+		for (int i = 0; i < natts; i++)
 		{
 			Form_pg_attribute att = TupleDescAttr(funcctx->attinmeta->tupdesc, i);
 
@@ -728,9 +727,7 @@ Datum oai_fdw_identity(PG_FUNCTION_ARGS)
 Datum oai_fdw_listSets(PG_FUNCTION_ARGS)
 {
 
-	text *srvname_text = PG_GETARG_TEXT_P(0);
-	char *srvname = text_to_cstring(srvname_text);
-	OAIFdwState *state = GetServerInfo(srvname);
+	OAIFdwState *state;
 
 	MemoryContext oldcontext;
 	FuncCallContext *funcctx;
@@ -744,6 +741,8 @@ Datum oai_fdw_listSets(PG_FUNCTION_ARGS)
 		List *sets;
 		funcctx = SRF_FIRSTCALL_INIT();
 		oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
+
+		state = GetServerInfo(text_to_cstring(PG_GETARG_TEXT_PP(0)));
 
 		/*
 		 * Loading USER MAPPING (if any)
@@ -773,15 +772,14 @@ Datum oai_fdw_listSets(PG_FUNCTION_ARGS)
 
 	if (call_cntr < max_calls)
 	{
-		Datum values[23];
-		bool nulls[23];
+		int natts = funcctx->attinmeta->tupdesc->natts;
+		Datum *values = (Datum *)palloc(natts * sizeof(Datum));
+		bool *nulls = (bool *)palloc0(natts * sizeof(bool));
 		HeapTuple tuple;
 		Datum result;
 		OAISet *set_node = (OAISet *)list_nth((List *)funcctx->user_fctx, call_cntr);
 
-		memset(nulls, 0, sizeof(nulls));
-
-		for (size_t i = 0; i < funcctx->attinmeta->tupdesc->natts; i++)
+		for (int i = 0; i < natts; i++)
 		{
 			Form_pg_attribute att = TupleDescAttr(funcctx->attinmeta->tupdesc, i);
 
@@ -806,9 +804,7 @@ Datum oai_fdw_listSets(PG_FUNCTION_ARGS)
 
 Datum oai_fdw_listMetadataFormats(PG_FUNCTION_ARGS)
 {
-	text *srvname_text = PG_GETARG_TEXT_P(0);
-	const char *srvname = text_to_cstring(srvname_text);
-	OAIFdwState *state = GetServerInfo(srvname);
+	OAIFdwState *state;
 
 	FuncCallContext *funcctx;
 	int call_cntr;
@@ -823,6 +819,8 @@ Datum oai_fdw_listMetadataFormats(PG_FUNCTION_ARGS)
 		List *formats;
 		funcctx = SRF_FIRSTCALL_INIT();
 		oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
+
+		state = GetServerInfo(text_to_cstring(PG_GETARG_TEXT_PP(0)));
 
 		/*
 		 * Loading USER MAPPING (if any)
@@ -856,15 +854,14 @@ Datum oai_fdw_listMetadataFormats(PG_FUNCTION_ARGS)
 	/* do when there is more left to send */
 	if (call_cntr < max_calls)
 	{
-		Datum values[23];
-		bool nulls[23];
+		int natts = funcctx->attinmeta->tupdesc->natts;
+		Datum *values = (Datum *)palloc(natts * sizeof(Datum));
+		bool *nulls = (bool *)palloc0(natts * sizeof(bool));
 		HeapTuple tuple;
 		Datum result;
 		OAIMetadataFormat *format = (OAIMetadataFormat *)list_nth((List *)funcctx->user_fctx, call_cntr);
 
-		memset(nulls, 0, sizeof(nulls));
-
-		for (size_t i = 0; i < funcctx->attinmeta->tupdesc->natts; i++)
+		for (int i = 0; i < natts; i++)
 		{
 			Form_pg_attribute att = TupleDescAttr(funcctx->attinmeta->tupdesc, i);
 
