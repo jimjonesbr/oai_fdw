@@ -66,7 +66,7 @@ To run the predefined regression tests run `make installcheck` with the user `po
 $ make PGUSER=postgres installcheck
 ```
 
-By default this runs only the tests that need nothing but a PostgreSQL server. Tests that talk to an OAI-PMH repository are opt-in: `INCLUDE_EXTERNAL_TESTS=1` adds those against live OAI-PMH repositories, `INCLUDE_LOCAL_TESTS=1` those through the proxies deployed by `scripts/squid`, and `INCLUDE_ALL_TESTS=1` both:
+By default this runs only the tests that need nothing but a PostgreSQL server. Tests that talk to an OAI-PMH repository are opt-in: `INCLUDE_EXTERNAL_TESTS=1` adds those against live OAI-PMH repositories, `INCLUDE_LOCAL_TESTS=1` those through the proxies deployed by `scripts/squid`, `INCLUDE_STRESS_TESTS=1` a stress test that harvests the whole ULB Münster repository (it takes hours), and `INCLUDE_ALL_TESTS=1` all of them:
 
 ```bash
 $ make PGUSER=postgres INCLUDE_EXTERNAL_TESTS=1 installcheck

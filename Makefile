@@ -36,11 +36,15 @@ REGRESS = create-extension \
 #   make installcheck INCLUDE_LOCAL_TESTS=1     the Squid proxies deployed by
 #                                               scripts/squid, which forward to
 #                                               the DNB repository
+#   make installcheck INCLUDE_STRESS_TESTS=1    long running stress test,
+#                                               harvesting the whole ULB
+#                                               Münster repository
 #   make installcheck INCLUDE_ALL_TESTS=1       all of the above
 #
 ifdef INCLUDE_ALL_TESTS
   INCLUDE_EXTERNAL_TESTS = 1
   INCLUDE_LOCAL_TESTS = 1
+  INCLUDE_STRESS_TESTS = 1
 endif
 
 ifdef INCLUDE_EXTERNAL_TESTS
@@ -54,6 +58,10 @@ endif
 
 ifdef INCLUDE_LOCAL_TESTS
   REGRESS += proxy
+endif
+
+ifdef INCLUDE_STRESS_TESTS
+  REGRESS += stress-test-ulb
 endif
 
 CURL_CONFIG = curl-config
