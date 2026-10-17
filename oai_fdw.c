@@ -159,8 +159,8 @@
  *
  * OAI_FDW_MAX_RETRY_AFTER caps how long a single wait may last, so that a
  * repository asking for an implausible delay cannot pin a backend down
- * indefinitely. OAI_FDW_DEFAULT_RETRY_AFTER is used when a 503 arrives with no
- * usable Retry-After header at all.
+ * indefinitely. Without a usable Retry-After header, the wait starts at
+ * OAI_FDW_DEFAULT_RETRY_AFTER and doubles with every attempt.
  */
 /*
  * WL_EXIT_ON_PM_DEATH only exists from PostgreSQL 12 on; on 11 the caller has
@@ -2135,8 +2135,10 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 				{
 					long retry_after = ParseRetryAfter(chunk_header.memory);
 
+					/* no Retry-After: back off exponentially, up to the maximum */
 					if (retry_after < 0)
-						retry_after = OAI_FDW_DEFAULT_RETRY_AFTER;
+						retry_after = Min(OAI_FDW_DEFAULT_RETRY_AFTER << Min(i - 1, 16),
+										  OAI_FDW_MAX_RETRY_AFTER);
 
 					elog(WARNING, "'%s' is applying flow control (HTTP %ld), retrying in %ld seconds (%ld/%ld)",
 						 state->foreign_server->servername, attempt_code, retry_after, i, maxretries);

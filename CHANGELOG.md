@@ -7,7 +7,7 @@
 
   **Reproducible builds**: the build date shown by `oai_fdw_settings()` is taken from `SOURCE_DATE_EPOCH`, if set.
 
-  **HTTP 429 flow control**: `429 Too Many Requests` is handled like `503`, honouring `Retry-After`. Other client errors (4xx) are no longer retried.
+  **HTTP 429 flow control**: `429 Too Many Requests` is handled like `503`, honouring `Retry-After`. Without `Retry-After`, the wait before each retry doubles, starting at 5 seconds. Other client errors (4xx) are no longer retried.
 
   **Validation of `from` and `until`**: the table options must be a valid `YYYY-MM-DD` or `YYYY-MM-DDThh:mm:ssZ` value.
 
