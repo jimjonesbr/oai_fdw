@@ -133,7 +133,7 @@ CREATE FOREIGN TABLE "Regress T" (
   updated timestamp OPTIONS (oai_node 'datestamp')
 ) SERVER regress_offline OPTIONS (metadataprefix 'oai_dc');
 CALL OAI_HarvestTable('"Regress T"', 'regress_h', interval '1 day', '2020-01-01', '2020-01-02');
-INFO:  target table "public.regress_h" created
+NOTICE:  target table "public.regress_h" created
 ERROR:  OAI request failed: HTTP 0
 -- values only known at execution time are pushed down (see the DETAIL)
 \set VERBOSITY default

@@ -96,7 +96,7 @@ BEGIN
       ELSE
         RAISE WARNING 'foreign table "%" has no identifier column. It is strongly recommended to map the OAI identifier to a column, as it can ensure that records are not duplicated',oai_table;              
       END IF;    
-      RAISE INFO 'target table "%" created',target_table;  
+      RAISE NOTICE 'target table "%" created',target_table;  
     END IF;
     
   END IF;
@@ -144,7 +144,7 @@ BEGIN
       END IF;
     END IF;
   END LOOP;
-  RAISE INFO 'OAI harvester complete ("%" -> "%"): % records inserted and % updated [% - %]',
+  RAISE NOTICE 'OAI harvester complete ("%" -> "%"): % records inserted and % updated [% - %]',
               oai_table,target_table,total_inserts,total_updates,to_char(start_date,'yyyy-mm-dd hh24:mi:ss'),to_char(end_date,'yyyy-mm-dd hh24:mi:ss');
 END; $$;
 

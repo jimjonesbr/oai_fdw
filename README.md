@@ -778,10 +778,10 @@ For instance, an OAI ListRecords request for all records from the year 2021 (`st
 ```sql
 CALL OAI_HarvestTable('dnb_oai_dc','"clone-dnb:oai/dc"', interval '1 day', '2020-01-01 00:00:00', '2020-01-03 00:00:00',true,true);
 
-INFO:  target table "public."clone-dnb:oai/dc"" created
+NOTICE:  target table "public."clone-dnb:oai/dc"" created
 INFO:  page stored into "public."clone-dnb:oai/dc"": 215 records inserted and 0 updated [2020-01-01 00:00:00 - 2020-01-02 00:00:00]
 INFO:  page stored into "public."clone-dnb:oai/dc"": 898 records inserted and 0 updated [2020-01-02 00:00:00 - 2020-01-03 00:00:00]
-INFO:  OAI harvester complete ("public.dnb_oai_dc" -> "public."clone-dnb:oai/dc""): 1113 records inserted and 0 updated [2020-01-01 00:00:00 - 2020-01-03 00:00:00]
+NOTICE:  OAI harvester complete ("public.dnb_oai_dc" -> "public."clone-dnb:oai/dc""): 1113 records inserted and 0 updated [2020-01-01 00:00:00 - 2020-01-03 00:00:00]
 
 SELECT count(*) FROM "clone-dnb:oai/dc";
  count 
