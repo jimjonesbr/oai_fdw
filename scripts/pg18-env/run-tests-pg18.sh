@@ -23,5 +23,5 @@ podman exec -itw /oai_fdw/ -u postgres $CONTAINER_NAME psql -d postgres \
 # INCLUDE_STRESS_TESTS=1   - harvests the whole ULB repository (takes hours)
 # INCLUDE_ALL_TESTS=1      - all of the above
 
-podman exec -itw /oai_fdw/ $CONTAINER_NAME make PGUSER=postgres INCLUDE_STRESS_TESTS=1 INCLUDE_EXTERNAL_TESTS=1 INCLUDE_LOCAL_TESTS=1 installcheck
+podman exec -itw /oai_fdw/ $CONTAINER_NAME make PGUSER=postgres INCLUDE_EXTERNAL_TESTS=1 INCLUDE_LOCAL_TESTS=1 installcheck
 echo -e "\n== Tests completed ==\n"
