@@ -101,6 +101,17 @@ CREATE FOREIGN TABLE regress_from_t (id text OPTIONS (oai_node 'identifier'))
 SELECT id FROM regress_from_t WHERE id = 'oai:x:1';
 \set VERBOSITY terse
 
+-- OAI_HarvestTable in a current schema whose name needs quoting
+CREATE SCHEMA "Regress Schema";
+SET search_path = "Regress Schema", public;
+CREATE FOREIGN TABLE regress_schema_t (
+  id text           OPTIONS (oai_node 'identifier'),
+  updated timestamp OPTIONS (oai_node 'datestamp')
+) SERVER regress_offline OPTIONS (metadataprefix 'oai_dc');
+CALL OAI_HarvestTable('regress_schema_t', 'regress_h', interval '1 day', '2020-01-01', '2020-01-02');
+RESET search_path;
+DROP SCHEMA "Regress Schema" CASCADE;
+
 -- OAI_HarvestTable checks its arguments before creating anything
 CALL OAI_HarvestTable('regress_t', 'regress_h', interval '-1 day', '2020-01-01', '2020-01-10');
 CALL OAI_HarvestTable('regress_t', 'regress_h', interval '0', '2020-01-01', '2020-01-10');

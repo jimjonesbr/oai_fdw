@@ -27,11 +27,11 @@ DECLARE
 BEGIN
   
   IF oai_table !~~ '%.%' OR (oai_table !~~ '"%"."%"' AND oai_table ~~ '"%"') THEN
-    oai_table := CURRENT_SCHEMA || '.' || oai_table;
+    oai_table := quote_ident(CURRENT_SCHEMA) || '.' || oai_table;
   END IF;
   
   IF target_table !~~ '%.%' OR (target_table !~~ '"%"."%"' AND target_table ~~ '"%"') THEN
-    target_table := CURRENT_SCHEMA || '.' || target_table;
+    target_table := quote_ident(CURRENT_SCHEMA) || '.' || target_table;
   END IF;
   
   IF page_size IS NULL OR start_date IS NULL OR end_date IS NULL THEN
