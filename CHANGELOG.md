@@ -49,6 +49,8 @@
 
   **Linking**: the library now links against libxml2.
 
+  **Stalled transfers**: a transfer that receives less than one byte per second for 300 seconds is now aborted and retried, instead of hanging forever with the default `request_timeout` of `0`. Timeouts are reported with libcurl's reason.
+
   **No signals from libcurl**: libcurl builds without an asynchronous resolver used `SIGALRM` for DNS timeouts, which PostgreSQL uses itself (e.g. for `statement_timeout`). `CURLOPT_NOSIGNAL` is now set.
 
 ### oai_fdw 1.14

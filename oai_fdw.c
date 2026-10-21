@@ -99,6 +99,11 @@
 #define OAI_DEFAULT_CONNECT_TIMEOUT 300
 #define OAI_DEFAULT_MAX_RETRY 3
 /*
+ * A transfer that receives less than one byte per second for this many
+ * seconds is aborted, and retried like any other failure.
+ */
+#define OAI_FDW_STALL_TIMEOUT 300
+/*
  * Maximum number of bytes from an HTTP error response body to include in
  * error messages and server logs.  Prevents huge HTML error pages (e.g.
  * from misconfigured proxies) from flooding PostgreSQL logs.
@@ -2015,6 +2020,10 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 		curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, connectTimeout);
 		curl_easy_setopt(curl, CURLOPT_TIMEOUT, request_timeout);
 
+		/* without it, a stalled connection would hang the request forever */
+		curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, 1L);
+		curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, (long)OAI_FDW_STALL_TIMEOUT);
+
 		elog(DEBUG2, "  %s (%s): timeout > %ld", __func__, state->requestVerb, connectTimeout);
 		elog(DEBUG2, "  %s (%s): max retry > %ld", __func__, state->requestVerb, maxretries);
 
@@ -2277,6 +2286,13 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 				free(chunk_header.memory);
 			curl_slist_free_all(headers);
 			curl_easy_cleanup(curl);
+
+			/* a timeout, e.g. a stalled transfer, is not about the HTTP status */
+			if (res == CURLE_OPERATION_TIMEDOUT)
+				ereport(ERROR,
+						(errcode(ERRCODE_FDW_UNABLE_TO_CREATE_EXECUTION),
+						 errmsg("OAI request timed out: %s", errbuf),
+						 errdetail("URL: \"%s\"", request_url.data)));
 
 			ereport(ERROR,
 					(errcode(ERRCODE_FDW_UNABLE_TO_CREATE_EXECUTION),
