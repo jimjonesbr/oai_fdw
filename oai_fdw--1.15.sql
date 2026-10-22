@@ -57,7 +57,7 @@ CREATE PROCEDURE OAI_HarvestTable
  target_table text, 
  page_size interval, 
  start_date timestamp, 
- end_date timestamp DEFAULT CURRENT_TIMESTAMP, 
+ end_date timestamp DEFAULT (now() AT TIME ZONE 'UTC'), 
  create_table boolean DEFAULT true,
  exec_verbose boolean DEFAULT false)
 LANGUAGE plpgsql AS $$ 

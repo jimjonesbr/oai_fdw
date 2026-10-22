@@ -756,7 +756,7 @@ SELECT * FROM oai_fdw_settings;
 
 `start_date`:  Start date from the time window.
 
-`end_date` (optional): End date from the time window, exclusive. Default **CURRENT_TIMESTAMP**.
+`end_date` (optional): End date from the time window, exclusive. Default: the current time in UTC, as OAI-PMH datestamps are UTC.
 
 `create_table` (optional): Creates the `target_table` if it does not exist. Set it to `false` to require an existing table. Default **TRUE**.
 

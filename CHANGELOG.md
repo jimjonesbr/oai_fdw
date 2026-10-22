@@ -43,7 +43,7 @@
 
   **Redirects**: a redirect that is not followed now raises an error naming its target and suggesting `request_redirect`, instead of reporting an invalid response. A followed redirect no longer warns about the content-type of the redirect response. Neither does a `Content-Type` header without a space after the colon.
 
-  **`OAI_HarvestTable`**: the last time window is no longer skipped, quoted table names work, a current schema whose name needs quoting works, and same-named tables in other schemas are no longer mixed up. A `page_size` that is not positive, or a NULL argument, is rejected instead of reporting a completed harvest of nothing. Its "target table created" and "harvester complete" messages are now NOTICEs instead of INFOs, so that they can be silenced with `client_min_messages`; the per-page messages of `exec_verbose` remain INFOs.
+  **`OAI_HarvestTable`**: the last time window is no longer skipped, quoted table names work, a current schema whose name needs quoting works, the default `end_date` is the current time in UTC instead of the session's local time (which left out the latest records in sessions west of UTC), and same-named tables in other schemas are no longer mixed up. A `page_size` that is not positive, or a NULL argument, is rejected instead of reporting a completed harvest of nothing. Its "target table created" and "harvester complete" messages are now NOTICEs instead of INFOs, so that they can be silenced with `client_min_messages`; the per-page messages of `exec_verbose` remain INFOs.
 
   **Server options**: `request_redirect`, `request_max_redirect` and the URL scheme are validated, and `connect_retry '0'` disables retries.
 
