@@ -446,7 +446,7 @@ static char *OAINodeText(xmlNodePtr node);
 static void AppendOAIArgument(StringInfo buf, CURL *curl, const char *name, const char *value);
 static bool HasDayGranularity(OAIFdwState *state);
 static void NormalizeDatestampArguments(OAIFdwState *state);
-static OAIFdwState *GetServerInfo(const char *srvname);
+static OAIFdwState *GetOAIServerByName(const char *srvname);
 static List *GetMetadataFormats(OAIFdwState *state);
 static List *GetIdentity(OAIFdwState *state);
 static List *GetSets(OAIFdwState *state);
@@ -555,101 +555,46 @@ Datum oai_fdw_settings(PG_FUNCTION_ARGS)
 	PG_RETURN_TEXT_P(cstring_to_text(buffer.data));
 }
 
-/**
- * Retrieves all information configured in the CREATE SERVER statement.
+/*
+ * GetOAIServerByName
+ * ------------------
+ * Looks up an oai_fdw server by name for the support functions and IMPORT
+ * FOREIGN SCHEMA, checks that the current user may use it, and loads its
+ * options.
  */
-OAIFdwState *GetServerInfo(const char *srvname)
+OAIFdwState *GetOAIServerByName(const char *srvname)
 {
 	OAIFdwState *state = (OAIFdwState *)palloc0(sizeof(OAIFdwState));
 	ForeignServer *server = GetForeignServerByName(srvname, true);
-
-	state->requestRedirect = false;
-	state->requestMaxRedirect = 0L;
-	state->maxretries = OAI_DEFAULT_MAX_RETRY;
+	ForeignDataWrapper *fdw;
+	AclResult aclresult;
 
 	elog(DEBUG2, "%s called: '%s'", __func__, srvname);
 
-	if (server)
-	{
-		ListCell *cell;
-		AclResult aclresult;
-		ForeignDataWrapper *fdw = GetForeignDataWrapper(server->fdwid);
-
-		if (!OidIsValid(fdw->fdwhandler) ||
-			GetFdwRoutine(fdw->fdwhandler)->GetForeignRelSize != OAIFdwGetForeignRelSize)
-			ereport(ERROR,
-					(errcode(ERRCODE_FDW_INVALID_HANDLE),
-					 errmsg("FOREIGN SERVER '%s' does not belong to oai_fdw", srvname)));
-
-#if PG_VERSION_NUM >= 160000
-		aclresult = object_aclcheck(ForeignServerRelationId, server->serverid, GetUserId(), ACL_USAGE);
-#else
-		aclresult = pg_foreign_server_aclcheck(server->serverid, GetUserId(), ACL_USAGE);
-#endif
-		if (aclresult != ACLCHECK_OK)
-			aclcheck_error(aclresult, OBJECT_FOREIGN_SERVER, server->servername);
-
-		foreach (cell, server->options)
-		{
-			DefElem *def = lfirst_node(DefElem, cell);
-
-			elog(DEBUG2, "  %s parsing node '%s': %s", __func__, def->defname, defGetString(def));
-
-			if (strcmp(def->defname, OAI_NODE_URL) == 0)
-			{
-				state->url = defGetString(def);
-			}
-			else if (strcmp(def->defname, OAI_SERVER_OPTION_HTTP_PROXY) == 0)
-			{
-				state->proxy = defGetString(def);
-				state->proxyType = OAI_SERVER_OPTION_HTTP_PROXY;
-			}
-			else if (strcmp(OAI_SERVER_OPTION_CONNECTRETRY, def->defname) == 0)
-			{
-				char *tailpt;
-				char *maxretry_str = defGetString(def);
-				state->maxretries = strtol(maxretry_str, &tailpt, 0);
-			}
-			else if (strcmp(def->defname, OAI_SERVER_OPTION_CONNECT_TIMEOUT) == 0)
-			{
-				char *tailpt;
-				char *timeout_str = defGetString(def);
-
-				state->connectTimeout = strtol(timeout_str, &tailpt, 0);
-			}
-			else if (strcmp(def->defname, OAI_SERVER_OPTION_REQUEST_TIMEOUT) == 0)
-			{
-				char *tailpt;
-				char *timeout_str = defGetString(def);
-
-				state->request_timeout = strtol(timeout_str, &tailpt, 0);
-			}
-			else if (strcmp(def->defname, OAI_SERVER_OPTION_REQUEST_REDIRECT) == 0)
-			{
-				state->requestRedirect = defGetBoolean(def);
-
-				elog(DEBUG2, "  %s: setting \"%s\": %d", __func__, OAI_SERVER_OPTION_REQUEST_REDIRECT, state->requestRedirect);
-			}
-			else if (strcmp(def->defname, OAI_SERVER_OPTION_REQUEST_MAX_REDIRECT) == 0)
-			{
-				char *tailpt;
-				char *maxredirect_str = defGetString(def);
-
-				state->requestMaxRedirect = strtol(maxredirect_str, &tailpt, 10);
-
-				elog(DEBUG2, "  %s: setting \"%s\": %ld", __func__, OAI_SERVER_OPTION_REQUEST_MAX_REDIRECT, state->requestMaxRedirect);
-
-				if (strcmp(defGetString(def), "0") != 0 && state->requestMaxRedirect == 0)
-					elog(ERROR, "invalid value for \"%s\"", OAI_SERVER_OPTION_REQUEST_MAX_REDIRECT);
-			}
-		}
-	}
-	else
+	if (!server)
 		ereport(ERROR,
 				(errcode(ERRCODE_CONNECTION_DOES_NOT_EXIST),
 				 errmsg("FOREIGN SERVER does not exist: '%s'", srvname)));
 
+	fdw = GetForeignDataWrapper(server->fdwid);
+
+	if (!OidIsValid(fdw->fdwhandler) ||
+		GetFdwRoutine(fdw->fdwhandler)->GetForeignRelSize != OAIFdwGetForeignRelSize)
+		ereport(ERROR,
+				(errcode(ERRCODE_FDW_INVALID_HANDLE),
+				 errmsg("FOREIGN SERVER '%s' does not belong to oai_fdw", srvname)));
+
+#if PG_VERSION_NUM >= 160000
+	aclresult = object_aclcheck(ForeignServerRelationId, server->serverid, GetUserId(), ACL_USAGE);
+#else
+	aclresult = pg_foreign_server_aclcheck(server->serverid, GetUserId(), ACL_USAGE);
+#endif
+	if (aclresult != ACLCHECK_OK)
+		aclcheck_error(aclresult, OBJECT_FOREIGN_SERVER, server->servername);
+
 	state->foreign_server = server;
+	LoadOAIServerInfo(state);
+
 	return state;
 }
 
@@ -669,7 +614,7 @@ Datum oai_fdw_identity(PG_FUNCTION_ARGS)
 		funcctx = SRF_FIRSTCALL_INIT();
 		oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
 
-		state = GetServerInfo(text_to_cstring(PG_GETARG_TEXT_PP(0)));
+		state = GetOAIServerByName(text_to_cstring(PG_GETARG_TEXT_PP(0)));
 
 		/*
 		 * Loading USER MAPPING (if any)
@@ -747,7 +692,7 @@ Datum oai_fdw_listSets(PG_FUNCTION_ARGS)
 		funcctx = SRF_FIRSTCALL_INIT();
 		oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
 
-		state = GetServerInfo(text_to_cstring(PG_GETARG_TEXT_PP(0)));
+		state = GetOAIServerByName(text_to_cstring(PG_GETARG_TEXT_PP(0)));
 
 		/*
 		 * Loading USER MAPPING (if any)
@@ -825,7 +770,7 @@ Datum oai_fdw_listMetadataFormats(PG_FUNCTION_ARGS)
 		funcctx = SRF_FIRSTCALL_INIT();
 		oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
 
-		state = GetServerInfo(text_to_cstring(PG_GETARG_TEXT_PP(0)));
+		state = GetOAIServerByName(text_to_cstring(PG_GETARG_TEXT_PP(0)));
 
 		/*
 		 * Loading USER MAPPING (if any)
@@ -3888,7 +3833,7 @@ static List *OAIFdwImportForeignSchema(ImportForeignSchemaStmt *stmt, Oid server
 	ForeignServer *server = GetForeignServer(serverOid);
 
 	elog(DEBUG2, "%s called: '%s'", __func__, server->servername);
-	state = GetServerInfo(server->servername);
+	state = GetOAIServerByName(server->servername);
 	LoadOAIUserMapping(state, GetUserId());
 
 	elog(DEBUG2, "  %s: parsing statements", __func__);
@@ -4222,8 +4167,18 @@ static void LoadOAITableInfo(OAIFdwState *state)
 	}
 }
 
+/*
+ * LoadOAIServerInfo
+ * -----------------
+ * Loads the options of state->foreign_server, for scans and, through
+ * GetOAIServerByName(), for the support functions and IMPORT FOREIGN SCHEMA.
+ */
 static void LoadOAIServerInfo(OAIFdwState *state)
 {
+	state->requestRedirect = false;
+	state->requestMaxRedirect = 0;
+	state->maxretries = OAI_DEFAULT_MAX_RETRY;
+
 	if (state->foreign_server)
 	{
 		ListCell *cell;
@@ -4241,10 +4196,9 @@ static void LoadOAIServerInfo(OAIFdwState *state)
 				state->proxy = defGetString(def);
 				state->proxyType = OAI_SERVER_OPTION_HTTP_PROXY;
 			}
+			/* servers created before 1.13 may still have them; user mappings win */
 			else if (strcmp(OAI_USERMAPPING_OPTION_PROXY_USER, def->defname) == 0)
-			{
 				state->proxyUser = defGetString(def);
-			}
 			else if (strcmp(OAI_USERMAPPING_OPTION_PROXY_PASSWORD, def->defname) == 0)
 				state->proxyPassword = defGetString(def);
 			else if (strcmp(OAI_SERVER_OPTION_CONNECT_TIMEOUT, def->defname) == 0)
@@ -4272,6 +4226,12 @@ static void LoadOAIServerInfo(OAIFdwState *state)
 				char *tailpt;
 				char *maxredirect_str = defGetString(def);
 				state->requestMaxRedirect = strtol(maxredirect_str, &tailpt, 10);
+
+				/* only servers created before the validator checked it */
+				if (*tailpt != '\0' || state->requestMaxRedirect < 0)
+					ereport(ERROR,
+							(errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
+							 errmsg("invalid %s: %s", OAI_SERVER_OPTION_REQUEST_MAX_REDIRECT, maxredirect_str)));
 			}
 			else
 				elog(WARNING, "Invalid SERVER OPTION > '%s'", def->defname);
@@ -4281,10 +4241,6 @@ static void LoadOAIServerInfo(OAIFdwState *state)
 
 static void InitSession(OAIFdwState *state, RelOptInfo *baserel)
 {
-	state->requestRedirect = false;
-	state->requestMaxRedirect = 0;
-	state->maxretries = OAI_DEFAULT_MAX_RETRY;
-
 	elog(DEBUG2, "%s called", __func__);
 
 	/*
