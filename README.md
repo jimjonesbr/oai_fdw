@@ -30,7 +30,7 @@ A PostgreSQL Foreign Data Wrapper to access OAI-PMH repositories (Open Archives 
 ## [Requirements](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#requirements)
 
 * [libxml2](http://www.xmlsoft.org/): version 2.5.0 or higher.
-* [libcurl](https://curl.se/libcurl/): version 7.74.0 or higher.
+* [libcurl](https://curl.se/libcurl/): version 7.62.0 or higher (RHEL / Rocky Linux 8's 7.61.1 works as well, as it includes the URL API added in 7.62.0).
 * [PostgreSQL](https://www.postgresql.org): version 11 or higher.
 
 ## [Build and Install](https://github.com/jimjonesbr/oai_fdw/blob/master/README.md#build_and_install)
