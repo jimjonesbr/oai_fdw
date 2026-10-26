@@ -2065,8 +2065,11 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 			for (long i = 1; res != CURLE_OK && res != CURLE_ABORTED_BY_CALLBACK && i <= maxretries; i++)
 			{
 				long attempt_code = 0;
+				long connect_code = 0;
+				long delay;
 
 				curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &attempt_code);
+				curl_easy_getinfo(curl, CURLINFO_HTTP_CONNECTCODE, &connect_code);
 
 				/* other client errors, e.g. 401 or 404, will not go away by retrying */
 				if (attempt_code >= 400 && attempt_code < 500 &&
@@ -2074,36 +2077,47 @@ static int ExecuteOAIRequest(OAIFdwState *state)
 					attempt_code != OAI_HTTP_TOO_MANY_REQUESTS)
 					break;
 
+				/* neither will a proxy refusing the tunnel, e.g. 407 */
+				if (connect_code >= 400 && connect_code < 500)
+					break;
+
 				/*
-				 * OAI-PMH flow control (spec section 3.4): "503 Service Unavailable"
-				 * is the repository asking the harvester to slow down, not a failure.
-				 * Retrying it immediately - as every other error is retried - would
-				 * simply hammer a server that has just said it is overloaded, so the
-				 * requested delay is honoured before the next attempt.
+				 * Every retry waits, growing from 5 seconds up to the maximum: a
+				 * failure that goes away on its own, e.g. an overloaded or briefly
+				 * unreachable repository, usually needs more than a few seconds.
 				 *
-				 * "429 Too Many Requests" (RFC 6585) is handled the same way.
-				 *
-				 * Note that the Retry-After header has to be read before the header
+				 * OAI-PMH flow control (spec section 3.4): with "503 Service
+				 * Unavailable", as with "429 Too Many Requests" (RFC 6585), the
+				 * repository may say how long to wait in a Retry-After header,
+				 * which is honoured instead. It has to be read before the header
 				 * buffer is cleared for the next attempt.
 				 */
+				delay = Min(OAI_FDW_DEFAULT_RETRY_AFTER << Min(i - 1, 16),
+							OAI_FDW_MAX_RETRY_AFTER);
+
 				if (attempt_code == OAI_HTTP_SERVICE_UNAVAILABLE ||
 					attempt_code == OAI_HTTP_TOO_MANY_REQUESTS)
 				{
 					long retry_after = ParseRetryAfter(chunk_header.memory);
 
-					/* no Retry-After: back off exponentially, up to the maximum */
-					if (retry_after < 0)
-						retry_after = Min(OAI_FDW_DEFAULT_RETRY_AFTER << Min(i - 1, 16),
-										  OAI_FDW_MAX_RETRY_AFTER);
+					if (retry_after >= 0)
+						delay = retry_after;
 
 					elog(WARNING, "'%s' is applying flow control (HTTP %ld), retrying in %ld seconds (%ld/%ld)",
-						 state->foreign_server->servername, attempt_code, retry_after, i, maxretries);
-
-					OAIWaitRetryAfter(retry_after, state->foreign_server->servername);
+						 state->foreign_server->servername, attempt_code, delay, i, maxretries);
 				}
 				else
-					elog(WARNING, "request to '%s' failed (%ld/%ld)",
-						 state->foreign_server->servername, i, maxretries);
+					elog(WARNING, "request to '%s' failed, retrying in %ld seconds (%ld/%ld)",
+						 state->foreign_server->servername, delay, i, maxretries);
+
+				/* libcurl's reason, for the server log only: its wording varies */
+				if (errbuf[0] != '\0')
+					ereport(LOG,
+							(errmsg("request to '%s' failed: %s",
+									state->foreign_server->servername, errbuf),
+							 errhidestmt(true)));
+
+				OAIWaitRetryAfter(delay, state->foreign_server->servername);
 
 				/* discard any partial data from the failed attempt */
 				chunk.size = 0;

@@ -86,9 +86,6 @@ FROM dnb_zdb_oai_dc
 WHERE
   datestamp BETWEEN '2021-01-03' AND '2021-01-04';
 DEBUG:  GET "https://services.dnb.de/oai/repository?verb=ListRecords&set=zdb&from=2021-01-03T00%3A00%3A00Z&until=2021-01-04T00%3A00%3A00Z&metadataPrefix=oai_dc"
-WARNING:  request to 'oai_server_dnb' failed (1/3)
-WARNING:  request to 'oai_server_dnb' failed (2/3)
-WARNING:  request to 'oai_server_dnb' failed (3/3)
 WARNING:  unsupported content-type: "Content-Type: text/html;charset=utf-8"
 DEBUG:  ExecuteOAIRequest: no response body available for HTTP error 0
 ERROR:  OAI request failed: HTTP 0

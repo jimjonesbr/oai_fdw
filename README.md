@@ -110,7 +110,7 @@ OPTIONS (url 'https://sammlungen.ulb.uni-muenster.de/oai');
 | `url`         | **required**            | URL address of the OAI-PMH repository. |
 | `http_proxy` | optional            | Proxy for HTTP requests.
 | `connect_timeout`         | optional            | Connection timeout for establishing a HTTP request in seconds (default `300`).
-| `connect_retry`         | optional            | Number of attempts to retry a request in case of failure (default `3`). `0` disables retries.
+| `connect_retry`         | optional            | Number of attempts to retry a request in case of failure (default `3`). `0` disables retries. The first retry waits 5 seconds and every further one twice as long, up to 300 seconds, unless the repository asks for a different delay with `Retry-After`. Client errors (`4xx`, also from a proxy) are not retried, except `408` and `429`.
 | `request_redirect`         | optional            | Enables URL redirect issued by the server (default `false`).
 | `request_max_redirect`         | optional            | Limit of how many times the URL redirection may occur. If that many redirections have been followed, the next redirect will cause an error. Not setting this parameter or setting it to `0` leaves the limit to libcurl (30 redirects since libcurl 8.3.0, unlimited in older versions).
 | `request_timeout` | optional | Maximum time in seconds allowed for a complete HTTP request (connect + transfer). `0` disables the limit (default). Unlike `connect_timeout`, this applies to the entire duration of the request, including data transfer. Independently of this option, a transfer that receives less than one byte per second for 300 seconds is aborted and retried as configured in `connect_retry`. |
