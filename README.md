@@ -773,6 +773,8 @@ For instance, an OAI ListRecords request for all records from the year 2021 (`st
 
 `OAI_HarvestTable` commits after each page, so that a failure does not lose the pages already stored. It therefore cannot be called inside a transaction block.
 
+For large repositories, use `OAI_HarvestTable` rather than a single query such as `CREATE TABLE ... AS SELECT * FROM oai_table`. A single query has to survive every request of the whole harvest in one statement, and a failure after hours loses everything, while `OAI_HarvestTable` keeps the pages it has already stored. Many repositories also limit how fast they can be harvested, and some stop answering a client that keeps harvesting for too long. If a harvest fails, run it again later: with an `identifier` column, records already stored are updated rather than duplicated, and a later `start_date` skips the pages already harvested.
+
 **Usage**
 
 ```sql
